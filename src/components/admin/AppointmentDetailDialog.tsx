@@ -37,7 +37,7 @@ import {
   deleteAppointment,
   updateAppointmentStatus,
   updateAppointment,
-} from '@/services/appointments'
+} from '@/services'
 import {
   AlertDialog,
   AlertDialogAction,

@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
 import { Service } from '@/types'
-import { getServices } from '@/services/services'
+import { getServices } from '@/services'
 import {
   getServicesByProfessional,
   addServiceToProfessional,
   removeServiceFromProfessional,
-} from '@/services/professionals'
+} from '@/services'
 import { useToast } from '@/hooks/use-toast'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'

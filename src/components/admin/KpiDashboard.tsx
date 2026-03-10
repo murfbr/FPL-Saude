@@ -6,7 +6,7 @@ import {
   getServicePerformance,
   getPartnershipPerformance,
   getAnnualComparative,
-} from '@/services/kpis'
+} from '@/services'
 import {
   DollarSign,
   CalendarCheck,
@@ -48,9 +48,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { getAllProfessionals } from '@/services/professionals'
-import { getAllServices } from '@/services/services'
-import { getAllPartnerships } from '@/services/partnerships'
+import { getAllProfessionals } from '@/services'
+import { getAllServices } from '@/services'
+import { getAllPartnerships } from '@/services'
 import { Professional, Service, Partnership } from '@/types'
 
 const formatCurrency = (value: number | null | undefined) => {
@@ -376,7 +376,7 @@ export const KpiDashboard = () => {
               config={serviceChartConfig}
               className="h-[300px] w-full"
             >
-              <ResponsiveContainer>
+              <ResponsiveContainer width="100%" height="100%">
                 <RechartsBarChart data={serviceData} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis type="number" />
@@ -408,7 +408,7 @@ export const KpiDashboard = () => {
               config={partnershipChartConfig}
               className="h-[300px] w-full"
             >
-              <ResponsiveContainer>
+              <ResponsiveContainer width="100%" height="100%">
                 <RechartsBarChart data={partnershipData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
@@ -449,7 +449,7 @@ export const KpiDashboard = () => {
             config={annualChartConfig}
             className="h-[400px] w-full"
           >
-            <ResponsiveContainer>
+            <ResponsiveContainer width="100%" height="100%">
               <LineChart data={annualData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />

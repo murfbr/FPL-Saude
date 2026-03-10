@@ -29,3 +29,6 @@ screenshot.png
 
 # Environment variables
 .env*
+
+# Firebase service account
+firebase-service-account.json

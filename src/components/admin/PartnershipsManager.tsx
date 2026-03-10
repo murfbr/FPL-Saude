@@ -34,7 +34,7 @@ import {
   createPartnership,
   updatePartnership,
   deletePartnership,
-} from '@/services/partnerships'
+} from '@/services'
 import { PartnershipForm } from './PartnershipForm'
 import { PartnershipDiscountsDialog } from './PartnershipDiscountsDialog'
 

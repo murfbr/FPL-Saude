@@ -7,7 +7,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getAllActiveClientPackages } from '@/services/clients'
+import { getAllActiveClientPackages } from '@/services'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Progress } from '@/components/ui/progress'
 import { Ticket } from 'lucide-react'

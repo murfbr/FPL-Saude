@@ -22,7 +22,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/hooks/use-toast'
 import { Client } from '@/types'
-import { updateClient } from '@/services/clients'
+import { updateClient } from '@/services'
 import {
   cleanCPF,
   formatCPF,

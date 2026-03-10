@@ -58,11 +58,8 @@ self.addEventListener('fetch', (event) => {
             return networkResponse
           }
 
-          const url = new URL(event.request.url)
-          if (
-            url.origin.includes('supabase.co') ||
-            url.origin.includes('goskip.dev')
-          ) {
+          // Pass through for API calls
+          if (url.origin.includes('firestore.googleapis.com')) {
             return networkResponse
           }
 

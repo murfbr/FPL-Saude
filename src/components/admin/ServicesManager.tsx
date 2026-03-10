@@ -27,18 +27,18 @@ import {
   createService,
   updateService,
   deleteService,
-} from '@/services/services'
+} from '@/services'
 import {
   createPackage,
   updatePackage,
   deletePackage,
-} from '@/services/packages'
+} from '@/services'
 import {
   getSubscriptionPlans,
   createSubscriptionPlan,
   updateSubscriptionPlan,
   deleteSubscriptionPlan,
-} from '@/services/subscription-plans'
+} from '@/services'
 import { Service, Package, SubscriptionPlan } from '@/types'
 import { useToast } from '@/hooks/use-toast'
 import {

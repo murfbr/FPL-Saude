@@ -5,8 +5,8 @@ import {
   updateClient,
   deleteClient,
   exportClientData,
-} from '@/services/clients'
-import { getAppointmentsByClientId } from '@/services/appointments'
+} from '@/services'
+import { getAppointmentsByClientId } from '@/services'
 import { Client, Appointment, Partnership, NoteEntry } from '@/types'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -54,7 +54,7 @@ import { ptBR } from 'date-fns/locale'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/hooks/use-toast'
 import { PatientEditDialog } from '@/components/admin/PatientEditDialog'
-import { getAllPartnerships } from '@/services/partnerships'
+import { getAllPartnerships } from '@/services'
 import {
   Select,
   SelectContent,

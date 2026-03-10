@@ -26,7 +26,7 @@ import {
   getRecurringAvailability,
   setRecurringAvailability,
 } from '@/services/availability'
-import { getServicesByProfessional } from '@/services/professionals'
+import { getServicesByProfessional } from '@/services'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Service } from '@/types'
 import {

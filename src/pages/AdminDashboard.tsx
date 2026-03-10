@@ -22,9 +22,9 @@ import { Professional, Client, Service } from '@/types'
 import {
   getAllProfessionals,
   getProfessionalById,
-} from '@/services/professionals'
-import { getAllClients } from '@/services/clients'
-import { getAllServices } from '@/services/services'
+} from '@/services'
+import { getAllClients } from '@/services'
+import { getAllServices } from '@/services'
 import { UpcomingAppointments } from '@/components/admin/UpcomingAppointments'
 import { ProfessionalsList } from '@/components/admin/ProfessionalsList'
 import { PatientsList } from '@/components/admin/PatientsList'

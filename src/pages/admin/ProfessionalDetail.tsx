@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { getProfessionalById } from '@/services/professionals'
+import { getProfessionalById } from '@/services'
 import { Professional } from '@/types'
 import { Skeleton } from '@/components/ui/skeleton'
 import {

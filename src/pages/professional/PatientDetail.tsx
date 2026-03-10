@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getClientById } from '@/services/clients'
-import { getAppointmentsByClientId } from '@/services/appointments'
+import { getClientById } from '@/services'
+import { getAppointmentsByClientId } from '@/services'
 import { Client, Appointment, NoteEntry } from '@/types'
 import { Skeleton } from '@/components/ui/skeleton'
 import {

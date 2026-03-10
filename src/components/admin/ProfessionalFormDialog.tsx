@@ -22,7 +22,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
-import { createProfessionalUser } from '@/services/professionals'
+import { createProfessionalUser } from '@/services'
 import { Loader2 } from 'lucide-react'
 import { getFriendlyErrorMessage } from '@/lib/error-mapping'
 

@@ -7,7 +7,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { getUpcomingAppointments } from '@/services/appointments'
+import { getUpcomingAppointments } from '@/services'
 import { Appointment } from '@/types'
 import { format, formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'

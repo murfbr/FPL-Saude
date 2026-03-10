@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { getAllProfessionals } from '@/services/professionals'
+import { getAllProfessionals } from '@/services'
 
 export type ViewMode = 'month' | 'week' | 'day'
 

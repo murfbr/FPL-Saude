@@ -9,7 +9,7 @@ import {
   CardFooter,
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { getAppointmentsByProfessionalForRange } from '@/services/appointments'
+import { getAppointmentsByProfessionalForRange } from '@/services'
 import { getAvailabilityOverrides } from '@/services/availability'
 import { Appointment, AvailabilityOverride } from '@/types'
 import {

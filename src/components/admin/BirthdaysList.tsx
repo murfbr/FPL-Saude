@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Client } from '@/types'
-import { getClientsWithBirthdayThisWeek } from '@/services/clients'
+import { getClientsWithBirthdayThisWeek } from '@/services'
 import { startOfWeek, endOfWeek, format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { Cake } from 'lucide-react'

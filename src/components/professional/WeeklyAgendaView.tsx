@@ -31,7 +31,7 @@ import {
   RecurringAvailability,
   AvailabilityOverride,
 } from '@/types'
-import { getAppointmentsByProfessionalForRange } from '@/services/appointments'
+import { getAppointmentsByProfessionalForRange } from '@/services'
 import {
   getRecurringAvailability,
   getAvailabilityOverridesForRange,

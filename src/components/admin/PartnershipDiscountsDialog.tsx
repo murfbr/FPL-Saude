@@ -14,11 +14,11 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useToast } from '@/hooks/use-toast'
 import { Partnership, Service, PartnershipDiscount } from '@/types'
-import { getServices } from '@/services/services'
+import { getServices } from '@/services'
 import {
   getDiscountsForPartnership,
   setPartnershipDiscounts,
-} from '@/services/partnerships'
+} from '@/services'
 
 interface PartnershipDiscountsDialogProps {
   partnership: Partnership | null

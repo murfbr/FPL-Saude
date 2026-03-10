@@ -12,7 +12,7 @@ import {
   getRecurringAvailability,
   getAvailabilityOverrides,
 } from '@/services/availability'
-import { getServicesByProfessional } from '@/services/professionals'
+import { getServicesByProfessional } from '@/services'
 import { Service, RecurringAvailability, AvailabilityOverride } from '@/types'
 import { format, parseISO } from 'date-fns'
 import { Calendar } from '@/components/ui/calendar'

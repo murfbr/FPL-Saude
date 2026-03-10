@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { getAllProfessionals } from '@/services/professionals'
+import { getAllProfessionals } from '@/services'
 import { upsertTimeRecord } from '@/services/time-tracking'
 import { Professional } from '@/types'
 import { useToast } from '@/hooks/use-toast'

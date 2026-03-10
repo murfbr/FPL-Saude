@@ -16,6 +16,7 @@ export default defineConfig(({ mode }) => ({
     minify: mode !== 'development',
     sourcemap: mode === 'development',
     rollupOptions: {
+      external: ['zod/v4/core'],
       onwarn(warning, warn) {
         if (warning.code === 'MODULE_LEVEL_DIRECTIVE') {
           return

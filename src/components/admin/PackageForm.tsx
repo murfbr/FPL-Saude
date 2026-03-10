@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Package, Service } from '@/types'
-import { getServices } from '@/services/services'
+import { getServices } from '@/services'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 
 const packageSchema = z.object({

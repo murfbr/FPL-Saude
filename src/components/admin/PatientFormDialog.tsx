@@ -29,8 +29,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/hooks/use-toast'
 import { Partnership, Client } from '@/types'
-import { createClient } from '@/services/clients'
-import { getAllPartnerships } from '@/services/partnerships'
+import { createClient } from '@/services'
+import { getAllPartnerships } from '@/services'
 import { Skeleton } from '../ui/skeleton'
 import {
   cleanCPF,

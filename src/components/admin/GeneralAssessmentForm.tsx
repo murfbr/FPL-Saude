@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/form'
 import { useToast } from '@/hooks/use-toast'
 import { Client } from '@/types'
-import { updateClient, exportClientData } from '@/services/clients'
+import { updateClient, exportClientData } from '@/services'
 import { FileText, Loader2, Save, Download, History, Plus } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {

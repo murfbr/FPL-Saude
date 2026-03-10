@@ -3,7 +3,7 @@ import {
   getClientSubscriptions,
   cancelClientSubscription,
   getMonthlyClientUsage,
-} from '@/services/clients'
+} from '@/services'
 import { ClientSubscription } from '@/types'
 import {
   Card,

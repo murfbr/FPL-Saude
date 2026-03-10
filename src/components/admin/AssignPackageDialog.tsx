@@ -18,8 +18,8 @@ import {
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
 import { Package } from '@/types'
-import { getPackages } from '@/services/packages'
-import { assignPackageToClient } from '@/services/clients'
+import { getPackages } from '@/services'
+import { assignPackageToClient } from '@/services'
 import { Loader2, CalendarIcon } from 'lucide-react'
 import { Calendar } from '@/components/ui/calendar'
 import {

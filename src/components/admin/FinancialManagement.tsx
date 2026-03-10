@@ -21,7 +21,7 @@ import {
   getSubscriptionPayments,
   paySubscription,
   deleteSubscriptionPayment,
-} from '@/services/financials'
+} from '@/services'
 import { ClientSubscription } from '@/types'
 import { useAuth } from '@/providers/AuthProvider'
 import { useToast } from '@/hooks/use-toast'

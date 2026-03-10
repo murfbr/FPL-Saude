@@ -29,7 +29,7 @@ import {
   completeAppointment,
   cancelAppointment,
   getAppointmentsByScheduleId,
-} from '@/services/appointments'
+} from '@/services'
 import { Appointment, NoteEntry } from '@/types'
 import { format, isValid } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -47,7 +47,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useAuth } from '@/providers/AuthProvider'
-import { getProfessionalById } from '@/services/professionals'
+import { getProfessionalById } from '@/services'
 import { Separator } from '@/components/ui/separator'
 import { formatInTimeZone } from '@/lib/utils'
 

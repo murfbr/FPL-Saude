@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { getAllClients } from '@/services/clients'
-import { getAllServices } from '@/services/services'
+import { getAllClients } from '@/services'
+import { getAllServices } from '@/services'
 import { Client, Service } from '@/types'
 import { PatientsList } from '@/components/admin/PatientsList'
 import { Input } from '@/components/ui/input'

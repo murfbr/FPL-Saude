@@ -13,12 +13,12 @@ import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useToast } from '@/hooks/use-toast'
 import { Client, Service, Package } from '@/types'
-import { getServices } from '@/services/services'
-import { getPackages } from '@/services/packages'
+import { getServices } from '@/services'
+import { getPackages } from '@/services'
 import {
   createClientSubscription,
   assignPackageToClient,
-} from '@/services/clients'
+} from '@/services'
 import { Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 

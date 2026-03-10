@@ -22,7 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getAllProfessionals } from '@/services/professionals'
+import { getAllProfessionals } from '@/services'
 import { getMonthlyTimeRecords } from '@/services/time-tracking'
 import { Professional, TimeRecord } from '@/types'
 import { format, parseISO, differenceInMinutes } from 'date-fns'

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getClientPackages, cancelClientPackage } from '@/services/clients'
+import { getClientPackages, cancelClientPackage } from '@/services'
 import { ClientPackageWithDetails } from '@/types'
 import {
   Card,

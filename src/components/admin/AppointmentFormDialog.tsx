@@ -61,19 +61,19 @@ import {
   getAllClients,
   getClientPackages,
   getClientSubscriptions,
-} from '@/services/clients'
-import { getProfessionalsByService } from '@/services/professionals'
+} from '@/services'
+import { getProfessionalsByService } from '@/services'
 import {
   getFilteredAvailableSchedules,
   getAvailableProfessionalsAtSlot,
 } from '@/services/schedules'
 import { getAvailableDatesForProfessional } from '@/services/availability'
-import { getAllServices } from '@/services/services'
+import { getAllServices } from '@/services'
 import {
   bookAppointment,
   bookRecurringAppointments,
-} from '@/services/appointments'
-import { getDiscountsForPartnership } from '@/services/partnerships'
+} from '@/services'
+import { getDiscountsForPartnership } from '@/services'
 import { AvailableSlots } from '@/components/AvailableSlots'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useAuth } from '@/providers/AuthProvider'

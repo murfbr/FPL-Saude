@@ -27,9 +27,9 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
-import { createClientSubscription } from '@/services/clients'
-import { getServices } from '@/services/services'
-import { getSubscriptionPlans } from '@/services/subscription-plans'
+import { createClientSubscription } from '@/services'
+import { getServices } from '@/services'
+import { getSubscriptionPlans } from '@/services'
 import { Service, SubscriptionPlan } from '@/types'
 import { format } from 'date-fns'
 
