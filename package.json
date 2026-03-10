@@ -5,7 +5,7 @@
   "version": "0.0.294",
   "type": "module",
   "scripts": {
-    "start": "pnpm run dev",
+    "start": "npm run dev",
     "dev": "vite",
     "build": "vite build",
     "build:dev": "vite build --mode development",
@@ -13,7 +13,6 @@
     "lint:fix": "oxlint src --fix",
     "format": "prettier --write --cache .",
     "preview": "vite preview",
-    "preinstall": "npx only-allow pnpm",
     "test": "vitest --run --cache",
     "test:watch": "vitest"
   },
