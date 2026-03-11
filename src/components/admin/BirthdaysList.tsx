@@ -33,7 +33,7 @@ export const BirthdaysList = () => {
   }, [])
 
   return (
-    <Card className="mt-6">
+    <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Cake className="w-5 h-5 text-pink-500" />

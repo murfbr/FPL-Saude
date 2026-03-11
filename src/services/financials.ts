@@ -8,6 +8,7 @@ import {
   updateDoc,
   deleteDoc,
   query,
+  collectionGroup,
   orderBy,
   where,
   limit as fbLimit
@@ -55,7 +56,7 @@ export async function getExpectedRevenue(): Promise<{ data: number | null; error
 
 export async function getActiveSubscriptions(): Promise<{ data: ClientSubscription[] | null; error: any }> {
   try {
-    const subsRef = collection(db, 'companies', COMPANY_ID, 'client_subscriptions')
+    const subsRef = collectionGroup(db, 'subscriptions')
     const q = query(subsRef, where('status', '==', 'active'))
     const snap = await getDocs(q)
     
@@ -79,7 +80,10 @@ export async function getActiveSubscriptions(): Promise<{ data: ClientSubscripti
     
     const results = await Promise.all(promises)
     return { data: results as ClientSubscription[], error: null }
-  } catch (error) { return { data: null, error } }
+  } catch (error) {
+    console.error("🔥 ERRO EM getActiveSubscriptions (possível falta de índice?): ", error)
+    return { data: null, error }
+  }
 }
 
 export async function getSubscriptionPayments(subscriptionIds: string[], monthDate: Date): Promise<{ data: any[] | null; error: any }> {
@@ -126,6 +130,53 @@ export async function paySubscription(subscription: ClientSubscription, professi
 }
 
 export async function deleteSubscriptionPayment(recordId: string): Promise<{ error: any }> {
+  try {
+    await deleteDoc(doc(db, 'companies', COMPANY_ID, 'financial_records', recordId))
+    return { error: null }
+  } catch (error) { return { error } }
+}
+
+export async function getPackagePayments(clientPackageIds: string[]): Promise<{ data: any[] | null; error: any }> {
+  if (!clientPackageIds || clientPackageIds.length === 0) return { data: [], error: null }
+  
+  try {
+    const finRef = collection(db, 'companies', COMPANY_ID, 'financial_records')
+    // Batch lookup chunks
+    const chunks = []
+    for (let i = 0; i < clientPackageIds.length; i += 10) { chunks.push(clientPackageIds.slice(i, i + 10)) }
+
+    let results: any[] = []
+    for (const chunk of chunks) {
+      const q = query(finRef, where('client_package_id', 'in', chunk))
+      const snap = await getDocs(q)
+      snap.forEach(d => results.push({ id: d.id, ...d.data() }))
+    }
+    return { data: results, error: null }
+  } catch (error) { return { data: null, error } }
+}
+
+export async function payPackage(clientPackage: any, professionalId: string): Promise<{ error: any }> {
+  try {
+    const amount = (clientPackage.packages?.price || 0) - (clientPackage.discount_amount || 0)
+    const description = `Pacote ${clientPackage.packages?.name || ''}`
+
+    const finRef = collection(db, 'companies', COMPANY_ID, 'financial_records')
+    const newDoc = doc(finRef)
+    await setDoc(newDoc, {
+      id: newDoc.id,
+      client_id: clientPackage.client_id,
+      professional_id: professionalId,
+      client_package_id: clientPackage.id,
+      amount: amount,
+      payment_date: new Date().toISOString(),
+      description: description,
+      payment_method: 'manual',
+    })
+    return { error: null }
+  } catch (error) { return { error } }
+}
+
+export async function deletePackagePayment(recordId: string): Promise<{ error: any }> {
   try {
     await deleteDoc(doc(db, 'companies', COMPANY_ID, 'financial_records', recordId))
     return { error: null }

@@ -230,7 +230,7 @@ const PatientDetail = () => {
       <div className="container mx-auto py-8 px-4 text-center">
         <h2 className="text-2xl font-bold">Paciente não encontrado</h2>
         <Button asChild className="mt-4">
-          <Link to="/?tab=patients">Voltar para Pacientes</Link>
+          <Link to="/admin?tab=patients">Voltar para Pacientes</Link>
         </Button>
       </div>
     )
@@ -240,7 +240,7 @@ const PatientDetail = () => {
     <>
       <div className="container mx-auto py-8 px-4">
         <Button asChild variant="outline" className="mb-6">
-          <Link to="/?tab=patients">
+          <Link to="/admin?tab=patients">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Voltar para Pacientes
           </Link>

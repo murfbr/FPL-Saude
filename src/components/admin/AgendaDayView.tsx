@@ -29,6 +29,7 @@ interface AgendaDayViewProps {
   onAppointmentClick: (appointment: Appointment) => void
   onTimeSlotClick: (date: Date, isSpecificSlot?: boolean) => void
   selectedProfessional: string
+  isExpanded: boolean
 }
 
 const NORMAL_HEIGHT = 80
@@ -39,10 +40,10 @@ export const AgendaDayView = ({
   onAppointmentClick,
   onTimeSlotClick,
   selectedProfessional,
+  isExpanded,
 }: AgendaDayViewProps) => {
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [isExpanded, setIsExpanded] = useState(false)
   const [hoveredSlot, setHoveredSlot] = useState<{
     hour: number
     minutes: number
@@ -146,7 +147,7 @@ export const AgendaDayView = ({
   return (
     <div className="flex flex-col bg-background">
       <div className="sticky top-14 z-40 bg-background border-b p-4 flex justify-between items-center shrink-0 shadow-sm">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-center w-full gap-2">
           <Button variant="outline" size="icon" onClick={prevDay}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -157,20 +158,6 @@ export const AgendaDayView = ({
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
-
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="text-muted-foreground"
-        >
-          {isExpanded ? (
-            <Minimize2 className="mr-2 h-4 w-4" />
-          ) : (
-            <Maximize2 className="mr-2 h-4 w-4" />
-          )}
-          {isExpanded ? 'Recolher horários' : 'Expandir horários'}
-        </Button>
       </div>
 
       {isLoading ? (

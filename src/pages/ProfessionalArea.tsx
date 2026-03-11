@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ClientsTable } from '@/components/professional/ClientsTable'
@@ -12,8 +13,15 @@ import { TimeTracker } from '@/components/professional/TimeTracker'
 const ProfessionalArea = () => {
   const { toast } = useToast()
   const { user, professionalId } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [clients, setClients] = useState<Client[]>([])
   const [isLoading, setIsLoading] = useState(true)
+
+  const currentTab = searchParams.get('tab') || 'schedule'
+
+  const handleTabChange = (value: string) => {
+    setSearchParams({ tab: value })
+  }
 
   useEffect(() => {
     const fetchData = async () => {
@@ -78,7 +86,7 @@ const ProfessionalArea = () => {
         </p>
       </div>
 
-      <Tabs defaultValue="schedule">
+      <Tabs value={currentTab} onValueChange={handleTabChange}>
         <TabsList className="grid w-full grid-cols-3 mb-6">
           <TabsTrigger value="schedule">Agenda</TabsTrigger>
           <TabsTrigger value="clients">Pacientes</TabsTrigger>

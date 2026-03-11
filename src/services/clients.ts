@@ -197,7 +197,10 @@ export async function getAllActiveClientPackages(): Promise<{ data: any[] | null
       results.push(cp)
     }
     return { data: results, error: null }
-  } catch (error) { return { data: null, error } }
+  } catch (error) {
+    console.error("🔥 ERRO EM getAllActiveClientPackages (falta de índice?): ", error)
+    return { data: null, error }
+  }
 }
 
 export async function assignPackageToClient(clientId: string, packageId: string, sessions: number, purchaseDate?: Date, discountAmount: number = 0): Promise<{ error: any }> {
@@ -246,7 +249,10 @@ export async function getClientSubscriptions(clientId: string): Promise<{ data: 
       results.push(sub)
     }
     return { data: results, error: null }
-  } catch (error) { return { data: null, error } }
+  } catch (error) {
+    console.error("🔥 ERRO EM getClientSubscriptions (falta de índice?): ", error)
+    return { data: null, error }
+  }
 }
 
 export async function createClientSubscription(data: any): Promise<{ data: any | null; error: any }> {

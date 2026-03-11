@@ -112,7 +112,7 @@ const ProfessionalPatientDetail = () => {
     return (
       <div className="container mx-auto py-8 px-4 text-center">
         <h2 className="text-2xl font-bold">Paciente não encontrado</h2>
-        <Button onClick={() => navigate(-1)} className="mt-4">
+        <Button onClick={() => navigate('/profissional?tab=clients')} className="mt-4">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Voltar
         </Button>
@@ -123,7 +123,7 @@ const ProfessionalPatientDetail = () => {
   return (
     <>
       <div className="container mx-auto py-8 px-4">
-        <Button onClick={() => navigate(-1)} variant="outline" className="mb-6">
+        <Button onClick={() => navigate('/profissional?tab=clients')} variant="outline" className="mb-6">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Voltar para a lista
         </Button>

@@ -124,9 +124,9 @@ export const AgendaCalendarView = ({
       {isLoading ? (
         <Skeleton className="h-[600px] w-full" />
       ) : (
-        <div className="overflow-x-auto">
-          <div className="grid grid-cols-7 gap-px bg-border min-w-[600px]">
-            {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((day, i) => (
+        <div className="overflow-x-auto snap-x snap-mandatory custom-scrollbar pb-2">
+          <div className="grid grid-cols-7 gap-px bg-border min-w-[600px] snap-center">
+            {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((day, i) => (
               <div
                 key={i}
                 className="text-center font-medium py-2 bg-card text-xs sm:text-sm"

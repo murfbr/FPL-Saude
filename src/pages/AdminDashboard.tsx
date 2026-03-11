@@ -38,6 +38,7 @@ import { Button } from '@/components/ui/button'
 import { PatientFormDialog } from '@/components/admin/PatientFormDialog'
 import { ProfessionalFormDialog } from '@/components/admin/ProfessionalFormDialog'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
+import { AdminNavMenu } from '@/components/admin/AdminNavMenu'
 import {
   Select,
   SelectContent,
@@ -207,60 +208,56 @@ const AdminDashboard = () => {
               </Select>
             </div>
           ) : (
-            <ScrollArea className="w-full whitespace-nowrap print:hidden">
-              <TabsList className="inline-flex h-auto p-1 mb-6 w-max flex-wrap sm:flex-nowrap">
-                {tabOptions.map((option) => (
-                  <TabsTrigger key={option.value} value={option.value}>
-                    <option.icon className="w-4 h-4 mr-2" />
-                    {option.label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-              <ScrollBar orientation="horizontal" />
-            </ScrollArea>
+            <div className="mb-6 print:hidden">
+              <AdminNavMenu currentTab={currentTab} onTabChange={handleTabChange} />
+            </div>
           )}
 
           <TabsContent value="overview">
-            <div className="grid gap-6 md:grid-cols-3">
-              <div className="md:col-span-2 space-y-6">
+            <div className="flex flex-col md:grid gap-6 md:grid-cols-3 items-start">
+              <div className="order-1 md:order-none md:col-span-2 space-y-6">
                 <UpcomingAppointments />
-                <div className="grid gap-6 sm:grid-cols-2">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Profissionais</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      {isLoading ? (
-                        <Skeleton className="h-10 w-24" />
-                      ) : (
-                        <div className="text-3xl font-bold">
-                          {professionals.length}
-                        </div>
-                      )}
-                      <p className="text-xs text-muted-foreground">
-                        Profissionais cadastrados
-                      </p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Pacientes</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      {isLoading ? (
-                        <Skeleton className="h-10 w-24" />
-                      ) : (
-                        <div className="text-3xl font-bold">{clients.length}</div>
-                      )}
-                      <p className="text-xs text-muted-foreground">
-                        Pacientes ({clientStatusFilter})
-                      </p>
-                    </CardContent>
-                  </Card>
-                </div>
               </div>
-              <div className="space-y-6">
+              
+              {/* Force this next to Upcoming Appointments on desktop, but 2nd on mobile */}
+              <div className="order-2 md:order-none space-y-6 md:col-start-3 md:row-start-1 md:row-span-2">
                 <BirthdaysList />
+              </div>
+
+              {/* Force this below Upcoming Appointments on desktop, but 3rd on mobile */}
+              <div className="order-3 md:order-none md:col-span-2 grid gap-6 sm:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Profissionais</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoading ? (
+                      <Skeleton className="h-10 w-24" />
+                    ) : (
+                      <div className="text-3xl font-bold">
+                        {professionals.length}
+                      </div>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Profissionais cadastrados
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Pacientes</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoading ? (
+                      <Skeleton className="h-10 w-24" />
+                    ) : (
+                      <div className="text-3xl font-bold">{clients.length}</div>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Pacientes ({clientStatusFilter})
+                    </p>
+                  </CardContent>
+                </Card>
               </div>
             </div>
           </TabsContent>

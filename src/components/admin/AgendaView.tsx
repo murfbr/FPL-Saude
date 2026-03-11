@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { Calendar, RefreshCw, Columns, Rows } from 'lucide-react'
+import { Calendar, RefreshCw, Columns, Rows, Maximize2, Minimize2 } from 'lucide-react'
 import { AgendaCalendarView } from './AgendaCalendarView'
 import { AgendaWeekView } from './AgendaWeekView'
 import { AgendaDayView } from './AgendaDayView'
@@ -27,6 +27,7 @@ export const AgendaView = () => {
   const [selectedAppointment, setSelectedAppointment] =
     useState<Appointment | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [isExpanded, setIsExpanded] = useState(false)
 
   // Lifted State
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -77,6 +78,7 @@ export const AgendaView = () => {
     onAppointmentClick: handleAppointmentClick,
     onTimeSlotClick: handleTimeSlotClick,
     selectedProfessional,
+    isExpanded,
   }
 
   const renderView = () => {
@@ -146,7 +148,7 @@ export const AgendaView = () => {
     <div className="flex flex-col h-full bg-background rounded-lg border shadow-sm">
       {/* Consolidated Single Row Header */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4 border-b">
-        <div className="flex items-center gap-4 w-full md:w-auto">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full md:w-auto">
           <h2 className="text-lg font-semibold whitespace-nowrap">Agenda</h2>
 
           <Select
@@ -168,6 +170,23 @@ export const AgendaView = () => {
         </div>
 
         <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end">
+          {viewMode !== 'month' && (
+            <Button
+              variant="outline"
+              size={isMobile ? "sm" : "default"}
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="text-muted-foreground whitespace-nowrap"
+            >
+              {isExpanded ? (
+                <Minimize2 className="h-4 w-4 sm:mr-2" />
+              ) : (
+                <Maximize2 className="h-4 w-4 sm:mr-2" />
+              )}
+              <span className="hidden sm:inline">
+                {isExpanded ? 'Recolher horários' : 'Expandir horários'}
+              </span>
+            </Button>
+          )}
           {renderViewSwitcher()}
         </div>
       </div>

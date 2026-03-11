@@ -37,6 +37,7 @@ interface AgendaWeekViewProps {
   onAppointmentClick: (appointment: Appointment) => void
   onTimeSlotClick: (date: Date, isSpecificSlot?: boolean) => void
   selectedProfessional: string
+  isExpanded: boolean
 }
 
 const NORMAL_HEIGHT = 64
@@ -47,10 +48,10 @@ export const AgendaWeekView = ({
   onAppointmentClick,
   onTimeSlotClick,
   selectedProfessional,
+  isExpanded,
 }: AgendaWeekViewProps) => {
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [isExpanded, setIsExpanded] = useState(false)
   const [hoveredSlot, setHoveredSlot] = useState<{
     day: string
     hour: number
@@ -173,7 +174,7 @@ export const AgendaWeekView = ({
   return (
     <div className="flex flex-col bg-background">
       <div className="sticky top-14 z-40 bg-background border-b p-4 flex justify-between items-center shrink-0 shadow-sm">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-center w-full gap-2">
           <Button variant="outline" size="icon" onClick={prevWeek}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -195,20 +196,6 @@ export const AgendaWeekView = ({
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
-
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="text-muted-foreground"
-        >
-          {isExpanded ? (
-            <Minimize2 className="mr-2 h-4 w-4" />
-          ) : (
-            <Maximize2 className="mr-2 h-4 w-4" />
-          )}
-          {isExpanded ? 'Recolher horários' : 'Expandir horários'}
-        </Button>
       </div>
 
       {isLoading ? (
@@ -217,14 +204,16 @@ export const AgendaWeekView = ({
         </div>
       ) : (
         <div className="relative border-l border-r border-b">
-          <div className="min-w-[800px] relative">
-            <div className="sticky top-[7rem] z-30 flex border-b bg-background shadow-sm">
-              <div className="w-16 shrink-0 border-r bg-muted/30"></div>
+          {/* Scrollable Container for Mobile */}
+          <div className="overflow-x-auto snap-x snap-mandatory custom-scrollbar">
+            <div className="min-w-[800px] relative">
+              <div className="sticky top-[7rem] z-30 flex border-b bg-background shadow-sm">
+              <div className="w-16 shrink-0 border-r bg-muted/30 sticky left-0 z-40"></div>
               {daysInWeek.map((day) => (
                 <div
                   key={day.toString()}
                   className={cn(
-                    'flex-1 text-center py-2 border-r last:border-0',
+                    'flex-1 min-w-[120px] text-center py-2 border-r last:border-0 snap-start',
                     isToday(day) && 'bg-primary/5',
                   )}
                 >
@@ -241,10 +230,11 @@ export const AgendaWeekView = ({
                   </p>
                 </div>
               ))}
+              </div>
             </div>
 
             <div className="flex relative">
-              <div className="w-16 shrink-0 border-r bg-muted/10">
+              <div className="w-16 shrink-0 border-r bg-muted/10 sticky left-0 z-40 bg-background">
                 {hours.map((h) => (
                   <div
                     key={h}
@@ -263,7 +253,7 @@ export const AgendaWeekView = ({
                 return (
                   <div
                     key={day.toString()}
-                    className="flex-1 border-r last:border-0 relative bg-background cursor-pointer group"
+                    className="flex-1 min-w-[120px] border-r last:border-0 relative bg-background cursor-pointer group snap-start"
                     onMouseMove={(e) => handleMouseMove(e, day)}
                     onMouseLeave={handleMouseLeave}
                     onClick={() => {
