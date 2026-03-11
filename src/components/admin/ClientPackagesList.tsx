@@ -58,7 +58,7 @@ export const ClientPackagesList = ({ clientId }: ClientPackagesListProps) => {
   }, [clientId])
 
   const handleCancelPackage = async (packageId: string) => {
-    const { error } = await cancelClientPackage(packageId)
+    const { error } = await cancelClientPackage(clientId, packageId)
     if (error) {
       toast({
         title: 'Erro ao cancelar pacote',

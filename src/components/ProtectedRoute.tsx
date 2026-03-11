@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/providers/AuthProvider'
-import { UserRole } from '@/lib/supabase/types'
+import { UserRole } from '@/providers/AuthProvider'
 import {
   Loader2,
   LogOut,

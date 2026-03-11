@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '@/lib/supabase/client'
+import { auth as firebaseAuth } from '@/lib/firebase'
+import { verifyPasswordResetCode, confirmPasswordReset } from 'firebase/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -22,17 +23,28 @@ export default function ResetPassword() {
   const { toast } = useToast()
 
   useEffect(() => {
-    // Check if we have a session (user clicked email link)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
+    const searchParams = new URLSearchParams(window.location.search)
+    const oobCode = searchParams.get('oobCode')
+    
+    if (!oobCode) {
+      toast({
+        title: 'Link inválido ou expirado',
+        description: 'Por favor, solicite uma nova recuperação de senha.',
+        variant: 'destructive',
+      })
+      navigate('/forgot-password')
+      return
+    }
+
+    verifyPasswordResetCode(firebaseAuth, oobCode)
+      .catch(() => {
         toast({
           title: 'Link inválido ou expirado',
           description: 'Por favor, solicite uma nova recuperação de senha.',
           variant: 'destructive',
         })
         navigate('/forgot-password')
-      }
-    })
+      })
   }, [navigate, toast])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -59,11 +71,12 @@ export default function ResetPassword() {
     setIsLoading(true)
 
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: password,
-      })
+      const searchParams = new URLSearchParams(window.location.search)
+      const oobCode = searchParams.get('oobCode')
+      
+      if (!oobCode) throw new Error('Código de recuperação inválido.')
 
-      if (error) throw error
+      await confirmPasswordReset(firebaseAuth, oobCode, password)
 
       toast({
         title: 'Senha atualizada!',

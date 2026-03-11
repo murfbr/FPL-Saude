@@ -1,58 +1,71 @@
-import { supabase } from '@/lib/supabase/client'
+import { db } from '@/lib/firebase'
 import { TimeRecord } from '@/types'
+import { collection, query, where, getDocs, doc, setDoc, updateDoc, orderBy, limit, getDoc } from 'firebase/firestore'
 import { format } from 'date-fns'
+
+const COMPANY_ID = 'fpl-saude'
 
 export async function getTodayRecord(
   professionalId: string,
 ): Promise<{ data: TimeRecord | null; error: any }> {
-  const today = format(new Date(), 'yyyy-MM-dd')
-  const { data, error } = await supabase
-    .from('time_tracking')
-    .select('*')
-    .eq('professional_id', professionalId)
-    .eq('date', today)
-    .order('created_at', { ascending: false })
-    .maybeSingle()
+  try {
+    const today = format(new Date(), 'yyyy-MM-dd')
+    const ref = collection(db, 'companies', COMPANY_ID, 'professionals', professionalId, 'time_tracking')
+    const q = query(ref, where('date', '==', today))
+    const snapshot = await getDocs(q)
 
-  return { data: data as TimeRecord | null, error }
+    if (snapshot.empty) return { data: null, error: null }
+    // Sort manually or use descending query, assuming at most one per day usually
+    const records = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as TimeRecord))
+    return { data: records[0], error: null }
+
+  } catch (error) {
+    return { data: null, error }
+  }
 }
 
 export async function clockIn(
   professionalId: string,
 ): Promise<{ data: TimeRecord | null; error: any }> {
-  const now = new Date()
-  const today = format(now, 'yyyy-MM-dd')
-  const time = format(now, 'HH:mm:ss')
+  try {
+    const now = new Date()
+    const today = format(now, 'yyyy-MM-dd')
+    const time = format(now, 'HH:mm:ss')
 
-  const { data, error } = await supabase
-    .from('time_tracking')
-    .insert({
+    const ref = doc(collection(db, 'companies', COMPANY_ID, 'professionals', professionalId, 'time_tracking'))
+
+    const record: TimeRecord = {
+      id: ref.id,
       professional_id: professionalId,
       date: today,
       clock_in: time,
-    } as any)
-    .select()
-    .single()
+      clock_out: null,
+      created_at: now.toISOString()
+    }
 
-  return { data: data as TimeRecord, error }
+    await setDoc(ref, record)
+    return { data: record, error: null }
+  } catch (error) {
+    return { data: null, error }
+  }
 }
 
 export async function clockOut(
+  professionalId: string,
   recordId: string,
 ): Promise<{ data: TimeRecord | null; error: any }> {
-  const now = new Date()
-  const time = format(now, 'HH:mm:ss')
+  try {
+    const now = new Date()
+    const time = format(now, 'HH:mm:ss')
 
-  const { data, error } = await supabase
-    .from('time_tracking')
-    .update({
-      clock_out: time,
-    } as any)
-    .eq('id', recordId)
-    .select()
-    .single()
+    const ref = doc(db, 'companies', COMPANY_ID, 'professionals', professionalId, 'time_tracking', recordId)
+    await updateDoc(ref, { clock_out: time })
 
-  return { data: data as TimeRecord, error }
+    const snap = await getDoc(ref)
+    return { data: { id: snap.id, ...snap.data() } as TimeRecord, error: null }
+  } catch (error) {
+    return { data: null, error }
+  }
 }
 
 export async function upsertTimeRecord(
@@ -61,39 +74,32 @@ export async function upsertTimeRecord(
   clockInTime: string,
   clockOutTime: string | null,
 ): Promise<{ data: TimeRecord | null; error: any }> {
-  // Check if record exists
-  const { data: existing } = await supabase
-    .from('time_tracking')
-    .select('id')
-    .eq('professional_id', professionalId)
-    .eq('date', date)
-    .maybeSingle()
+  try {
+    const refCol = collection(db, 'companies', COMPANY_ID, 'professionals', professionalId, 'time_tracking')
+    const q = query(refCol, where('date', '==', date))
+    const snapshot = await getDocs(q)
 
-  let result
-  if (existing) {
-    result = await supabase
-      .from('time_tracking')
-      .update({
-        clock_in: clockInTime,
-        clock_out: clockOutTime,
-      } as any)
-      .eq('id', existing.id)
-      .select()
-      .single()
-  } else {
-    result = await supabase
-      .from('time_tracking')
-      .insert({
+    let docRef
+    if (!snapshot.empty) {
+      docRef = snapshot.docs[0].ref
+      await updateDoc(docRef, { clock_in: clockInTime, clock_out: clockOutTime })
+    } else {
+      docRef = doc(refCol)
+      await setDoc(docRef, {
+        id: docRef.id,
         professional_id: professionalId,
         date: date,
         clock_in: clockInTime,
         clock_out: clockOutTime,
-      } as any)
-      .select()
-      .single()
-  }
+        created_at: new Date().toISOString()
+      })
+    }
 
-  return { data: result.data as TimeRecord, error: result.error }
+    const snap = await getDoc(docRef)
+    return { data: { id: snap.id, ...snap.data() } as TimeRecord, error: null }
+  } catch (error) {
+    return { data: null, error }
+  }
 }
 
 export async function getMonthlyTimeRecords(
@@ -101,38 +107,41 @@ export async function getMonthlyTimeRecords(
   year: number,
   month: number,
 ): Promise<{ data: TimeRecord[] | null; error: any }> {
-  const startDate = `${year}-${String(month).padStart(2, '0')}-01`
-  // Simple next month calculation
-  let endYear = year
-  let endMonth = month + 1
-  if (endMonth > 12) {
-    endMonth = 1
-    endYear = year + 1
+  try {
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`
+    let endYear = year
+    let endMonth = month + 1
+    if (endMonth > 12) {
+      endMonth = 1
+      endYear = year + 1
+    }
+    const endDateStr = `${endYear}-${String(endMonth).padStart(2, '0')}-01`
+
+    const ref = collection(db, 'companies', COMPANY_ID, 'professionals', professionalId, 'time_tracking')
+    const q = query(ref, where('date', '>=', startDate), where('date', '<', endDateStr))
+    const snapshot = await getDocs(q)
+
+    const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as TimeRecord))
+    data.sort((a, b) => a.date.localeCompare(b.date) || a.clock_in.localeCompare(b.clock_in))
+
+    return { data, error: null }
+  } catch (error) {
+    return { data: null, error }
   }
-  const endDateStr = `${endYear}-${String(endMonth).padStart(2, '0')}-01`
-
-  const { data, error } = await supabase
-    .from('time_tracking')
-    .select('*')
-    .eq('professional_id', professionalId)
-    .gte('date', startDate)
-    .lt('date', endDateStr)
-    .order('date', { ascending: true })
-    .order('clock_in', { ascending: true })
-
-  return { data: data as TimeRecord[], error }
 }
 
 export async function getTimeTrackingHistory(
   professionalId: string,
-  limit = 20,
+  limitNum = 20,
 ): Promise<{ data: TimeRecord[] | null; error: any }> {
-  const { data, error } = await supabase
-    .from('time_tracking')
-    .select('*')
-    .eq('professional_id', professionalId)
-    .order('date', { ascending: false })
-    .limit(limit)
+  try {
+    const ref = collection(db, 'companies', COMPANY_ID, 'professionals', professionalId, 'time_tracking')
+    const q = query(ref, orderBy('date', 'desc'), limit(limitNum))
+    const snapshot = await getDocs(q)
 
-  return { data: data as TimeRecord[], error }
+    const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as TimeRecord))
+    return { data, error: null }
+  } catch (error) {
+    return { data: null, error }
+  }
 }

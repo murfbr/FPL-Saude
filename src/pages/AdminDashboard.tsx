@@ -97,10 +97,8 @@ const AdminDashboard = () => {
           return
         }
       }
-      if (user?.user_metadata?.full_name) {
-        setUserName(user.user_metadata.full_name)
-      } else if (user?.user_metadata?.name) {
-        setUserName(user.user_metadata.name)
+      if (user?.displayName) {
+        setUserName(user.displayName)
       } else {
         setUserName('Administrador')
       }
@@ -224,43 +222,45 @@ const AdminDashboard = () => {
 
           <TabsContent value="overview">
             <div className="grid gap-6 md:grid-cols-3">
-              <div className="md:col-span-2">
+              <div className="md:col-span-2 space-y-6">
                 <UpcomingAppointments />
-                <BirthdaysList />
+                <div className="grid gap-6 sm:grid-cols-2">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Profissionais</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {isLoading ? (
+                        <Skeleton className="h-10 w-24" />
+                      ) : (
+                        <div className="text-3xl font-bold">
+                          {professionals.length}
+                        </div>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        Profissionais cadastrados
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Pacientes</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {isLoading ? (
+                        <Skeleton className="h-10 w-24" />
+                      ) : (
+                        <div className="text-3xl font-bold">{clients.length}</div>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        Pacientes ({clientStatusFilter})
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
               </div>
               <div className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Profissionais</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {isLoading ? (
-                      <Skeleton className="h-10 w-24" />
-                    ) : (
-                      <div className="text-3xl font-bold">
-                        {professionals.length}
-                      </div>
-                    )}
-                    <p className="text-xs text-muted-foreground">
-                      Profissionais cadastrados
-                    </p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Pacientes</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {isLoading ? (
-                      <Skeleton className="h-10 w-24" />
-                    ) : (
-                      <div className="text-3xl font-bold">{clients.length}</div>
-                    )}
-                    <p className="text-xs text-muted-foreground">
-                      Pacientes ({clientStatusFilter})
-                    </p>
-                  </CardContent>
-                </Card>
+                <BirthdaysList />
               </div>
             </div>
           </TabsContent>

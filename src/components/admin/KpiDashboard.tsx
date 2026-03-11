@@ -376,24 +376,30 @@ export const KpiDashboard = () => {
               config={serviceChartConfig}
               className="h-[300px] w-full"
             >
-              <ResponsiveContainer width="100%" height="100%">
-                <RechartsBarChart data={serviceData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" />
-                  <YAxis
-                    type="category"
-                    dataKey="service_name"
-                    width={120}
-                    tick={{ fontSize: 12 }}
-                  />
-                  <Tooltip content={<ChartTooltipContent />} />
-                  <RechartsBar
-                    dataKey="count"
-                    fill="var(--color-count)"
-                    radius={[0, 4, 4, 0]}
-                  />
-                </RechartsBarChart>
-              </ResponsiveContainer>
+              {serviceData.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                  Nenhum dado para o período selecionado.
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <RechartsBarChart data={serviceData} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" />
+                    <YAxis
+                      type="category"
+                      dataKey="service_name"
+                      width={120}
+                      tick={{ fontSize: 12 }}
+                    />
+                    <Tooltip content={<ChartTooltipContent />} />
+                    <RechartsBar
+                      dataKey="count"
+                      fill="var(--color-count)"
+                      radius={[0, 4, 4, 0]}
+                    />
+                  </RechartsBarChart>
+                </ResponsiveContainer>
+              )}
             </ChartContainer>
           </CardContent>
         </Card>
@@ -408,34 +414,42 @@ export const KpiDashboard = () => {
               config={partnershipChartConfig}
               className="h-[300px] w-full"
             >
-              <ResponsiveContainer width="100%" height="100%">
-                <RechartsBarChart data={partnershipData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="partnership_name"
-                    tick={{ fontSize: 12 }}
-                    angle={-45}
-                    textAnchor="end"
-                    height={60}
-                  />
-                  <YAxis yAxisId="left" orientation="left" stroke="#8884d8" />
-                  <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" />
-                  <Tooltip content={<ChartTooltipContent />} />
-                  <Legend />
-                  <RechartsBar
-                    yAxisId="left"
-                    dataKey="client_count"
-                    fill="var(--color-client_count)"
-                    name="Clientes"
-                  />
-                  <RechartsBar
-                    yAxisId="right"
-                    dataKey="total_revenue"
-                    fill="var(--color-total_revenue)"
-                    name="Faturamento"
-                  />
-                </RechartsBarChart>
-              </ResponsiveContainer>
+              {partnershipData.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                  Nenhum dado para o período selecionado.
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <RechartsBarChart data={partnershipData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="partnership_name"
+                      tick={{ fontSize: 12 }}
+                      angle={-45}
+                      textAnchor="end"
+                      height={60}
+                    />
+                    <YAxis yAxisId="left" orientation="left" stroke="#8884d8" />
+                    <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" />
+                    <Tooltip content={<ChartTooltipContent />} />
+                    <ChartLegend content={<ChartLegendContent />} />
+                    <RechartsBar
+                      yAxisId="left"
+                      dataKey="client_count"
+                      fill="var(--color-client_count)"
+                      name="Clientes"
+                      radius={[4, 4, 0, 0]}
+                    />
+                    <RechartsBar
+                      yAxisId="right"
+                      dataKey="total_revenue"
+                      fill="var(--color-total_revenue)"
+                      name="Faturamento"
+                      radius={[4, 4, 0, 0]}
+                    />
+                  </RechartsBarChart>
+                </ResponsiveContainer>
+              )}
             </ChartContainer>
           </CardContent>
         </Card>
@@ -445,32 +459,40 @@ export const KpiDashboard = () => {
           <CardTitle>Comparativo Anual (Últimos 12 Meses)</CardTitle>
         </CardHeader>
         <CardContent>
-          <ChartContainer
-            config={annualChartConfig}
-            className="h-[400px] w-full"
-          >
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={annualData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip content={<ChartTooltipContent />} />
-                <ChartLegend content={<ChartLegendContent />} />
-                <Line
-                  type="monotone"
-                  dataKey="total_revenue"
-                  stroke="var(--color-total_revenue)"
-                  name="Faturamento"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="total_appointments"
-                  stroke="var(--color-total_appointments)"
-                  name="Sessões"
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </ChartContainer>
+            <ChartContainer
+              config={annualChartConfig}
+              className="h-[400px] w-full"
+            >
+              {annualData.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                  Nenhum dado para o período selecionado.
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={annualData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis />
+                    <Tooltip content={<ChartTooltipContent />} />
+                    <ChartLegend content={<ChartLegendContent />} />
+                    <Line
+                      type="monotone"
+                      dataKey="total_revenue"
+                      stroke="var(--color-total_revenue)"
+                      name="Faturamento"
+                      activeDot={{ r: 6, opacity: 0.8 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="total_appointments"
+                      stroke="var(--color-total_appointments)"
+                      name="Sessões"
+                      activeDot={{ r: 6, opacity: 0.8 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </ChartContainer>
         </CardContent>
       </Card>
     </div>

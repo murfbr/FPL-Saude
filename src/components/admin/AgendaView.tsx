@@ -169,16 +169,6 @@ export const AgendaView = () => {
 
         <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end">
           {renderViewSwitcher()}
-
-          <Button
-            variant={isMobile ? 'outline' : 'ghost'}
-            size="icon"
-            onClick={handleDataRefresh}
-            title="Atualizar Dados"
-            className="shrink-0"
-          >
-            <RefreshCw className="h-4 w-4" />
-          </Button>
         </div>
       </div>
 

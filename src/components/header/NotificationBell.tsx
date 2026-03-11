@@ -7,9 +7,10 @@ import {
   getUnreadNotificationCount,
   getRecentUnreadNotifications,
   markNotificationAsRead,
-  Notification,
 } from '@/services/notifications'
-import { supabase } from '@/lib/supabase/client'
+import { Notification } from '@/types'
+import { db } from '@/lib/firebase'
+import { collection, query, onSnapshot } from 'firebase/firestore'
 import {
   Popover,
   PopoverContent,
@@ -42,30 +43,23 @@ export const NotificationBell = () => {
 
     if (!professionalId) return
 
-    const channel = supabase
-      .channel('professional-notifications-bell')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'professional_notifications',
-          filter: `professional_id=eq.${professionalId}`,
-        },
-        () => {
-          fetchData()
-        },
-      )
-      .subscribe()
+    const ref = collection(db, 'companies', 'fpl-saude', 'professionals', professionalId, 'notifications')
+    const q = query(ref)
+
+    const unsubscribe = onSnapshot(q, () => {
+      fetchData()
+    })
 
     return () => {
-      supabase.removeChannel(channel)
+      unsubscribe()
     }
   }, [professionalId, user])
 
   const handleNotificationClick = async (notification: Notification) => {
     // Mark as read
-    await markNotificationAsRead(notification.id)
+    if (professionalId) {
+      await markNotificationAsRead(professionalId, notification.id)
+    }
 
     // Update local state optimistically or re-fetch
     fetchData()
@@ -115,7 +109,7 @@ export const NotificationBell = () => {
                   onClick={() => handleNotificationClick(notification)}
                 >
                   <p className="text-sm font-medium leading-snug">
-                    {notification.message}
+                    {notification.content}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     {formatDistanceToNow(new Date(notification.created_at), {

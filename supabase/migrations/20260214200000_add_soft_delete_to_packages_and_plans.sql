@@ -1,2 +1,0 @@
-ALTER TABLE public.packages ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT TRUE;
-ALTER TABLE public.subscription_plans ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT TRUE;

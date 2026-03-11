@@ -1,59 +1,80 @@
-import { supabase } from '@/lib/supabase/client'
-import { Database } from '@/lib/supabase/types'
+import { db } from '@/lib/firebase'
+import { Notification } from '@/types'
+import { collection, query, where, getDocs, doc, setDoc, updateDoc, orderBy, limit, getCountFromServer, getDoc } from 'firebase/firestore'
 
-export type Notification =
-  Database['public']['Tables']['professional_notifications']['Row']
+const COMPANY_ID = 'fpl-saude'
 
 export async function getNotifications(professionalId: string) {
-  const { data, error } = await supabase
-    .from('professional_notifications')
-    .select('*')
-    .eq('professional_id', professionalId)
-    .order('created_at', { ascending: false })
+  try {
+    const ref = collection(db, 'companies', COMPANY_ID, 'professionals', professionalId, 'notifications')
+    const q = query(ref)
+    const snapshot = await getDocs(q)
 
-  return { data, error }
+    const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Notification))
+    data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+    return { data, error: null }
+  } catch (error) {
+    return { data: null, error }
+  }
 }
 
 export async function getRecentUnreadNotifications(
   professionalId: string,
-  limit = 3,
+  limitNum = 3,
 ) {
-  const { data, error } = await supabase
-    .from('professional_notifications')
-    .select('*')
-    .eq('professional_id', professionalId)
-    .eq('is_read', false)
-    .order('created_at', { ascending: false })
-    .limit(limit)
+  try {
+    const ref = collection(db, 'companies', COMPANY_ID, 'professionals', professionalId, 'notifications')
+    const q = query(ref, where('is_read', '==', false))
+    const snapshot = await getDocs(q)
 
-  return { data, error }
+    let data = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Notification))
+
+    // Sort in memory to avoid requiring a composite index in Firestore
+    data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    data = data.slice(0, limitNum)
+
+    return { data, error: null }
+  } catch (error) {
+    return { data: null, error }
+  }
 }
 
 export async function getUnreadNotificationCount(professionalId: string) {
-  const { count, error } = await supabase
-    .from('professional_notifications')
-    .select('*', { count: 'exact', head: true })
-    .eq('professional_id', professionalId)
-    .eq('is_read', false)
+  try {
+    const ref = collection(db, 'companies', COMPANY_ID, 'professionals', professionalId, 'notifications')
+    const q = query(ref, where('is_read', '==', false))
+    const snapshot = await getCountFromServer(q)
 
-  return { count, error }
+    return { count: snapshot.data().count, error: null }
+  } catch (error) {
+    return { count: 0, error }
+  }
 }
 
-export async function markNotificationAsRead(notificationId: string) {
-  const { error } = await supabase
-    .from('professional_notifications')
-    .update({ is_read: true })
-    .eq('id', notificationId)
-
-  return { error }
+export async function markNotificationAsRead(professionalId: string, notificationId: string) {
+  try {
+    const ref = doc(db, 'companies', COMPANY_ID, 'professionals', professionalId, 'notifications', notificationId)
+    await updateDoc(ref, { is_read: true })
+    return { error: null }
+  } catch (error) {
+    return { error }
+  }
 }
 
 export async function markAllNotificationsAsRead(professionalId: string) {
-  const { error } = await supabase
-    .from('professional_notifications')
-    .update({ is_read: true })
-    .eq('professional_id', professionalId)
-    .eq('is_read', false)
+  try {
+    const ref = collection(db, 'companies', COMPANY_ID, 'professionals', professionalId, 'notifications')
+    const q = query(ref, where('is_read', '==', false))
+    const snapshot = await getDocs(q)
 
-  return { error }
+    // Simplification for batch update
+    // Depending on size this could need a batched write, doing individual updates for safety here
+    const promises = snapshot.docs.map(d => updateDoc(d.ref, { is_read: true }))
+    await Promise.all(promises)
+
+    return { error: null }
+  } catch (error) {
+    return { error }
+  }
 }

@@ -1,8 +1,0 @@
-{
-  "imports": {
-    "jsr:@supabase/functions-js/edge-runtime.d.ts": "jsr:@supabase/functions-js/edge-runtime.d.ts",
-    "jspdf": "https://esm.sh/jspdf@2.5.1",
-    "docx": "https://esm.sh/docx@8.5.0",
-    "../_shared/": "../_shared/"
-  }
-}

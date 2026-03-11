@@ -1,126 +1,181 @@
-import { supabase } from '@/lib/supabase/client'
+import { db } from '@/lib/firebase'
+import { collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, query, orderBy, where } from 'firebase/firestore'
 import { Professional, Service } from '@/types'
 
-type ProfessionalServiceLink = {
-  professionals: Professional
-}
+const COMPANY_ID = 'fpl-saude'
 
 export async function getProfessionalsByService(
   serviceId: string,
 ): Promise<{ data: Professional[] | null; error: any }> {
-  const { data, error } = await supabase
-    .from('professional_services')
-    .select('professionals(*)')
-    .eq('service_id', serviceId)
+  try {
+    const profsRef = collection(db, 'companies', COMPANY_ID, 'professionals')
+    // A migração de SQL para NoSQL frequentemente converte Arrays puros em 
+    // Dicionários indexados, ex: {"0": "uuid", "1": "uuid2"} ou strings.
+    const q = query(profsRef)
+    const snapshot = await getDocs(q)
 
-  if (error) {
+    const professionals: Professional[] = []
+    snapshot.forEach(doc => {
+      const data = doc.data()
+      // Filtra em memória aceitando formatações distorcidas de booleanos vindos do DB
+      const isActive = data.is_active === true || data.is_active === 'true' || data.is_active === 1
+      if (!isActive || !data.service_ids) return
+
+      let hasService = false
+      if (Array.isArray(data.service_ids)) {
+        hasService = data.service_ids.includes(serviceId)
+      } else if (typeof data.service_ids === 'string') {
+        hasService = data.service_ids.includes(serviceId)
+      } else if (typeof data.service_ids === 'object') {
+        // Se for um mapa explícito {"id-do-servico": true}
+        if (data.service_ids[serviceId]) hasService = true
+        // Se for um mapa serializado de array (index-based) {"0": "id-do-servico"}
+        else if (Object.values(data.service_ids).includes(serviceId)) hasService = true
+      }
+
+      if (hasService) {
+        professionals.push({ id: doc.id, ...data } as Professional)
+      }
+    })
+
+    return { data: professionals, error: null }
+  } catch (error) {
     return { data: null, error }
   }
-
-  const professionals = data
-    ?.map((item) => (item as ProfessionalServiceLink).professionals)
-    .filter(Boolean)
-
-  return { data: professionals || null, error: null }
 }
 
 export async function getAllProfessionals(options?: {
   activeOnly?: boolean
-}): Promise<{
-  data: Professional[] | null
-  error: any
-}> {
-  let query = supabase
-    .from('professionals')
-    .select('*')
-    .order('name', { ascending: true })
+}): Promise<{ data: Professional[] | null; error: any }> {
+  try {
+    const profsRef = collection(db, 'companies', COMPANY_ID, 'professionals')
+    let q = query(profsRef, orderBy('name', 'asc'))
 
-  if (options?.activeOnly) {
-    query = query.eq('is_active', true)
+    const snapshot = await getDocs(q)
+    const professionals: Professional[] = []
+
+    snapshot.forEach(doc => {
+      const data = doc.data()
+      if (options?.activeOnly) {
+        const isActive = data.is_active === true || data.is_active === 'true' || data.is_active === 1
+        if (!isActive) return
+      }
+      professionals.push({ id: doc.id, ...data } as Professional)
+    })
+
+    return { data: professionals, error: null }
+  } catch (error) {
+    return { data: null, error }
   }
-
-  const { data, error } = await query
-  return { data, error }
 }
 
 export async function getProfessionalById(
   id: string,
 ): Promise<{ data: Professional | null; error: any }> {
-  const { data, error } = await supabase
-    .from('professionals')
-    .select('*')
-    .eq('id', id)
-    .single()
-  return { data, error }
+  try {
+    const docRef = doc(db, 'companies', COMPANY_ID, 'professionals', id)
+    const snapshot = await getDoc(docRef)
+
+    if (!snapshot.exists()) return { data: null, error: new Error('Profissional não encontrado') }
+    return { data: { id: snapshot.id, ...snapshot.data() } as Professional, error: null }
+  } catch (error) {
+    return { data: null, error }
+  }
 }
 
 export async function updateProfessional(
   id: string,
   updates: Partial<Omit<Professional, 'id' | 'created_at' | 'user_id'>>,
 ): Promise<{ data: Professional | null; error: any }> {
-  const { data, error } = await supabase
-    .from('professionals')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single()
-  return { data, error }
+  try {
+    const docRef = doc(db, 'companies', COMPANY_ID, 'professionals', id)
+    await updateDoc(docRef, updates)
+
+    const snapshot = await getDoc(docRef)
+    return { data: { id: snapshot.id, ...snapshot.data() } as Professional, error: null }
+  } catch (error) {
+    return { data: null, error }
+  }
 }
 
 export async function deleteProfessional(id: string): Promise<{ error: any }> {
-  const { error } = await supabase.from('professionals').delete().eq('id', id)
-  return { error }
+  try {
+    const docRef = doc(db, 'companies', COMPANY_ID, 'professionals', id)
+    await deleteDoc(docRef)
+    return { error: null }
+  } catch (error) {
+    return { error }
+  }
 }
 
+// Funções de manipulação do Array de Serviços
 export async function getServicesByProfessional(
   professionalId: string,
 ): Promise<{ data: Service[] | null; error: any }> {
-  const { data, error } = await supabase
-    .from('professional_services')
-    .select('services(*)')
-    .eq('professional_id', professionalId)
+  try {
+    // Busca o profissional e lê seus IDs
+    const { data: prof } = await getProfessionalById(professionalId)
+    if (!prof || !prof.service_ids || prof.service_ids.length === 0) {
+      return { data: [], error: null }
+    }
 
-  if (error) {
+    // Busca os dados de cada serviço baseado nesse array num batch
+    const servicesRef = collection(db, 'companies', COMPANY_ID, 'services')
+    const q = query(servicesRef, where('__name__', 'in', prof.service_ids))
+    const snapshot = await getDocs(q)
+
+    const services: Service[] = []
+    snapshot.forEach(doc => {
+      services.push({ id: doc.id, ...doc.data() } as Service)
+    })
+
+    return { data: services, error: null }
+  } catch (error) {
     return { data: null, error }
   }
-
-  const services = data?.map((item: any) => item.services).filter(Boolean)
-  return { data: services || null, error: null }
 }
 
 export async function addServiceToProfessional(
   professionalId: string,
   serviceId: string,
 ): Promise<{ error: any }> {
-  const { error } = await supabase
-    .from('professional_services')
-    .insert({ professional_id: professionalId, service_id: serviceId })
-  return { error }
+  try {
+    const docRef = doc(db, 'companies', COMPANY_ID, 'professionals', professionalId)
+    const snapshot = await getDoc(docRef)
+
+    const currentServices = snapshot.data()?.service_ids || []
+    if (!currentServices.includes(serviceId)) {
+      currentServices.push(serviceId)
+      await updateDoc(docRef, { service_ids: currentServices })
+    }
+    return { error: null }
+  } catch (error) {
+    return { error }
+  }
 }
 
 export async function removeServiceFromProfessional(
   professionalId: string,
   serviceId: string,
 ): Promise<{ error: any }> {
-  const { error } = await supabase
-    .from('professional_services')
-    .delete()
-    .eq('professional_id', professionalId)
-    .eq('service_id', serviceId)
-  return { error }
+  try {
+    const docRef = doc(db, 'companies', COMPANY_ID, 'professionals', professionalId)
+    const snapshot = await getDoc(docRef)
+
+    let currentServices = snapshot.data()?.service_ids || []
+    currentServices = currentServices.filter((id: string) => id !== serviceId)
+    await updateDoc(docRef, { service_ids: currentServices })
+
+    return { error: null }
+  } catch (error) {
+    return { error }
+  }
 }
 
 export async function createProfessionalUser(
   data: any,
 ): Promise<{ data: any; error: any }> {
-  const { data: result, error } = await supabase.functions.invoke(
-    'create-professional',
-    {
-      body: data,
-    },
-  )
-  if (error) return { data: null, error }
-  if (!result.success)
-    return { data: null, error: { message: result.error || 'Unknown error' } }
-  return { data: result.data, error: null }
+  // Nota: Firebase functions seria o análogo de supabase.functions.invoke.
+  // Por ora deixaremos não-implementado até ajustarmos o fluxo de Auth
+  return { data: null, error: new Error('Função de Servidor pendente') }
 }

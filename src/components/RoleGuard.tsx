@@ -1,6 +1,6 @@
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '@/providers/AuthProvider'
-import { UserRole } from '@/lib/supabase/types'
+import { UserRole } from '@/providers/AuthProvider'
 
 interface RoleGuardProps {
   children: React.ReactNode

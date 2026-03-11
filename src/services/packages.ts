@@ -1,53 +1,74 @@
-import { supabase } from '@/lib/supabase/client'
+import { db } from '@/lib/firebase'
+import { collection, doc, getDocs, getDoc, setDoc, updateDoc, query, orderBy, where } from 'firebase/firestore'
 import { Package } from '@/types'
 
-export async function getPackages(includeInactive = false): Promise<{
-  data: Package[] | null
-  error: any
-}> {
-  let query = supabase
-    .from('packages')
-    .select('*, services(*)')
-    .order('name', { ascending: true })
+const COMPANY_ID = 'fpl-saude'
 
-  if (!includeInactive) {
-    query = query.eq('is_active', true)
+export async function getPackages(includeInactive = false): Promise<{ data: Package[] | null; error: any }> {
+  try {
+    const packagesRef = collection(db, 'companies', COMPANY_ID, 'packages')
+    let q = query(packagesRef, orderBy('name', 'asc'))
+
+    if (!includeInactive) {
+      q = query(packagesRef, where('is_active', '==', true), orderBy('name', 'asc'))
+    }
+
+    const snapshot = await getDocs(q)
+    const packages: Package[] = []
+    
+    for (const d of snapshot.docs) {
+      const p = { id: d.id, ...d.data() } as any
+      if (p.service_id) {
+        const sSnap = await getDoc(doc(db, 'companies', COMPANY_ID, 'services', p.service_id))
+        if(sSnap.exists()) p.services = { name: sSnap.data().name, price: sSnap.data().price }
+      }
+      packages.push(p)
+    }
+    
+    return { data: packages, error: null }
+  } catch (error) {
+    console.error("🔥 [AÇÃO NECESSÁRIA - CLIQUE NO LINK ABAIXO PARA CRIAR ÍNDICE DE PACOTES]: ", error)
+    return { data: null, error }
   }
-
-  const { data, error } = await query
-
-  return { data: data as Package[] | null, error }
 }
 
 export async function createPackage(
   pkg: Omit<Package, 'id' | 'services' | 'is_active'>,
 ): Promise<{ data: Package | null; error: any }> {
-  const { data, error } = await supabase
-    .from('packages')
-    .insert({ ...pkg, is_active: true })
-    .select()
-    .single()
-  return { data, error }
+  try {
+    const packagesRef = collection(db, 'companies', COMPANY_ID, 'packages')
+    const newDocRef = doc(packagesRef)
+    const newPackage = { id: newDocRef.id, ...pkg, is_active: true }
+    
+    await setDoc(newDocRef, newPackage)
+    return { data: newPackage as Package, error: null }
+  } catch (error) {
+    return { data: null, error }
+  }
 }
 
 export async function updatePackage(
   id: string,
   pkg: Partial<Omit<Package, 'id' | 'services'>>,
 ): Promise<{ data: Package | null; error: any }> {
-  const { data, error } = await supabase
-    .from('packages')
-    .update(pkg)
-    .eq('id', id)
-    .select()
-    .single()
-  return { data, error }
+  try {
+    const docRef = doc(db, 'companies', COMPANY_ID, 'packages', id)
+    await updateDoc(docRef, pkg)
+    
+    const snapshot = await getDoc(docRef)
+    return { data: { id: snapshot.id, ...snapshot.data() } as Package, error: null }
+  } catch (error) {
+    return { data: null, error }
+  }
 }
 
 export async function deletePackage(id: string): Promise<{ error: any }> {
-  // Soft delete: set is_active to false instead of removing the row
-  const { error } = await supabase
-    .from('packages')
-    .update({ is_active: false })
-    .eq('id', id)
-  return { error }
+  // Soft delete match
+  try {
+    const docRef = doc(db, 'companies', COMPANY_ID, 'packages', id)
+    await updateDoc(docRef, { is_active: false })
+    return { error: null }
+  } catch (error) {
+    return { error }
+  }
 }

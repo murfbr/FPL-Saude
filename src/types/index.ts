@@ -35,6 +35,7 @@ export interface Professional {
   // Optional fields for dynamic availability checks
   current_occupancy?: number
   max_capacity?: number
+  service_ids?: string[]
 }
 
 export interface Schedule {
@@ -177,5 +178,15 @@ export interface TimeRecord {
   date: string
   clock_in: string
   clock_out: string | null
+  created_at: string
+}
+
+export interface Notification {
+  id: string
+  professional_id: string
+  title: string
+  content: string
+  is_read: boolean
+  link: string | null
   created_at: string
 }

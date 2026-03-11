@@ -1,17 +1,23 @@
-import { supabase } from '@/lib/supabase/client'
+import { storage } from '@/lib/firebase'
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
 
 export const uploadFile = async (bucket: string, path: string, file: File) => {
-  const { data, error } = await supabase.storage
-    .from(bucket)
-    .upload(path, file, {
-      cacheControl: '3600',
-      upsert: true,
-    })
+  try {
+    const storageRef = ref(storage, `${bucket}/${path}`)
+    const snapshot = await uploadBytesResumable(storageRef, file)
 
-  return { data, error }
+    return { data: snapshot, error: null }
+  } catch (error) {
+    return { data: null, error }
+  }
 }
 
-export const getPublicUrl = (bucket: string, path: string) => {
-  const { data } = supabase.storage.from(bucket).getPublicUrl(path)
-  return data.publicUrl
+export const getPublicUrl = async (bucket: string, path: string) => {
+  try {
+    const storageRef = ref(storage, `${bucket}/${path}`)
+    const url = await getDownloadURL(storageRef)
+    return url
+  } catch (error) {
+    return null
+  }
 }
