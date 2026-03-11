@@ -67,7 +67,7 @@ import {
   getFilteredAvailableSchedules,
   getAvailableProfessionalsAtSlot,
 } from '@/services/schedules'
-import { getAvailableDatesForProfessional } from '@/services/availability'
+import { getAvailableDatesForProfessional, getRecurringAvailability } from '@/services/availability'
 import { getAllServices } from '@/services'
 import {
   bookAppointment,
@@ -96,17 +96,18 @@ const appointmentSchema = z
       .min(2, 'Mínimo de 2 semanas para recorrência')
       .max(52, 'Máximo de 52 semanas (1 ano)')
       .optional(),
+    recurrenceDays: z.array(z.number()).optional(),
     discount: z.coerce.number().min(0).optional(),
   })
   .refine(
     (data) => {
       if (data.isRecurring) {
-        return !!data.recurrenceWeeks && data.recurrenceWeeks >= 2
+        return !!data.recurrenceWeeks && data.recurrenceWeeks >= 2 && !!data.recurrenceDays && data.recurrenceDays.length > 0
       }
       return true
     },
     {
-      message: 'Defina a duração da recorrência (mínimo 2 semanas).',
+      message: 'Defina a duração e ao menos um dia da semana para recorrência.',
       path: ['recurrenceWeeks'],
     },
   )
@@ -138,6 +139,7 @@ export const AppointmentFormDialog = ({
   const [services, setServices] = useState<Service[]>([])
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [availableDates, setAvailableDates] = useState<string[] | null>(null)
+  const [availableWeekdays, setAvailableWeekdays] = useState<number[] | null>(null)
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [isLoading, setIsLoading] = useState({
     clients: true,
@@ -165,6 +167,7 @@ export const AppointmentFormDialog = ({
       date: initialDate || undefined,
       isRecurring: false,
       recurrenceWeeks: 4,
+      recurrenceDays: [],
       startTime: '',
       serviceId: '',
       clientId: '',
@@ -210,6 +213,7 @@ export const AppointmentFormDialog = ({
         date: initialDate || undefined,
         isRecurring: false,
         recurrenceWeeks: 4,
+        recurrenceDays: [],
         startTime: '',
         serviceId: '',
         clientId: '',
@@ -220,6 +224,7 @@ export const AppointmentFormDialog = ({
       setAvailablePackages([])
       setActiveSubscription(null)
       setAppliedPartnershipDiscount(null)
+      setAvailableWeekdays(null)
     }
   }, [isOpen, initialDate, form, preselectedProfessionalId, isSpecificTimeSlot])
 
@@ -338,6 +343,43 @@ export const AppointmentFormDialog = ({
     }
   }, [professionalId, serviceId, currentMonth, isSpecificTimeSlot])
 
+  // Get professional valid weekdays for Recurring Appointment
+  useEffect(() => {
+    if (isRecurring && professionalId && serviceId) {
+      getRecurringAvailability(professionalId).then(res => {
+        if (res.data && res.data.length > 0) {
+          let rules = res.data.filter(r => !r.service_ids || r.service_ids.includes(serviceId))
+          
+          // If a specific time is already selected, restrict days to only those where the shift covers the time
+          const selectedTime = form.getValues('startTime')
+          if (selectedTime) {
+             const timeStr = formatInTimeZone(new Date(selectedTime), 'HH:mm')
+             rules = rules.filter(r => timeStr >= r.start_time.substring(0, 5) && timeStr < r.end_time.substring(0, 5))
+          }
+
+          const days = Array.from(new Set(rules.map(r => r.day_of_week)))
+          setAvailableWeekdays(days)
+          
+          // Clean up currently selected days that are no longer valid
+          const currentDays = form.getValues('recurrenceDays') || []
+          const validSelectedDays = currentDays.filter(dayId => {
+             const dbDay = dayId === 0 ? 7 : dayId
+             return days.includes(dbDay)
+          })
+          if (validSelectedDays.length !== currentDays.length) {
+             form.setValue('recurrenceDays', validSelectedDays)
+          }
+
+        } else {
+          setAvailableWeekdays([])
+          form.setValue('recurrenceDays', [])
+        }
+      })
+    } else {
+      setAvailableWeekdays(null)
+    }
+  }, [isRecurring, professionalId, serviceId, form])
+
   useEffect(() => {
     if (!isSpecificTimeSlot && professionalId && serviceId && date) {
       setIsLoading((prev) => ({ ...prev, schedules: true }))
@@ -388,7 +430,9 @@ export const AppointmentFormDialog = ({
       if (
         values.isRecurring &&
         values.recurrenceWeeks &&
-        values.recurrenceWeeks >= 2
+        values.recurrenceWeeks >= 2 &&
+        values.recurrenceDays && 
+        values.recurrenceDays.length > 0
       ) {
         result = await bookRecurringAppointments(
           values.professionalId,
@@ -396,6 +440,7 @@ export const AppointmentFormDialog = ({
           values.serviceId,
           values.startTime,
           values.recurrenceWeeks,
+          values.recurrenceDays,
           packageIdToUse,
           discountToUse,
         )
@@ -755,35 +800,101 @@ export const AppointmentFormDialog = ({
               />
 
               {isRecurring && (
-                <FormField
-                  control={form.control}
-                  name="recurrenceWeeks"
-                  render={({ field }) => (
-                    <FormItem className="border rounded-md p-4 bg-muted/10">
-                      <FormLabel className="flex justify-between">
-                        Duração da Recorrência
-                        <span className="text-xs text-muted-foreground font-normal">
-                          Max: 52 semanas
-                        </span>
-                      </FormLabel>
-                      <div className="flex gap-2 items-center">
-                        <FormControl>
-                          <Input
-                            type="number"
-                            min={2}
-                            max={52}
-                            className="w-24"
-                            {...field}
-                          />
-                        </FormControl>
-                        <span className="text-sm text-muted-foreground">
-                          semanas
-                        </span>
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <div className="space-y-4 border rounded-md p-4 bg-muted/10">
+                  <FormField
+                    control={form.control}
+                    name="recurrenceDays"
+                    render={() => (
+                      <FormItem>
+                        <div className="mb-2">
+                          <FormLabel className="text-sm font-medium">Dias da Semana</FormLabel>
+                        </div>
+                        <div className="flex flex-wrap gap-4">
+                          {[
+                            { id: 1, label: 'Seg' },
+                            { id: 2, label: 'Ter' },
+                            { id: 3, label: 'Qua' },
+                            { id: 4, label: 'Qui' },
+                            { id: 5, label: 'Sex' },
+                            { id: 6, label: 'Sáb' },
+                            { id: 0, label: 'Dom' },
+                          ].map((day) => (
+                            <FormField
+                              key={day.id}
+                              control={form.control}
+                              name="recurrenceDays"
+                              render={({ field }) => {
+                                return (
+                                  <FormItem
+                                    key={day.id}
+                                    className="flex flex-row items-center space-x-1 space-y-0"
+                                  >
+                                    <FormControl>
+                                      <Checkbox
+                                        disabled={availableWeekdays !== null && !availableWeekdays.includes(day.id === 0 ? 7 : day.id)}
+                                        checked={field.value?.includes(day.id)}
+                                        onCheckedChange={(checked) => {
+                                          return checked
+                                            ? field.onChange([...(field.value || []), day.id])
+                                            : field.onChange(
+                                                field.value?.filter(
+                                                  (value) => value !== day.id
+                                                )
+                                              )
+                                        }}
+                                      />
+                                    </FormControl>
+                                    <FormLabel 
+                                      className={cn(
+                                        "font-normal text-sm",
+                                        (availableWeekdays !== null && !availableWeekdays.includes(day.id === 0 ? 7 : day.id)) 
+                                        ? "text-muted-foreground cursor-not-allowed" 
+                                        : "cursor-pointer"
+                                      )}
+                                    >
+                                      {day.label}
+                                    </FormLabel>
+                                  </FormItem>
+                                )
+                              }}
+                            />
+                          ))}
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="recurrenceWeeks"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex justify-between">
+                          Duração da Recorrência
+                          <span className="text-xs text-muted-foreground font-normal">
+                            Max: 52 semanas
+                          </span>
+                        </FormLabel>
+                        <div className="flex gap-2 items-center">
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min={2}
+                              max={52}
+                              className="w-24"
+                              {...field}
+                            />
+                          </FormControl>
+                          <span className="text-sm text-muted-foreground">
+                            semanas
+                          </span>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
               )}
             </div>
 

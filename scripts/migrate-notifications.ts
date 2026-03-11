@@ -27,6 +27,7 @@ async function runMigration() {
         console.error('❌ ERRO: Chaves do Supabase ausentes.')
         process.exit(1)
     }
+    /*
     const supabase = createClient(supabaseUrl, supabaseKey)
 
     console.log('\n⏳ Buscando notificações do Supabase...')
@@ -36,6 +37,9 @@ async function runMigration() {
         console.error('Erro ao buscar notificações:', error)
         process.exit(1)
     }
+    */
+   
+    const notifications: any[] = []
 
     if (notifications && notifications.length > 0) {
         console.log(`Encontradas ${notifications.length} notificações.`)

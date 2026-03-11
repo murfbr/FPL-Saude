@@ -1,5 +1,5 @@
 import { db } from '@/lib/firebase'
-import { collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, query, orderBy, where, limit as fbLimit } from 'firebase/firestore'
+import { collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, query, orderBy, where, limit as fbLimit, arrayUnion, writeBatch } from 'firebase/firestore'
 import { Appointment, NoteEntry, Client, Professional, Service } from '@/types'
 
 const COMPANY_ID = 'fpl-saude'
@@ -81,8 +81,69 @@ export async function bookAppointment(
   }
 }
 
-export async function bookRecurringAppointments(professionalId: string, clientId: string, serviceId: string, startTime: string, weeks: number): Promise<{ error: any }> {
-  return { error: new Error('Firebase RPC recurrence not setup yet') }
+export async function bookRecurringAppointments(
+  professionalId: string, 
+  clientId: string, 
+  serviceId: string, 
+  baseStartTime: string, 
+  weeks: number,
+  daysOfWeek: number[],
+  clientPackageId?: string,
+  discountAmount: number = 0
+): Promise<{ error: any }> {
+  try {
+    if (!daysOfWeek || daysOfWeek.length === 0) {
+      return { error: new Error('Nenhum dia da semana selecionado para recorrência.') }
+    }
+
+    const batch = writeBatch(db)
+    const appointmentsRef = collection(db, 'companies', COMPANY_ID, 'appointments')
+    const baseDate = new Date(baseStartTime)
+    let appointmentsCreated = 0
+
+    const recurrenceGroupId = crypto.randomUUID ? crypto.randomUUID() : `rec_${Date.now()}`
+
+    for (const targetDay of daysOfWeek) {
+      // Find the first occurrence of this weekday on or after the base date
+      const firstOccurrence = new Date(baseDate)
+      const currentDow = firstOccurrence.getDay()
+      let daysToAdd = targetDay - currentDow
+      if (daysToAdd < 0) {
+         daysToAdd += 7
+      }
+      firstOccurrence.setDate(firstOccurrence.getDate() + daysToAdd)
+
+      for (let w = 0; w < weeks; w++) {
+        const occurrenceDate = new Date(firstOccurrence)
+        occurrenceDate.setDate(occurrenceDate.getDate() + (w * 7))
+
+        const newDocRef = doc(appointmentsRef)
+        const appInfo = {
+          id: newDocRef.id,
+          professional_id: professionalId,
+          client_id: clientId,
+          service_id: serviceId,
+          schedules: { start_time: occurrenceDate.toISOString() },
+          status: 'scheduled',
+          created_at: new Date().toISOString(),
+          client_package_id: clientPackageId || null,
+          discount_amount: discountAmount,
+          is_recurring: true,
+          recurrence_group_id: recurrenceGroupId
+        }
+        batch.set(newDocRef, appInfo)
+        appointmentsCreated++
+      }
+    }
+    
+    if (appointmentsCreated > 0) {
+       await batch.commit()
+    }
+    return { error: null }
+  } catch (error) {
+    console.error("Error creating recurring appointments:", error)
+    return { error }
+  }
 }
 
 export async function rescheduleAppointment(appointmentId: string, newProfessionalId: string, newStartTime: string): Promise<{ error: any }> {
@@ -241,12 +302,18 @@ export async function cancelAppointment(appointmentId: string): Promise<{ error:
 export async function addAppointmentNote(appointmentId: string, note: NoteEntry): Promise<{ error: any }> {
   try {
     const docRef = doc(db, 'companies', COMPANY_ID, 'appointments', appointmentId)
-    const snap = await getDoc(docRef)
-    const currentNotes = snap.data()?.notes || []
-    currentNotes.push(note)
-    await updateDoc(docRef, { notes: currentNotes })
+    // Usamos setDoc com merge: true para garantir que o array seja inicializado caso o agendamento antigo não o tenha.
+    // Criamos um objeto sanitizado removendo chaves com valor 'undefined' pois o Firestore as rejeita
+    const cleanNote = Object.fromEntries(Object.entries(note).filter(([_, v]) => v !== undefined))
+    
+    await setDoc(docRef, { 
+      notes: arrayUnion(cleanNote) 
+    }, { merge: true })
     return { error: null }
-  } catch (e) { return { error: e } }
+  } catch (e) { 
+    console.error("Erro ao salvar anotação do paciente:", e)
+    return { error: e } 
+  }
 }
 
 export async function getAppointmentsByScheduleId(scheduleId: string): Promise<{ data: Appointment[] | null; error: any }> {

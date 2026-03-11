@@ -12,14 +12,15 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useToast } from '@/hooks/use-toast'
-import { Client, Service, Package } from '@/types'
+import { Client, Service, Package, PartnershipDiscount } from '@/types'
 import { getServices } from '@/services'
 import { getPackages } from '@/services'
 import {
   createClientSubscription,
   assignPackageToClient,
+  getDiscountsForPartnership
 } from '@/services'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Percent } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 interface ClientOnboardingDialogProps {
@@ -41,20 +42,26 @@ export const ClientOnboardingDialog = ({
   const [selectedPackages, setSelectedPackages] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [partnershipDiscounts, setPartnershipDiscounts] = useState<PartnershipDiscount[]>([])
 
   useEffect(() => {
     if (isOpen) {
       setIsLoading(true)
-      Promise.all([getServices(), getPackages()])
-        .then(([servicesRes, packagesRes]) => {
+      Promise.all([
+        getServices(), 
+        getPackages(),
+        client?.partnership_id ? getDiscountsForPartnership(client.partnership_id) : Promise.resolve({ data: [] })
+      ])
+        .then(([servicesRes, packagesRes, discountsRes]) => {
           setServices(
             (servicesRes.data || []).filter((s) => s.value_type === 'monthly'),
           )
           setPackages(packagesRes.data || [])
+          setPartnershipDiscounts(discountsRes.data || [])
         })
         .finally(() => setIsLoading(false))
     }
-  }, [isOpen])
+  }, [isOpen, client])
 
   const handleSkip = () => {
     onOpenChange(false)
@@ -72,6 +79,10 @@ export const ClientOnboardingDialog = ({
 
       // Create subscriptions
       for (const serviceId of selectedServices) {
+        const service = services.find(s => s.id === serviceId)
+        const discount = partnershipDiscounts.find(d => d.service_id === serviceId || d.service_id === null)
+        const discountAmount = service && discount ? service.price * (discount.discount_percentage / 100) : 0
+
         promises.push(
           createClientSubscription({
             client_id: client.id,
@@ -79,6 +90,7 @@ export const ClientOnboardingDialog = ({
             start_date: new Date().toISOString(),
             end_date: null,
             status: 'active',
+            discount_amount: discountAmount
           }),
         )
       }
@@ -87,8 +99,11 @@ export const ClientOnboardingDialog = ({
       for (const packageId of selectedPackages) {
         const pkg = packages.find((p) => p.id === packageId)
         if (pkg) {
+          const discount = partnershipDiscounts.find(d => d.service_id === pkg.service_id || d.service_id === null)
+          const discountAmount = discount ? pkg.price * (discount.discount_percentage / 100) : 0
+
           promises.push(
-            assignPackageToClient(client.id, packageId, pkg.session_count),
+            assignPackageToClient(client.id, packageId, pkg.session_count, undefined, discountAmount),
           )
         }
       }
@@ -171,8 +186,13 @@ export const ClientOnboardingDialog = ({
                         >
                           {service.name}
                         </Label>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
                           R$ {service.price.toFixed(2)}/mês
+                          {partnershipDiscounts.some(d => d.service_id === service.id || d.service_id === null) && (
+                            <span className="text-green-600 font-medium flex items-center gap-0.5 ml-1">
+                              <Percent className="w-3 h-3" /> Parceria
+                            </span>
+                          )}
                         </p>
                       </div>
                     </div>
@@ -211,9 +231,14 @@ export const ClientOnboardingDialog = ({
                         >
                           {pkg.name}
                         </Label>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
                           {pkg.session_count} sessões - R${' '}
                           {pkg.price.toFixed(2)}
+                          {partnershipDiscounts.some(d => d.service_id === pkg.service_id || d.service_id === null) && (
+                            <span className="text-green-600 font-medium flex items-center gap-0.5 ml-1">
+                              <Percent className="w-3 h-3" /> Parceria
+                            </span>
+                          )}
                         </p>
                       </div>
                     </div>

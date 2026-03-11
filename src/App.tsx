@@ -10,6 +10,7 @@ import { RoleGuard } from '@/components/RoleGuard'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import Layout from './components/Layout'
 import PublicLayout from './components/PublicLayout'
+import Landing from './pages/Landing'
 import Index from './pages/Index'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -52,6 +53,9 @@ const App = () => (
           <Toaster />
           <Sonner />
           <Routes>
+            {/* Landing Page */}
+            <Route path="/" element={<Landing />} />
+
             {/* Public Routes */}
             <Route element={<PublicLayout />}>
               <Route path="/login" element={<Login />} />
@@ -73,8 +77,8 @@ const App = () => (
                 </ProtectedRoute>
               }
             >
-              {/* Index Route */}
-              <Route path="/" element={<Index />} />
+              {/* Dashboard Route (Internal Routing) */}
+              <Route path="/dashboard" element={<Index />} />
 
               {/* Admin Routes - Using RoleGuard instead of nested ProtectedRoute */}
               <Route path="/admin">

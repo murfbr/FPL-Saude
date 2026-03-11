@@ -37,7 +37,7 @@ const Login = () => {
           if (role === 'admin') navigate('/admin', { replace: true })
           else if (role === 'professional')
             navigate('/profissional', { replace: true })
-          else navigate('/', { replace: true }) // Will hit Index and redirect
+          else navigate('/dashboard', { replace: true }) // Will hit Index and redirect
         } else {
           navigate(from, { replace: true })
         }

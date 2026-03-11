@@ -9,38 +9,38 @@ export async function getProfessionalsByService(
 ): Promise<{ data: Professional[] | null; error: any }> {
   try {
     const profsRef = collection(db, 'companies', COMPANY_ID, 'professionals')
-    // A migração de SQL para NoSQL frequentemente converte Arrays puros em 
-    // Dicionários indexados, ex: {"0": "uuid", "1": "uuid2"} ou strings.
-    const q = query(profsRef)
+    
+    // Optimized Query: We rely on Firestore 'array-contains' for explosive speed instead of pulling everything.
+    const q = query(
+      profsRef, 
+      where('is_active', '==', true),
+      where('service_ids', 'array-contains', serviceId)
+    )
+    
     const snapshot = await getDocs(q)
-
     const professionals: Professional[] = []
+    
     snapshot.forEach(doc => {
-      const data = doc.data()
-      // Filtra em memória aceitando formatações distorcidas de booleanos vindos do DB
-      const isActive = data.is_active === true || data.is_active === 'true' || data.is_active === 1
-      if (!isActive || !data.service_ids) return
-
-      let hasService = false
-      if (Array.isArray(data.service_ids)) {
-        hasService = data.service_ids.includes(serviceId)
-      } else if (typeof data.service_ids === 'string') {
-        hasService = data.service_ids.includes(serviceId)
-      } else if (typeof data.service_ids === 'object') {
-        // Se for um mapa explícito {"id-do-servico": true}
-        if (data.service_ids[serviceId]) hasService = true
-        // Se for um mapa serializado de array (index-based) {"0": "id-do-servico"}
-        else if (Object.values(data.service_ids).includes(serviceId)) hasService = true
-      }
-
-      if (hasService) {
-        professionals.push({ id: doc.id, ...data } as Professional)
-      }
+      professionals.push({ id: doc.id, ...doc.data() } as Professional)
     })
 
     return { data: professionals, error: null }
-  } catch (error) {
-    return { data: null, error }
+  } catch (error: any) {
+    console.error("🔥 [AÇÃO NECESSÁRIA - ÍNDICE FIRESTORE]: O Firebase provavelmente bloqueou a query exigindo um índice composto. Verifique o link no console abaixo:", error.message)
+    // Fallback lento caso o índice não exista ainda (Evita que o sistema quebre totalmente enquanto o cliente cria o índice)
+    try {
+      const fallbackSnapshot = await getDocs(collection(db, 'companies', COMPANY_ID, 'professionals'))
+      const fallbackPros: Professional[] = []
+      fallbackSnapshot.forEach(doc => {
+        const data = doc.data()
+        if (data.is_active && Array.isArray(data.service_ids) && data.service_ids.includes(serviceId)) {
+          fallbackPros.push({ id: doc.id, ...data } as Professional)
+        }
+      })
+      return { data: fallbackPros, error: null }
+    } catch (fallbackError) {
+      return { data: null, error: fallbackError }
+    }
   }
 }
 

@@ -27,11 +27,16 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
-import { createClientSubscription } from '@/services'
-import { getServices } from '@/services'
-import { getSubscriptionPlans } from '@/services'
-import { Service, SubscriptionPlan } from '@/types'
+import { 
+  createClientSubscription, 
+  getServices, 
+  getSubscriptionPlans, 
+  getClientById, 
+  getDiscountsForPartnership 
+} from '@/services'
+import { Service, SubscriptionPlan, PartnershipDiscount } from '@/types'
 import { format } from 'date-fns'
+import { Percent } from 'lucide-react'
 
 const subscriptionSchema = z.object({
   serviceId: z.string().uuid('Selecione um serviço.'),
@@ -61,6 +66,9 @@ export const ClientSubscriptionDialog = ({
   const [plans, setPlans] = useState<SubscriptionPlan[]>([])
   const [filteredPlans, setFilteredPlans] = useState<SubscriptionPlan[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [clientPartnershipId, setClientPartnershipId] = useState<string | null>(null)
+  const [partnershipDiscounts, setPartnershipDiscounts] = useState<PartnershipDiscount[]>([])
+  const [selectedPlanDetails, setSelectedPlanDetails] = useState<SubscriptionPlan | null>(null)
 
   const form = useForm<SubscriptionFormValues>({
     resolver: zodResolver(subscriptionSchema),
@@ -71,16 +79,28 @@ export const ClientSubscriptionDialog = ({
 
   useEffect(() => {
     if (isOpen) {
-      Promise.all([getServices(), getSubscriptionPlans()]).then(
-        ([servicesRes, plansRes]) => {
+      Promise.all([getServices(), getSubscriptionPlans(), getClientById(clientId)]).then(
+        ([servicesRes, plansRes, clientRes]) => {
           setServices(servicesRes.data || [])
           setPlans(plansRes.data || [])
+          
+          if (clientRes.data?.partnership_id) {
+            setClientPartnershipId(clientRes.data.partnership_id)
+            getDiscountsForPartnership(clientRes.data.partnership_id).then((res) => {
+              setPartnershipDiscounts(res.data || [])
+            })
+          }
         },
       )
+    } else {
+      setClientPartnershipId(null)
+      setPartnershipDiscounts([])
+      setSelectedPlanDetails(null)
     }
-  }, [isOpen])
+  }, [isOpen, clientId])
 
   const selectedServiceId = form.watch('serviceId')
+  const selectedPlanId = form.watch('planId')
 
   useEffect(() => {
     if (selectedServiceId) {
@@ -94,8 +114,36 @@ export const ClientSubscriptionDialog = ({
     }
   }, [selectedServiceId, plans, form])
 
+  useEffect(() => {
+    if (selectedPlanId) {
+       setSelectedPlanDetails(plans.find(p => p.id === selectedPlanId) || null)
+    } else {
+       setSelectedPlanDetails(null)
+    }
+  }, [selectedPlanId, plans])
+
+  let finalPrice = 0
+  let originalPrice = 0
+  let appliedDiscount: PartnershipDiscount | null = null
+
+  if (selectedPlanDetails) {
+    originalPrice = selectedPlanDetails.price
+    finalPrice = originalPrice
+
+    if (clientPartnershipId && partnershipDiscounts.length > 0) {
+       const discount = partnershipDiscounts.find(d => d.service_id === selectedServiceId || d.service_id === null)
+       if (discount) {
+          appliedDiscount = discount
+          const discountAmount = originalPrice * (discount.discount_percentage / 100)
+          finalPrice = Math.max(0, originalPrice - discountAmount)
+       }
+    }
+  }
+
   const onSubmit = async (values: SubscriptionFormValues) => {
     setIsSubmitting(true)
+    const discountValue = originalPrice - finalPrice
+
     const { error } = await createClientSubscription({
       client_id: clientId,
       service_id: values.serviceId,
@@ -103,6 +151,7 @@ export const ClientSubscriptionDialog = ({
       start_date: new Date(values.startDate).toISOString(),
       end_date: null,
       status: 'active',
+      discount_amount: discountValue
     })
 
     if (error) {
@@ -219,6 +268,31 @@ export const ClientSubscriptionDialog = ({
                 </FormItem>
               )}
             />
+
+            {selectedPlanDetails && (
+              <div className="p-4 bg-muted/30 rounded-lg border space-y-2 mt-4">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Valor Original:</span>
+                  <span>R$ {originalPrice.toFixed(2)}</span>
+                </div>
+                
+                {appliedDiscount && (
+                  <div className="flex justify-between text-sm text-green-600 items-center">
+                    <span className="flex items-center gap-1">
+                      <Percent className="w-3 h-3" />
+                      Desconto de Parceria ({appliedDiscount.discount_percentage}%)
+                    </span>
+                    <span>- R$ {(originalPrice - finalPrice).toFixed(2)}</span>
+                  </div>
+                )}
+                
+                <div className="flex justify-between font-medium pt-2 border-t text-base">
+                  <span>Valor Final da Assinatura:</span>
+                  <span>R$ {finalPrice.toFixed(2)}</span>
+                </div>
+              </div>
+            )}
+
             <DialogFooter>
               <Button
                 type="submit"

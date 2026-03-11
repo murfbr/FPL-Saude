@@ -1,7 +1,7 @@
 
 import { initializeApp } from 'firebase/app'
 import { getFirestore, collection, doc, setDoc } from 'firebase/firestore'
-import { createClient } from '@supabase/supabase-js'
+// import { createClient } from '@supabase/supabase-js'
 import * as dotenv from 'dotenv'
 
 dotenv.config({ path: '.env.local' })
@@ -32,6 +32,7 @@ async function runMigrationClient() {
         process.exit(1)
     }
 
+    /*
     const supabase = createClient(supabaseUrl, supabaseKey)
 
     console.log('\n⏳ Buscando notificações do Supabase...')
@@ -41,6 +42,9 @@ async function runMigrationClient() {
         console.error('Erro ao buscar notificações:', error)
         process.exit(1)
     }
+    */
+   
+    const notifications: any[] = []
 
     if (notifications && notifications.length > 0) {
         console.log(`Encontradas ${notifications.length} notificações.`)

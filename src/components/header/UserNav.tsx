@@ -70,7 +70,7 @@ export const UserNav = () => {
           <DropdownMenuSeparator />
           <DropdownMenuLabel>Navegar para</DropdownMenuLabel>
           {role === 'admin' && (
-            <DropdownMenuItem onClick={() => navigate('/')}>
+            <DropdownMenuItem onClick={() => navigate('/admin')}>
               <LayoutDashboard className="mr-2 h-4 w-4" />
               <span>Dashboard Admin</span>
             </DropdownMenuItem>

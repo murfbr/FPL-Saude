@@ -12,8 +12,11 @@ import {
   orderBy,
   where,
 } from 'firebase/firestore'
-import { Client, ClientPackageWithDetails, ClientSubscription } from '@/types'
-import { format, startOfMonth, endOfMonth } from 'date-fns'
+import { Client, ClientPackageWithDetails, ClientSubscription, Appointment, NoteEntry } from '@/types'
+import { format, startOfMonth, endOfMonth, isValid } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
+import { jsPDF } from 'jspdf'
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx'
 
 const COMPANY_ID = 'fpl-saude'
 
@@ -197,7 +200,7 @@ export async function getAllActiveClientPackages(): Promise<{ data: any[] | null
   } catch (error) { return { data: null, error } }
 }
 
-export async function assignPackageToClient(clientId: string, packageId: string, sessions: number, purchaseDate?: Date): Promise<{ error: any }> {
+export async function assignPackageToClient(clientId: string, packageId: string, sessions: number, purchaseDate?: Date, discountAmount: number = 0): Promise<{ error: any }> {
   try {
     const pkgsRef = collection(db, 'companies', COMPANY_ID, 'clients', clientId, 'packages')
     const newDoc = doc(pkgsRef)
@@ -206,7 +209,8 @@ export async function assignPackageToClient(clientId: string, packageId: string,
       client_id: clientId,
       package_id: packageId,
       sessions_remaining: sessions,
-      purchase_date: purchaseDate ? purchaseDate.toISOString() : new Date().toISOString()
+      purchase_date: purchaseDate ? purchaseDate.toISOString() : new Date().toISOString(),
+      discount_amount: discountAmount
     })
     return { error: null }
   } catch (error) { return { error } }
@@ -246,7 +250,15 @@ export async function getClientSubscriptions(clientId: string): Promise<{ data: 
 }
 
 export async function createClientSubscription(data: any): Promise<{ data: any | null; error: any }> {
-  return { data: null, error: null }
+  try {
+    const subsRef = collection(db, 'companies', COMPANY_ID, 'clients', data.client_id, 'subscriptions')
+    const newDoc = doc(subsRef)
+    const docData = { ...data, id: newDoc.id, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+    await setDoc(newDoc, docData)
+    return { data: docData, error: null }
+  } catch (error) {
+    return { data: null, error }
+  }
 }
 export async function updateClientSubscription(subId: string, updates: any): Promise<{ error: any }> {
   return { error: null }
@@ -254,8 +266,159 @@ export async function updateClientSubscription(subId: string, updates: any): Pro
 export async function cancelClientSubscription(subId: string): Promise<{ error: any }> {
   return { error: null }
 }
-export async function exportClientData(clientId: string, exportType: string, formatType: string): Promise<{ data: any | null; error: any }> {
-  return { data: null, error: new Error('Not implemented for Firebase yet') }
+export async function exportClientData(clientId: string, exportType: string, formatType: 'pdf' | 'docx'): Promise<{ data: any | null; error: any }> {
+  try {
+    // 1. Buscando o nome do paciente
+    const patientSnap = await getDoc(doc(db, 'companies', COMPANY_ID, 'clients', clientId))
+    if (!patientSnap.exists()) {
+      return { data: null, error: new Error('Paciente não encontrado') }
+    }
+    const patient = patientSnap.data()
+
+    // 2. Buscando todas as consultas do paciente para agrupar as anotações
+    const apptsRef = collection(db, 'companies', COMPANY_ID, 'appointments')
+    const q = query(apptsRef, where('client_id', '==', clientId))
+    const apptsSnap = await getDocs(q)
+    
+    // 3. Consolidando e ordenando anotações (mais recentes primeiro)
+    let allNotes: NoteEntry[] = []
+    apptsSnap.forEach(doc => {
+      const data = doc.data()
+      if (data.notes && Array.isArray(data.notes)) {
+        allNotes.push(...data.notes)
+      }
+    })
+    
+    allNotes.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    
+    if (allNotes.length === 0) {
+       return { data: null, error: new Error('O paciente não possui anotações para exportar.') }
+    }
+
+    const reportDate = format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })
+    const sanitizedName = patient.name.replace(/[^a-zA-Z0-9_-]/g, '_')
+    const filename = `Historico_Clinico_${sanitizedName}_${format(new Date(), 'ddMMyyyy_HHmm')}.${formatType}`
+
+    // 4. Gerando PDF
+    if (formatType === 'pdf') {
+      const doc = new jsPDF()
+      const pageWidth = doc.internal.pageSize.getWidth()
+      let yOffset = 20
+      
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(16)
+      doc.text('Histórico de Sessões - Prontuário Clínico', pageWidth / 2, yOffset, { align: 'center' })
+      yOffset += 10
+      
+      doc.setFontSize(12)
+      doc.text(`Paciente: ${patient.name}`, 15, yOffset)
+      yOffset += 6
+      doc.setFont('helvetica', 'normal')
+      doc.text(`Gerado em: ${reportDate}`, 15, yOffset)
+      yOffset += 12
+      
+      doc.line(15, yOffset, pageWidth - 15, yOffset)
+      yOffset += 8
+
+      // Percorre e preenche o PDF (respeitando quebra de páginas manuais por altura)
+      for (const note of allNotes) {
+         if (yOffset > 270) {
+            doc.addPage()
+            yOffset = 20
+         }
+         
+         const dateString = format(new Date(note.date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+         
+         doc.setFont('helvetica', 'bold')
+         doc.text(`Data: ${dateString} | Profissional: ${note.professional_name || 'Desconhecido'}`, 15, yOffset)
+         yOffset += 6
+         
+         doc.setFont('helvetica', 'normal')
+         
+         // Split text para não vazar a folha A4
+         const splitText = doc.splitTextToSize(note.content, pageWidth - 30)
+         
+         // Se estourar a página atual durante o texto, joga pra próxima
+         if ((yOffset + (splitText.length * 6)) > 280) {
+             doc.addPage()
+             yOffset = 20
+         }
+         
+         doc.text(splitText, 15, yOffset)
+         yOffset += (splitText.length * 5) + 8
+         
+         doc.line(15, yOffset, pageWidth - 15, yOffset) // separador
+         yOffset += 8
+      }
+      
+      const pdfBase64 = doc.output('datauristring').split(',')[1]
+      return { data: { content: pdfBase64, filename }, error: null }
+    } 
+    
+    // 5. Gerando DOCX
+    else if (formatType === 'docx') {
+       const docxSections = []
+       
+       // Header Page
+       docxSections.push(
+          new Paragraph({
+             text: "Histórico de Sessões - Prontuário Clínico",
+             heading: HeadingLevel.HEADING_1,
+             alignment: AlignmentType.CENTER,
+             spacing: { after: 300 }
+          }),
+          new Paragraph({
+             children: [
+                new TextRun({ text: `Paciente: `, bold: true }),
+                new TextRun({ text: patient.name })
+             ],
+             spacing: { after: 100 }
+          }),
+          new Paragraph({
+             children: [
+                new TextRun({ text: `Gerado em: `, bold: true }),
+                new TextRun({ text: reportDate })
+             ],
+             spacing: { after: 300 }
+          })
+       )
+
+       // Percorre Notas
+       for (const note of allNotes) {
+          const dateString = format(new Date(note.date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+          
+          docxSections.push(
+              new Paragraph({
+                children: [
+                   new TextRun({ text: `Data: ${dateString} | Profissional: ${note.professional_name || 'Desconhecido'}`, bold: true, size: 24 }) // Size é half-points (24 = 12pt)
+                ],
+                spacing: { before: 200, after: 100 }
+              }),
+              new Paragraph({
+                 text: note.content,
+                 spacing: { after: 300 }
+              })
+          )
+       }
+
+       const docxDocument = new Document({
+          creator: "FPL Saúde",
+          title: "Histórico Clínico",
+          sections: [{
+              properties: {},
+              children: docxSections
+          }]
+       })
+       
+       const base64Content = await Packer.toBase64String(docxDocument)
+       return { data: { content: base64Content, filename }, error: null }
+    }
+
+    return { data: null, error: new Error('Formato de arquivo não suportado.') }
+  } catch (error) {
+    console.error("Erro ao gerar exportação: ", error)
+    return { data: null, error }
+  }
 }
 export async function getClientsWithBirthdayThisWeek(startDate: Date, endDate: Date): Promise<{ data: Client[] | null; error: any }> {
   try {

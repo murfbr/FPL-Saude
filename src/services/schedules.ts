@@ -87,7 +87,7 @@ export async function getFilteredAvailableSchedules(
           professional_id: professionalId,
           start_time: slotStart.toISOString(),
           end_time: slotEnd.toISOString(),
-          max_capacity: 1,
+          max_capacity: service.max_attendees || 1,
           current_count: 0
         })
 
@@ -104,7 +104,7 @@ export async function getFilteredAvailableSchedules(
         const slotStart = new Date(slot.start_time)
         const slotEnd = new Date(slot.end_time)
 
-        const overlaps = activeAppointments.some(app => {
+        const overlappingAppointments = activeAppointments.filter(app => {
           const appStart = new Date(app.schedules?.start_time)
           const appEnd = new Date(app.schedules?.end_time)
 
@@ -114,15 +114,16 @@ export async function getFilteredAvailableSchedules(
           )
         })
 
-        return !overlaps
+        slot.current_count = overlappingAppointments.length
+        return overlappingAppointments.length < slot.max_capacity
       })
     }
 
-    // Filter out slots earlier than 07:00 AM
+    // Filter out slots earlier than 07:00 AM or later than 20:00 PM
     candidateSlots = candidateSlots.filter(slot => {
       const timeStr = formatInTimeZone(slot.start_time, TIMEZONE, 'HH:mm')
       const [hours] = timeStr.split(':').map(Number)
-      return hours >= 7
+      return hours >= 7 && hours < 20
     })
 
     return { data: candidateSlots, error: null }
@@ -150,14 +151,25 @@ export async function getAvailableProfessionalsAtSlot(
     const { data: prosWithService } = await getProfessionalsByService(serviceId)
     if (!prosWithService || prosWithService.length === 0) return { data: [], error: null }
 
-    const availablePros: Professional[] = []
+    const targetTime = formatInTimeZone(date, 'America/Sao_Paulo', 'HH:mm')
 
-    // 2. For each pro, check if they have that specific slot available
-    for (const pro of prosWithService) {
+    // 2. We use Promise.all to fetch availability for all professionals AT THE SAME TIME (concurrently).
+    // This reduces the network time from e.g. (10 pros * 500ms = 5000ms) down to just ~500ms total.
+    const availabilityChecks = prosWithService.map(async (pro) => {
       const { data: slots } = await getFilteredAvailableSchedules(pro.id, serviceId, date)
-      // BYPASS TOTAL: Injetamos todos e adicionaremos console log pra você me dizer o que está dando errado.
-      availablePros.push(pro)
-    }
+      
+      const isAvailable = slots?.some(s => {
+        const slotTime = formatInTimeZone(new Date(s.start_time), 'America/Sao_Paulo', 'HH:mm')
+        return slotTime === targetTime
+      })
+
+      return isAvailable ? pro : null
+    })
+
+    const results = await Promise.all(availabilityChecks)
+    
+    // 3. Filter out nulls
+    const availablePros = results.filter((pro): pro is Professional => pro !== null)
 
     return { data: availablePros, error: null }
   } catch (error) {
