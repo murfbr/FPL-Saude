@@ -7,6 +7,7 @@ import {
   endOfWeek,
   eachDayOfInterval,
   isToday,
+  isWeekend,
 } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import {
@@ -105,8 +106,9 @@ export const AgendaWeekView = ({
   const daysInWeek = useMemo(() => {
     const start = startOfWeek(currentDate, { locale: ptBR, weekStartsOn: 0 })
     const end = endOfWeek(currentDate, { locale: ptBR, weekStartsOn: 0 })
-    return eachDayOfInterval({ start, end })
-  }, [currentDate])
+    const allDays = eachDayOfInterval({ start, end })
+    return isExpanded ? allDays : allDays.filter((d) => !isWeekend(d))
+  }, [currentDate, isExpanded])
 
   const appointmentsByDay = useMemo(() => {
     const map = new Map<string, ReturnType<typeof computeEventLayout>>()
@@ -206,17 +208,17 @@ export const AgendaWeekView = ({
         <div className="relative border-l border-r border-b">
           {/* Scrollable Container for Mobile */}
           <div className="overflow-x-auto snap-x snap-mandatory custom-scrollbar">
-            <div className="min-w-[800px] relative">
-              <div className="sticky top-[7rem] z-30 flex border-b bg-background shadow-sm">
-              <div className="w-16 shrink-0 border-r bg-muted/30 sticky left-0 z-40"></div>
-              {daysInWeek.map((day) => (
-                <div
-                  key={day.toString()}
-                  className={cn(
-                    'flex-1 min-w-[120px] text-center py-2 border-r last:border-0 snap-start',
-                    isToday(day) && 'bg-primary/5',
-                  )}
-                >
+            <div className="min-w-max relative">
+              <div className="sticky top-[7rem] z-30 flex border-b bg-background">
+                <div className="w-16 shrink-0 border-r bg-muted/30 sticky left-0 z-40 bg-background"></div>
+                {daysInWeek.map((day) => (
+                  <div
+                    key={day.toString()}
+                    className={cn(
+                      'flex-1 min-w-[140px] text-center py-2 border-r last:border-0 snap-start',
+                      isToday(day) && 'bg-primary/5',
+                    )}
+                  >
                   <p className="text-xs uppercase text-muted-foreground">
                     {format(day, 'EEE', { locale: ptBR })}
                   </p>
@@ -253,7 +255,7 @@ export const AgendaWeekView = ({
                 return (
                   <div
                     key={day.toString()}
-                    className="flex-1 min-w-[120px] border-r last:border-0 relative bg-background cursor-pointer group snap-start"
+                    className="flex-1 min-w-[140px] border-r last:border-0 relative bg-background cursor-pointer group snap-start"
                     onMouseMove={(e) => handleMouseMove(e, day)}
                     onMouseLeave={handleMouseLeave}
                     onClick={() => {

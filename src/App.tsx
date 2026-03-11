@@ -8,6 +8,7 @@ import { AuthProvider } from '@/providers/AuthProvider'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { RoleGuard } from '@/components/RoleGuard'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { Analytics } from '@vercel/analytics/react'
 import Layout from './components/Layout'
 import PublicLayout from './components/PublicLayout'
 import Landing from './pages/Landing'
@@ -47,6 +48,7 @@ const App = () => (
     <BrowserRouter
       future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
     >
+      <Analytics />
       <OverlayCleanup />
       <AuthProvider>
         <TooltipProvider>

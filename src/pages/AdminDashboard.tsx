@@ -16,7 +16,9 @@ import {
   Search,
   CreditCard,
   Clock,
+  MessageSquare,
 } from 'lucide-react'
+
 import { useAuth } from '@/providers/AuthProvider'
 import { Professional, Client, Service } from '@/types'
 import {
@@ -34,7 +36,9 @@ import { KpiDashboard } from '@/components/admin/KpiDashboard'
 import { PartnershipsManager } from '@/components/admin/PartnershipsManager'
 import { FinancialManagement } from '@/components/admin/FinancialManagement'
 import { TimeSheetReport } from '@/components/admin/TimeSheetReport'
+import { MessageConfirmation } from '@/components/admin/MessageConfirmation'
 import { Button } from '@/components/ui/button'
+
 import { PatientFormDialog } from '@/components/admin/PatientFormDialog'
 import { ProfessionalFormDialog } from '@/components/admin/ProfessionalFormDialog'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
@@ -161,7 +165,9 @@ const AdminDashboard = () => {
     { value: 'professionals', label: 'Profissionais', icon: Briefcase },
     { value: 'patients', label: 'Pacientes', icon: Users },
     { value: 'timesheets', label: 'Ponto Eletrônico', icon: Clock },
+    { value: 'messages', label: 'Confirmações', icon: MessageSquare },
     { value: 'services', label: 'Serviços e Pacotes', icon: Stethoscope },
+
     { value: 'partnerships', label: 'Parcerias', icon: Handshake },
   ]
 
@@ -377,7 +383,12 @@ const AdminDashboard = () => {
             <TimeSheetReport />
           </TabsContent>
 
+          <TabsContent value="messages">
+            <MessageConfirmation />
+          </TabsContent>
+
           <TabsContent value="services">
+
             <Card>
               <CardHeader>
                 <CardTitle>Gerenciar Serviços e Pacotes</CardTitle>

@@ -17,8 +17,9 @@ async function hydrateAppointment(appDoc: any): Promise<Appointment> {
 
   if (data.client_id) {
     promises.push(getDoc(doc(db, 'companies', COMPANY_ID, 'clients', data.client_id)).then((d) => {
-      appointment.clients = { id: d.id, name: d.data()?.name, email: d.data()?.email }
+      appointment.clients = { id: d.id, name: d.data()?.name, email: d.data()?.email, phone: d.data()?.phone }
     }))
+
   }
 
   if (data.professional_id) {

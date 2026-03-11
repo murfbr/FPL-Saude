@@ -15,8 +15,10 @@ import {
   Handshake,
   Stethoscope,
   Clock,
+  MessageSquare,
   ChevronDown,
 } from 'lucide-react'
+
 import { cn } from '@/lib/utils'
 
 interface AdminNavMenuProps {
@@ -144,13 +146,15 @@ export function AdminNavMenu({ currentTab, onTabChange }: AdminNavMenuProps) {
         <DropdownMenuTrigger asChild>
           <Button
             variant={
-              ['services', 'timesheets'].includes(currentTab)
+              ['services', 'timesheets', 'messages'].includes(currentTab)
                 ? 'secondary'
                 : 'ghost'
             }
             className={cn(
-              ['services', 'timesheets'].includes(currentTab) && 'bg-accent',
+              ['services', 'timesheets', 'messages'].includes(currentTab) &&
+                'bg-accent',
             )}
+
           >
             Administrativo
             <ChevronDown className="ml-2 h-4 w-4" />
@@ -177,6 +181,17 @@ export function AdminNavMenu({ currentTab, onTabChange }: AdminNavMenuProps) {
             <Clock className="mr-2 h-4 w-4" />
             Ponto Eletrônico
           </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => onTabChange('messages')}
+            className={cn(
+              'cursor-pointer',
+              currentTab === 'messages' && 'bg-muted',
+            )}
+          >
+            <MessageSquare className="mr-2 h-4 w-4" />
+            Confirmações
+          </DropdownMenuItem>
+
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

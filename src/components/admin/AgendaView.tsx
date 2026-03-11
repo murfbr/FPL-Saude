@@ -170,23 +170,21 @@ export const AgendaView = () => {
         </div>
 
         <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end">
-          {viewMode !== 'month' && (
-            <Button
-              variant="outline"
-              size={isMobile ? "sm" : "default"}
-              onClick={() => setIsExpanded(!isExpanded)}
-              className="text-muted-foreground whitespace-nowrap"
-            >
-              {isExpanded ? (
-                <Minimize2 className="h-4 w-4 sm:mr-2" />
-              ) : (
-                <Maximize2 className="h-4 w-4 sm:mr-2" />
-              )}
-              <span className="hidden sm:inline">
-                {isExpanded ? 'Recolher horários' : 'Expandir horários'}
-              </span>
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            size={isMobile ? "sm" : "default"}
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="text-muted-foreground whitespace-nowrap"
+          >
+            {isExpanded ? (
+              <Minimize2 className="h-4 w-4 sm:mr-2" />
+            ) : (
+              <Maximize2 className="h-4 w-4 sm:mr-2" />
+            )}
+            <span className="hidden sm:inline">
+              {isExpanded ? 'Recolher' : 'Expandir'}
+            </span>
+          </Button>
           {renderViewSwitcher()}
         </div>
       </div>

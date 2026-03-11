@@ -10,6 +10,7 @@ import {
   isToday,
   getDay,
   isValid,
+  isWeekend,
 } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { ChevronLeft, ChevronRight, Plus, AlertCircle } from 'lucide-react'
@@ -32,6 +33,7 @@ interface AgendaCalendarViewProps {
   onAppointmentClick: (appointment: Appointment) => void
   onTimeSlotClick: (date: Date, isSpecificSlot?: boolean) => void
   selectedProfessional: string
+  isExpanded: boolean
 }
 
 export const AgendaCalendarView = ({
@@ -41,6 +43,7 @@ export const AgendaCalendarView = ({
   onAppointmentClick,
   onTimeSlotClick,
   selectedProfessional,
+  isExpanded,
 }: AgendaCalendarViewProps) => {
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -70,10 +73,28 @@ export const AgendaCalendarView = ({
   const daysInMonth = useMemo(() => {
     const start = startOfMonth(displayedMonth)
     const end = endOfMonth(displayedMonth)
-    return eachDayOfInterval({ start, end })
-  }, [displayedMonth])
+    const allDays = eachDayOfInterval({ start, end })
+    return isExpanded ? allDays : allDays.filter((d) => !isWeekend(d))
+  }, [displayedMonth, isExpanded])
 
-  const startingDayIndex = getDay(startOfMonth(displayedMonth))
+  // For full 7-day grid, use getDay (0=Sun). For 5-day grid, compute the weekday offset (Mon=0)
+  const startingDayIndex = useMemo(() => {
+    if (isExpanded) {
+      return getDay(startOfMonth(displayedMonth))
+    }
+    // When hiding weekends, the grid is Mon-Fri (5 cols)
+    // getDay returns 0=Sun,1=Mon,...,6=Sat
+    const dayOfWeek = getDay(startOfMonth(displayedMonth))
+    // Map: Mon=0, Tue=1, Wed=2, Thu=3, Fri=4. If month starts on Sat/Sun, offset is 0
+    if (dayOfWeek === 0 || dayOfWeek === 6) return 0
+    return dayOfWeek - 1
+  }, [displayedMonth, isExpanded])
+
+  const dayHeaders = isExpanded
+    ? ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+    : ['Seg', 'Ter', 'Qua', 'Qui', 'Sex']
+
+  const gridCols = isExpanded ? 'grid-cols-7' : 'grid-cols-5'
 
   const appointmentsByDay = useMemo(() => {
     const map = new Map<string, Appointment[]>()
@@ -125,8 +146,8 @@ export const AgendaCalendarView = ({
         <Skeleton className="h-[600px] w-full" />
       ) : (
         <div className="overflow-x-auto snap-x snap-mandatory custom-scrollbar pb-2">
-          <div className="grid grid-cols-7 gap-px bg-border min-w-[600px] snap-center">
-            {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((day, i) => (
+          <div className={cn('grid gap-px bg-border min-w-[800px] snap-center', gridCols)}>
+            {dayHeaders.map((day, i) => (
               <div
                 key={i}
                 className="text-center font-medium py-2 bg-card text-xs sm:text-sm"
