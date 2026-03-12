@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { db } from '@/lib/firebase'
+import { doc, getDoc } from 'firebase/firestore'
 import {
   Dialog,
   DialogContent,
@@ -30,6 +33,8 @@ import {
   X,
   PackageCheck,
   CreditCard,
+  Banknote,
+  ExternalLink,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import {
@@ -112,6 +117,11 @@ export const AppointmentDetailDialog = ({
   const [newNote, setNewNote] = useState('')
   const [isSavingNote, setIsSavingNote] = useState(false)
   const [localStatus, setLocalStatus] = useState<string | null>(null)
+  const [localNotes, setLocalNotes] = useState<NoteEntry[]>([])
+  const [packageDetails, setPackageDetails] = useState<{ name: string; sessions_remaining: number; sessions_total: number } | null>(null)
+  const [subscriptionDetails, setSubscriptionDetails] = useState<{ plan_name: string } | null>(null)
+
+  const navigate = useNavigate()
 
   // Discount editing state
   const [isEditingDiscount, setIsEditingDiscount] = useState(false)
@@ -122,6 +132,47 @@ export const AppointmentDetailDialog = ({
     if (appointment) {
       setLocalStatus(appointment.status)
       setDiscountValue(appointment.discount_amount?.toString() || '0')
+      setLocalNotes(appointment.notes || [])
+      setPackageDetails(null)
+      setSubscriptionDetails(null)
+
+      const clientPackageId = (appointment as any).client_package_id
+      const serviceValueType = (appointment.services as any).value_type
+
+      // Fetch package details if this appointment uses a package
+      if (clientPackageId) {
+        const clientId = (appointment as any).client_id
+        getDoc(doc(db, 'companies', 'fpl-saude', 'clients', clientId, 'client_packages', clientPackageId))
+          .then((snap) => {
+            if (snap.exists()) {
+              const data = snap.data()
+              // Fetch the package template to get the name
+              if (data.package_id) {
+                getDoc(doc(db, 'companies', 'fpl-saude', 'packages', data.package_id))
+                  .then((pkgSnap) => {
+                    setPackageDetails({
+                      name: pkgSnap.exists() ? pkgSnap.data().name : 'Pacote',
+                      sessions_remaining: data.sessions_remaining ?? 0,
+                      sessions_total: data.sessions_total ?? 0,
+                    })
+                  })
+              }
+            }
+          })
+          .catch(() => {})
+      } else if (serviceValueType === 'monthly') {
+        // Fetch subscription info — find active subscription for this client/service
+        const clientId = (appointment as any).client_id
+        const serviceId = (appointment as any).service_id
+        getDoc(doc(db, 'companies', 'fpl-saude', 'clients', clientId))
+          .then((clientSnap) => {
+            // Just show the service name as subscription type since we have it
+            setSubscriptionDetails({
+              plan_name: appointment.services?.name || 'Assinatura Mensal',
+            })
+          })
+          .catch(() => {})
+      }
     }
   }, [appointment])
 
@@ -197,6 +248,8 @@ export const AppointmentDetailDialog = ({
     } else {
       toast({ title: 'Nota adicionada com sucesso!' })
       setNewNote('')
+      // Optimistic update: show the new note immediately without waiting for parent re-fetch
+      setLocalNotes((prev) => [...prev, noteEntry])
       onAppointmentUpdated()
     }
     setIsSavingNote(false)
@@ -270,7 +323,18 @@ export const AppointmentDetailDialog = ({
               <DetailItem
                 icon={User}
                 label="Cliente"
-                value={appointment.clients.name}
+                value={
+                  <button
+                    className="font-medium text-primary hover:underline flex items-center gap-1 text-left"
+                    onClick={() => {
+                      onOpenChange(false)
+                      navigate(`/admin/pacientes/${(appointment as any).client_id}`)
+                    }}
+                  >
+                    {appointment.clients.name}
+                    <ExternalLink className="h-3 w-3 shrink-0" />
+                  </button>
+                }
               />
               <DetailItem
                 icon={Stethoscope}
@@ -446,12 +510,59 @@ export const AppointmentDetailDialog = ({
               </div>
             </div>
 
+            {/* Payment Method Block */}
+            <div className={`flex items-start gap-3 col-span-1 sm:col-span-2 p-3 rounded-md border ${
+              isPackage ? 'bg-blue-50/60 border-blue-200' :
+              isMonthlySubscription ? 'bg-purple-50/60 border-purple-200' :
+              'bg-muted/20'
+            }`}>
+              {isPackage ? (
+                <PackageCheck className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
+              ) : isMonthlySubscription ? (
+                <CreditCard className="h-5 w-5 text-purple-600 mt-0.5 shrink-0" />
+              ) : (
+                <Banknote className="h-5 w-5 text-muted-foreground mt-0.5 shrink-0" />
+              )}
+              <div className="flex-1">
+                <p className="text-sm font-medium mb-1">
+                  {isPackage ? 'Forma de Pagamento: Pacote de Sessões' :
+                   isMonthlySubscription ? 'Forma de Pagamento: Assinatura Mensal' :
+                   'Forma de Pagamento: Sessão Avulsa'}
+                </p>
+                {isPackage && (
+                  packageDetails ? (
+                    <div className="text-xs text-blue-700 space-y-0.5">
+                      <p><span className="font-medium">Pacote:</span> {packageDetails.name}</p>
+                      <p>
+                        <span className="font-medium">Sessões restantes:</span>{' '}
+                        <span className={packageDetails.sessions_remaining <= 2 ? 'text-red-600 font-bold' : ''}>
+                          {packageDetails.sessions_remaining}
+                        </span>{' '}
+                        / {packageDetails.sessions_total}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-blue-500 italic">Carregando detalhes do pacote...</p>
+                  )
+                )}
+                {isMonthlySubscription && (
+                  subscriptionDetails ? (
+                    <p className="text-xs text-purple-700">
+                      <span className="font-medium">Plano:</span> {subscriptionDetails.plan_name}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-purple-500 italic">Carregando assinatura...</p>
+                  )
+                )}
+              </div>
+            </div>
+
             <div className="space-y-3">
               <Label>Anotações</Label>
               <ScrollArea className="h-[150px] w-full rounded-md border p-4 bg-muted/20">
-                {appointment.notes && appointment.notes.length > 0 ? (
+                {localNotes && localNotes.length > 0 ? (
                   <div className="space-y-4">
-                    {appointment.notes.map((note, index) => (
+                    {localNotes.map((note, index) => (
                       <div
                         key={index}
                         className="bg-background p-3 rounded-lg border shadow-sm"
