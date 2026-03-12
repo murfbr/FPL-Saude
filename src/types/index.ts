@@ -85,10 +85,12 @@ export interface Appointment {
   discount_amount?: number
   notes: NoteEntry[] | null
   created_at: string
-  clients: Client
-  professionals: Professional
-  services: Service
-  schedules: Schedule
+  is_recurring?: boolean
+  recurrence_group_id?: string
+  clients?: Partial<Client>
+  professionals?: Partial<Professional>
+  services?: Partial<Service>
+  schedules?: Partial<Schedule>
 }
 
 export interface Package {

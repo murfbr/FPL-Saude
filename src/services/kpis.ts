@@ -48,10 +48,15 @@ async function fetchAppointments(startStr: string, endStr: string, filters?: Kpi
     }
   }
 
-  // Hydrate services price & name for revenue math
-  const hydrated = await Promise.all(results.map(async (r) => {
+  // Hydrate services price & name for revenue math (using denormalized data when available)
+  const hydrated = await Promise.all(results.map(async (r: any) => {
+    // Check if we already have the denormalized data from our NoSQL optimization
+    if (r.services?.name && r.services?.price !== undefined) {
+      return r
+    }
+
     if (r.service_id) {
-      // Ideally we should cache services too, but caching appointments fetches is the major win
+      // Legacy Fallback: Only read if denormalization hasn't happened yet
       const sSnap = await getDoc(doc(db, 'companies', COMPANY_ID, 'services', r.service_id))
       r.services = { name: sSnap.data()?.name, price: sSnap.data()?.price || 0 }
     }

@@ -6,6 +6,7 @@ import { getServiceById } from './services'
 import { getAppointmentsByProfessionalForRange } from './appointments'
 import { getRecurringAvailability, getAvailabilityOverridesForRange } from './availability'
 import { getAllProfessionals, getProfessionalsByService } from './professionals'
+import { computeSlotsForDay } from '@/lib/availability-logic'
 
 const TIMEZONE = 'America/Sao_Paulo'
 
@@ -13,6 +14,7 @@ export async function getFilteredAvailableSchedules(
   professionalId: string,
   serviceId: string,
   date: Date,
+  excludeAppointmentId?: string,
 ): Promise<{ data: Schedule[] | null; error: any }> {
   try {
     const dateStr = format(date, 'yyyy-MM-dd')
@@ -22,109 +24,32 @@ export async function getFilteredAvailableSchedules(
     if (!service) throw new Error('Serviço não encontrado')
     const durationMins = service.duration_minutes || 60
 
-    // 2. Fetch Availability Rules
-    const { data: recurring } = await getRecurringAvailability(professionalId)
-    const { data: overrides } = await getAvailabilityOverridesForRange(professionalId, date, date)
-
-    // Day of week in JS (0 = Sunday, 1 = Monday). Supabase may have been 1..7 so check logic.
-    // Date-fns format 'i' gives 1 for Monday, 7 for Sunday. Supabase postgres EXTRACT(ISODOW) does the same.
-    const dayOfWeek = parseInt(format(date, 'i'))
-
-    const dayOverrides = overrides?.filter(o => o.override_date === dateStr) || []
-
-    let isDayAvailable = true
-    let timeBlocks: { start_time: string, end_time: string }[] = []
-
-    if (dayOverrides.length > 0) {
-      // Check if there is an override blocking the whole day
-      const blockingOverride = dayOverrides.find(o => o.is_available === false && o.start_time === '00:00:00')
-      if (blockingOverride) {
-        isDayAvailable = false
-      } else {
-        // Use overrides as the source of truth for time blocks if they allow availability
-        const availableOverrides = dayOverrides.filter(o => o.is_available)
-        if (availableOverrides.length > 0) {
-          timeBlocks = availableOverrides.map(o => ({ start_time: o.start_time, end_time: o.end_time }))
-        } else {
-          isDayAvailable = false
-        }
-      }
-    } else {
-      // Find recurring rules for this day
-      const dailyRules = recurring?.filter(r => r.day_of_week === dayOfWeek) || []
-      if (dailyRules.length > 0) {
-        timeBlocks = dailyRules.map(r => ({ start_time: r.start_time, end_time: r.end_time }))
-      } else {
-        isDayAvailable = false
-      }
-    }
-
-    if (!isDayAvailable || timeBlocks.length === 0) {
-      return { data: [], error: null }
-    }
-
-    // 3. Fetch Appointments for this day to subtract
+    // 2. Fetch Availability Rules & Appointments concurrently
     const startOfD = startOfDay(date)
     const endOfD = endOfDay(date)
-    const { data: appointments } = await getAppointmentsByProfessionalForRange(professionalId, startOfD.toISOString(), endOfD.toISOString())
 
-    // 4. Generate candidate slots
-    let candidateSlots: Schedule[] = []
+    const [
+      { data: recurring },
+      { data: overrides },
+      { data: appointments }
+    ] = await Promise.all([
+      getRecurringAvailability(professionalId),
+      getAvailabilityOverridesForRange(professionalId, date, date),
+      getAppointmentsByProfessionalForRange(professionalId, startOfD.toISOString(), endOfD.toISOString())
+    ])
 
-    timeBlocks.forEach(block => {
-      // Parse block to Date
-      let slotStart = parseISO(`${dateStr}T${block.start_time}-03:00`)
-      const blockEnd = parseISO(`${dateStr}T${block.end_time}-03:00`)
-
-      while (isBefore(slotStart, blockEnd)) {
-        const slotEnd = addMinutes(slotStart, durationMins)
-
-        // If the slot overflows the block, break
-        if (isAfter(slotEnd, blockEnd)) break
-
-        candidateSlots.push({
-          id: `virtual_${format(slotStart, 'HH:mm')}`,
-          professional_id: professionalId,
-          start_time: slotStart.toISOString(),
-          end_time: slotEnd.toISOString(),
-          max_capacity: service.max_attendees || 1,
-          current_count: 0
-        })
-
-        // Advance to next slot - default to fixed duration stepping (could be configured differently)
-        slotStart = slotEnd
-      }
-    })
-
-    // 5. Filter out slots overlapping with existing appointments
-    if (appointments && appointments.length > 0) {
-      const activeAppointments = appointments.filter(a => ['scheduled', 'confirmed'].includes(a.status))
-
-      candidateSlots = candidateSlots.filter(slot => {
-        const slotStart = new Date(slot.start_time)
-        const slotEnd = new Date(slot.end_time)
-
-        const overlappingAppointments = activeAppointments.filter(app => {
-          const appStart = new Date(app.schedules?.start_time)
-          const appEnd = new Date(app.schedules?.end_time)
-
-          return (
-            (isBefore(slotStart, appEnd) && isAfter(slotEnd, appStart)) || // Strict overlap
-            slotStart.getTime() === appStart.getTime()
-          )
-        })
-
-        slot.current_count = overlappingAppointments.length
-        return overlappingAppointments.length < slot.max_capacity
-      })
+    if (!recurring || !overrides || !appointments) {
+      return { data: [], error: 'Erro ao buscar dados de disponibilidade' }
     }
 
-    // Filter out slots earlier than 07:00 AM or later than 20:00 PM
-    candidateSlots = candidateSlots.filter(slot => {
-      const timeStr = formatInTimeZone(slot.start_time, TIMEZONE, 'HH:mm')
-      const [hours] = timeStr.split(':').map(Number)
-      return hours >= 7 && hours < 20
-    })
+    // 3. Use utility to compute slots
+    const candidateSlots = computeSlotsForDay(date, {
+      recurring: recurring || [],
+      overrides: overrides || [],
+      appointments: appointments || [],
+      service: service,
+      excludeAppointmentId
+    }, professionalId)
 
     return { data: candidateSlots, error: null }
 

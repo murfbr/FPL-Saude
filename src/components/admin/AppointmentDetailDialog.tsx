@@ -35,14 +35,17 @@ import {
   CreditCard,
   Banknote,
   ExternalLink,
+  Repeat,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import {
   addAppointmentNote,
   deleteAppointment,
+  deleteFutureAppointments,
   updateAppointmentStatus,
   updateAppointment,
 } from '@/services'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -118,6 +121,7 @@ export const AppointmentDetailDialog = ({
   const [isSavingNote, setIsSavingNote] = useState(false)
   const [localStatus, setLocalStatus] = useState<string | null>(null)
   const [localNotes, setLocalNotes] = useState<NoteEntry[]>([])
+  const [deleteMode, setDeleteMode] = useState<'only-this' | 'this-and-future'>('only-this')
   const [packageDetails, setPackageDetails] = useState<{ name: string; sessions_remaining: number; sessions_total: number } | null>(null)
   const [subscriptionDetails, setSubscriptionDetails] = useState<{ plan_name: string } | null>(null)
 
@@ -161,12 +165,9 @@ export const AppointmentDetailDialog = ({
           })
           .catch(() => {})
       } else if (serviceValueType === 'monthly') {
-        // Fetch subscription info — find active subscription for this client/service
         const clientId = (appointment as any).client_id
-        const serviceId = (appointment as any).service_id
         getDoc(doc(db, 'companies', 'fpl-saude', 'clients', clientId))
-          .then((clientSnap) => {
-            // Just show the service name as subscription type since we have it
+          .then(() => {
             setSubscriptionDetails({
               plan_name: appointment.services?.name || 'Assinatura Mensal',
             })
@@ -185,8 +186,14 @@ export const AppointmentDetailDialog = ({
   }
 
   const handleDelete = async () => {
+    if (!appointment) return
     setIsDeleting(true)
-    const { error } = await deleteAppointment(appointment.id)
+    
+    const serviceFn = deleteMode === 'this-and-future' 
+      ? deleteFutureAppointments 
+      : deleteAppointment
+
+    const { error } = await serviceFn(appointment.id)
     if (error) {
       toast({
         title: 'Erro ao excluir agendamento',
@@ -194,7 +201,7 @@ export const AppointmentDetailDialog = ({
         variant: 'destructive',
       })
     } else {
-      toast({ title: 'Agendamento excluído com sucesso.' })
+      toast({ title: 'Agendamento(s) excluído(s) com sucesso!' })
       onAppointmentUpdated()
       onOpenChange(false)
     }
@@ -203,12 +210,10 @@ export const AppointmentDetailDialog = ({
 
   const handleStatusChange = async (newStatus: string) => {
     setIsUpdatingStatus(true)
-    // Optimistic Update
     setLocalStatus(newStatus)
 
     const { error } = await updateAppointmentStatus(appointment.id, newStatus)
     if (error) {
-      // Revert if error
       setLocalStatus(appointment.status)
       toast({
         title: 'Erro ao atualizar status',
@@ -248,7 +253,6 @@ export const AppointmentDetailDialog = ({
     } else {
       toast({ title: 'Nota adicionada com sucesso!' })
       setNewNote('')
-      // Optimistic update: show the new note immediately without waiting for parent re-fetch
       setLocalNotes((prev) => [...prev, noteEntry])
       onAppointmentUpdated()
     }
@@ -289,7 +293,6 @@ export const AppointmentDetailDialog = ({
   const duration = appointment.services.duration_minutes || 30
   const calculatedEndTime = addMinutes(new Date(startTime), duration)
 
-  // Use 'as any' to safely access potentially extended properties that might not be in the strict type yet
   const clientPackageId = (appointment as any).client_package_id
   const serviceValueType = (appointment.services as any).value_type
 
@@ -303,9 +306,8 @@ export const AppointmentDetailDialog = ({
     ? 0
     : Math.max(0, servicePrice - currentDiscount)
 
-  // Use local status for display to support optimistic updates
   const displayStatus = localStatus || appointment.status
-  const canEdit = ['scheduled', 'confirmed'].includes(displayStatus)
+  const canEdit = ['scheduled'].includes(displayStatus)
   const isAdmin = role === 'admin'
 
   return (
@@ -353,6 +355,11 @@ export const AppointmentDetailDialog = ({
                     ) : (
                       <span className="text-xs text-muted-foreground">
                         Valor Base: R$ {servicePrice.toFixed(2)}
+                      </span>
+                    )}
+                    {appointment.is_recurring && (
+                      <span className="text-xs text-primary font-medium flex items-center gap-1 mt-0.5">
+                        <Repeat className="h-3 w-3" /> Recorrente
                       </span>
                     )}
                   </div>
@@ -615,7 +622,6 @@ export const AppointmentDetailDialog = ({
           </div>
 
           <DialogFooter className="flex-col sm:flex-row gap-2">
-            {/* Delete Button (Hard Delete) - Admin Only or special permission */}
             {isAdmin && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
@@ -635,6 +641,34 @@ export const AppointmentDetailDialog = ({
                       manter o histórico, altere o status para "Cancelado".
                     </AlertDialogDescription>
                   </AlertDialogHeader>
+
+                  {appointment.is_recurring && (
+                    <div className="py-4 px-1">
+                      <Label className="text-sm font-semibold mb-3 block flex items-center gap-2">
+                        <Repeat className="w-4 h-4 text-destructive" />
+                        Este é um agendamento recorrente
+                      </Label>
+                      <RadioGroup
+                        value={deleteMode}
+                        onValueChange={(val: any) => setDeleteMode(val)}
+                        className="flex flex-col space-y-2"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="only-this" id="del-only-this" />
+                          <Label htmlFor="del-only-this" className="font-normal cursor-pointer text-sm">
+                            Excluir apenas este agendamento
+                          </Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="this-and-future" id="del-this-and-future" />
+                          <Label htmlFor="del-this-and-future" className="font-normal cursor-pointer text-sm font-medium text-destructive">
+                            Excluir este e todos os agendamentos futuros
+                          </Label>
+                        </div>
+                      </RadioGroup>
+                    </div>
+                  )}
+
                   <AlertDialogFooter>
                     <AlertDialogCancel>Voltar</AlertDialogCancel>
                     <AlertDialogAction
@@ -644,7 +678,9 @@ export const AppointmentDetailDialog = ({
                       {isDeleting ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
-                        'Confirmar Exclusão'
+                        appointment.is_recurring && deleteMode === 'this-and-future' 
+                          ? 'Confirmar Exclusão da Série' 
+                          : 'Confirmar Exclusão'
                       )}
                     </AlertDialogAction>
                   </AlertDialogFooter>
@@ -653,16 +689,14 @@ export const AppointmentDetailDialog = ({
             )}
 
             {canEdit && (
-              <>
-                <Button
-                  variant="secondary"
-                  className="w-full sm:w-auto"
-                  onClick={() => setIsRescheduleOpen(true)}
-                >
-                  <CalendarClock className="mr-2 h-4 w-4" />
-                  Remarcar
-                </Button>
-              </>
+              <Button
+                variant="secondary"
+                className="w-full sm:w-auto"
+                onClick={() => setIsRescheduleOpen(true)}
+              >
+                <CalendarClock className="mr-2 h-4 w-4" />
+                Remarcar
+              </Button>
             )}
           </DialogFooter>
         </DialogContent>
@@ -672,10 +706,12 @@ export const AppointmentDetailDialog = ({
         isOpen={isRescheduleOpen}
         onOpenChange={setIsRescheduleOpen}
         oldAppointmentId={appointment.id}
-        client={appointment.clients}
-        service={appointment.services}
+        client={appointment.clients as any}
+        service={appointment.services as any}
         professionalId={appointment.professional_id}
         onRescheduleSuccess={handleRescheduleSuccess}
+        is_recurring={appointment.is_recurring}
+        currentStartTime={appointment.schedules?.start_time}
       />
     </>
   )

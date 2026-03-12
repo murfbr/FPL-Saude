@@ -128,8 +128,30 @@ export async function getSubscriptionPayments(subscriptionIds: string[], monthDa
 
 export async function paySubscription(subscription: ClientSubscription, professionalId: string): Promise<{ error: any }> {
   try {
-    const amount = subscription.subscription_plans?.price || subscription.services?.price || 0
-    const description = `Mensalidade ${subscription.subscription_plans?.name || subscription.services?.name} - ${format(new Date(), 'MM/yyyy')}`
+    const fullPrice = subscription.subscription_plans?.price || subscription.services?.price || 0
+    const planName = subscription.subscription_plans?.name || subscription.services?.name || ''
+    const now = new Date()
+    
+    let amount = fullPrice
+    let description = `Mensalidade ${planName} - ${format(now, 'MM/yyyy')}`
+
+    // Prorated billing: check if the subscription started in the current billing month
+    if (subscription.start_date) {
+      const startDate = new Date(subscription.start_date)
+      const isSameMonthAsStart =
+        startDate.getFullYear() === now.getFullYear() &&
+        startDate.getMonth() === now.getMonth()
+
+      if (isSameMonthAsStart) {
+        // Calculate proration: days from start_date to end of month
+        const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+        const startDay = startDate.getDate()
+        const daysActive = daysInMonth - startDay + 1 // inclusive of start day
+
+        amount = Math.round((fullPrice / daysInMonth) * daysActive * 100) / 100
+        description = `Mensalidade ${planName} - ${format(now, 'MM/yyyy')} (proporcional: ${daysActive}/${daysInMonth} dias — R$ ${fullPrice.toFixed(2)}/mês)`
+      }
+    }
 
     const finRef = collection(db, 'companies', COMPANY_ID, 'financial_records')
     const newDoc = doc(finRef)
@@ -139,13 +161,14 @@ export async function paySubscription(subscription: ClientSubscription, professi
       professional_id: professionalId,
       client_subscription_id: subscription.id,
       amount: amount,
-      payment_date: new Date().toISOString(),
+      payment_date: now.toISOString(),
       description: description,
       payment_method: 'manual',
     })
     return { error: null }
   } catch (error) { return { error } }
 }
+
 
 export async function deleteSubscriptionPayment(recordId: string): Promise<{ error: any }> {
   try {

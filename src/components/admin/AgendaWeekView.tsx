@@ -210,7 +210,7 @@ export const AgendaWeekView = ({
           <div className="overflow-x-auto snap-x snap-mandatory custom-scrollbar">
             <div className="min-w-max relative">
               <div className="sticky top-[7rem] z-30 flex border-b bg-background">
-                <div className="w-16 shrink-0 border-r bg-muted/30 sticky left-0 z-40 bg-background"></div>
+                <div className="w-12 shrink-0 border-r bg-muted/30 sticky left-0 z-40 bg-background"></div>
                 {daysInWeek.map((day) => (
                   <div
                     key={day.toString()}
@@ -236,7 +236,7 @@ export const AgendaWeekView = ({
             </div>
 
             <div className="flex relative">
-              <div className="w-16 shrink-0 border-r bg-muted/10 sticky left-0 z-40 bg-background">
+              <div className="w-12 shrink-0 border-r bg-muted/10 sticky left-0 z-40 bg-background">
                 {hours.map((h) => (
                   <div
                     key={h}

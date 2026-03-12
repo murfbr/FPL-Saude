@@ -8,44 +8,43 @@ const COMPANY_ID = 'fpl-saude'
  * Função Auxiliar para "Hidratar" Agendamentos com os relacionamentos
  * que o React UI antigo espera do Supabase (ex: appointment.clients.name)
  */
+/**
+ * Função Auxiliar para "Hidratar" Agendamentos
+ * Agora ela apenas retorna o agendamento se os campos denormalizados já existirem,
+ * ou busca os dados se for um documento antigo (compatibilidade).
+ */
 async function hydrateAppointment(appDoc: any): Promise<Appointment> {
   const data = appDoc.data()
   const appointment = { id: appDoc.id, ...data } as any
 
-  // Relacionamentos Paralelos em Memória
+  // Se já tiver os objetos básicos (denormalizados no write), não precisa de reads extras
+  if (data.clients?.name && data.professionals?.name && data.services?.name) {
+    return appointment as Appointment
+  }
+
+  // Fallback para documentos antigos (Legacy Hydration)
   const promises = []
 
-  if (data.client_id) {
+  if (data.client_id && !data.clients) {
     promises.push(getDoc(doc(db, 'companies', COMPANY_ID, 'clients', data.client_id)).then((d) => {
       appointment.clients = { id: d.id, name: d.data()?.name, email: d.data()?.email, phone: d.data()?.phone }
     }))
-
   }
 
-  if (data.professional_id) {
+  if (data.professional_id && !data.professionals) {
     promises.push(getDoc(doc(db, 'companies', COMPANY_ID, 'professionals', data.professional_id)).then((d) => {
       appointment.professionals = { id: d.id, name: d.data()?.name }
     }))
   }
 
-  if (data.service_id) {
+  if (data.service_id && !data.services) {
     promises.push(getDoc(doc(db, 'companies', COMPANY_ID, 'services', data.service_id)).then((d) => {
       const s = d.data()
       appointment.services = { id: d.id, name: s?.name, duration_minutes: s?.duration_minutes, max_attendees: s?.max_attendees, value_type: s?.value_type, price: s?.price }
     }))
   }
 
-  // Se não existir data nativa no appointment e houver ID de Schedule antigo, tenta hidratar (Backward Compatibility Supabase)
-  if (!data.schedules && data.schedule_id && data.professional_id) {
-    promises.push(getDoc(doc(db, 'companies', COMPANY_ID, 'professionals', data.professional_id, 'availability', data.schedule_id)).then((d) => {
-      if (d.exists() && d.data()) {
-        const s = d.data()
-        appointment.schedules = { start_time: s?.start_time, end_time: s?.end_time }
-      }
-    }).catch(() => { /* ignora se n existir no nosql */ }))
-  }
-
-  await Promise.all(promises)
+  if (promises.length > 0) await Promise.all(promises)
   return appointment as Appointment
 }
 
@@ -62,17 +61,50 @@ export async function bookAppointment(
     const appointmentsRef = collection(db, 'companies', COMPANY_ID, 'appointments')
     const newDocRef = doc(appointmentsRef)
 
-    // Mocking schedule shape for backward compatibility
+    // OTIMIZAÇÃO: Buscar dados para desnormalizar no write
+    const [clientSnap, profSnap, serviceSnap] = await Promise.all([
+      getDoc(doc(db, 'companies', COMPANY_ID, 'clients', clientId)),
+      getDoc(doc(db, 'companies', COMPANY_ID, 'professionals', professionalId)),
+      getDoc(doc(db, 'companies', COMPANY_ID, 'services', serviceId))
+    ])
+
+    const clientData = clientSnap.data()
+    const profData = profSnap.data()
+    const serviceData = serviceSnap.data()
+
     const appInfo = {
       id: newDocRef.id,
       professional_id: professionalId,
       client_id: clientId,
       service_id: serviceId,
-      schedules: { start_time: startTime }, // Denormalized for NoSQL UI quick reads
       status: 'scheduled',
       created_at: new Date().toISOString(),
       client_package_id: clientPackageId || null,
       discount_amount: discountAmount,
+      
+      // Dados Desnormalizados
+      clients: { 
+        id: clientId, 
+        name: clientData?.name, 
+        email: clientData?.email, 
+        phone: clientData?.phone 
+      },
+      professionals: { 
+        id: professionalId, 
+        name: profData?.name 
+      },
+      services: { 
+        id: serviceId, 
+        name: serviceData?.name, 
+        duration_minutes: serviceData?.duration_minutes, 
+        price: serviceData?.price,
+        value_type: serviceData?.value_type
+      },
+      schedules: { 
+        start_time: startTime,
+        // Calculate end_time based on duration
+        end_time: new Date(new Date(startTime).getTime() + (serviceData?.duration_minutes || 60) * 60000).toISOString()
+      },
     }
 
     await setDoc(newDocRef, appInfo)
@@ -104,6 +136,18 @@ export async function bookRecurringAppointments(
 
     const recurrenceGroupId = crypto.randomUUID ? crypto.randomUUID() : `rec_${Date.now()}`
 
+    // OTIMIZAÇÃO: Buscar dados para desnormalizar no write
+    const [clientSnap, profSnap, serviceSnap] = await Promise.all([
+      getDoc(doc(db, 'companies', COMPANY_ID, 'clients', clientId)),
+      getDoc(doc(db, 'companies', COMPANY_ID, 'professionals', professionalId)),
+      getDoc(doc(db, 'companies', COMPANY_ID, 'services', serviceId))
+    ])
+
+    const clientData = clientSnap.data()
+    const profData = profSnap.data()
+    const serviceData = serviceSnap.data()
+    const duration = serviceData?.duration_minutes || 60
+
     for (const targetDay of daysOfWeek) {
       // Find the first occurrence of this weekday on or after the base date
       const firstOccurrence = new Date(baseDate)
@@ -124,13 +168,27 @@ export async function bookRecurringAppointments(
           professional_id: professionalId,
           client_id: clientId,
           service_id: serviceId,
-          schedules: { start_time: occurrenceDate.toISOString() },
           status: 'scheduled',
           created_at: new Date().toISOString(),
           client_package_id: clientPackageId || null,
           discount_amount: discountAmount,
           is_recurring: true,
-          recurrence_group_id: recurrenceGroupId
+          recurrence_group_id: recurrenceGroupId,
+
+          // Dados Desnormalizados
+          clients: { id: clientId, name: clientData?.name, email: clientData?.email, phone: clientData?.phone },
+          professionals: { id: professionalId, name: profData?.name },
+          services: { 
+            id: serviceId, 
+            name: serviceData?.name, 
+            duration_minutes: duration, 
+            price: serviceData?.price,
+            value_type: serviceData?.value_type
+          },
+          schedules: { 
+            start_time: occurrenceDate.toISOString(),
+            end_time: new Date(occurrenceDate.getTime() + duration * 60000).toISOString()
+          },
         }
         batch.set(newDocRef, appInfo)
         appointmentsCreated++
@@ -150,9 +208,95 @@ export async function bookRecurringAppointments(
 export async function rescheduleAppointment(appointmentId: string, newProfessionalId: string, newStartTime: string): Promise<{ error: any }> {
   try {
     const docRef = doc(db, 'companies', COMPANY_ID, 'appointments', appointmentId)
-    await updateDoc(docRef, { professional_id: newProfessionalId, 'schedules.start_time': newStartTime })
+    
+    // Get new professional info for denormalization
+    let profName = undefined
+    try {
+      const profSnap = await getDoc(doc(db, 'companies', COMPANY_ID, 'professionals', newProfessionalId))
+      profName = profSnap.data()?.name
+    } catch(e) {}
+
+    const appSnap = await getDoc(docRef)
+    const appData = appSnap.data()
+    const duration = appData?.services?.duration_minutes || 60
+    
+    const updates: any = { 
+      professional_id: newProfessionalId, 
+      'schedules.start_time': newStartTime,
+      'schedules.end_time': new Date(new Date(newStartTime).getTime() + duration * 60000).toISOString()
+    }
+
+    if (profName) {
+      updates['professionals.id'] = newProfessionalId
+      updates['professionals.name'] = profName
+    }
+
+    await updateDoc(docRef, updates)
     return { error: null }
   } catch (error) { return { error } }
+}
+
+export async function rescheduleFutureAppointments(
+  appointmentId: string,
+  newProfessionalId: string,
+  newStartTime: string
+): Promise<{ error: any }> {
+  try {
+    const sourceDocRef = doc(db, 'companies', COMPANY_ID, 'appointments', appointmentId)
+    const sourceSnap = await getDoc(sourceDocRef)
+    if (!sourceSnap.exists()) return { error: new Error('Agendamento não encontrado') }
+    
+    const sourceData = sourceSnap.data()
+    const groupId = sourceData.recurrence_group_id
+    
+    // If not recurring, just do a normal reschedule
+    if (!sourceData.is_recurring || !groupId) {
+      return rescheduleAppointment(appointmentId, newProfessionalId, newStartTime)
+    }
+
+    // Get new professional info for denormalization
+    let profName = undefined
+    try {
+      const profSnap = await getDoc(doc(db, 'companies', COMPANY_ID, 'professionals', newProfessionalId))
+      profName = profSnap.data()?.name
+    } catch(e) {}
+
+    const appointmentsRef = collection(db, 'companies', COMPANY_ID, 'appointments')
+    const q = query(
+      appointmentsRef,
+      where('recurrence_group_id', '==', groupId),
+      where('schedules.start_time', '>=', sourceData.schedules.start_time)
+    )
+    const snapshot = await getDocs(q)
+    
+    const batch = writeBatch(db)
+    const newBaseDate = new Date(newStartTime)
+    const oldBaseDate = new Date(sourceData.schedules.start_time)
+    const diffMs = newBaseDate.getTime() - oldBaseDate.getTime()
+
+    snapshot.docs.forEach(d => {
+      const data = d.data()
+      const oldStart = new Date(data.schedules.start_time)
+      const newStart = new Date(oldStart.getTime() + diffMs)
+      
+      const duration = data.services?.duration_minutes || 60
+      const newEnd = new Date(newStart.getTime() + duration * 60000)
+
+      batch.update(d.ref, {
+        professional_id: newProfessionalId,
+        'professionals.id': newProfessionalId,
+        'professionals.name': profName || data.professionals?.name,
+        'schedules.start_time': newStart.toISOString(),
+        'schedules.end_time': newEnd.toISOString()
+      })
+    })
+
+    await batch.commit()
+    return { error: null }
+  } catch (error) {
+    console.error("Error rescheduling future appointments:", error)
+    return { error }
+  }
 }
 
 export async function updateAppointmentStatus(appointmentId: string, status: string): Promise<{ error: any }> {
@@ -177,6 +321,41 @@ export async function deleteAppointment(appointmentId: string): Promise<{ error:
     await deleteDoc(docRef)
     return { error: null }
   } catch (error) { return { error } }
+}
+
+export async function deleteFutureAppointments(appointmentId: string): Promise<{ error: any }> {
+  try {
+    const sourceDocRef = doc(db, 'companies', COMPANY_ID, 'appointments', appointmentId)
+    const sourceSnap = await getDoc(sourceDocRef)
+    if (!sourceSnap.exists()) return { error: new Error('Agendamento não encontrado') }
+    
+    const sourceData = sourceSnap.data()
+    const groupId = sourceData.recurrence_group_id
+    
+    // If not recurring, just do a normal delete
+    if (!sourceData.is_recurring || !groupId) {
+      return deleteAppointment(appointmentId)
+    }
+
+    const appointmentsRef = collection(db, 'companies', COMPANY_ID, 'appointments')
+    const q = query(
+      appointmentsRef,
+      where('recurrence_group_id', '==', groupId),
+      where('schedules.start_time', '>=', sourceData.schedules.start_time)
+    )
+    const snapshot = await getDocs(q)
+    
+    const batch = writeBatch(db)
+    snapshot.docs.forEach(d => {
+      batch.delete(d.ref)
+    })
+
+    await batch.commit()
+    return { error: null }
+  } catch (error) {
+    console.error("Error deleting future appointments:", error)
+    return { error }
+  }
 }
 
 export async function getAppointmentsPaginated(page: number, pageSize: number, filters: any): Promise<{ data: Appointment[] | null; count: number | null; error: any }> {
@@ -211,25 +390,25 @@ export async function getAppointmentsForRange(startDate: Date, endDate: Date, pr
       qParts.push(where('professional_id', '==', professionalId))
     }
 
-    // Sem limites, buscamos a agenda e processamos local para não disparar 'missing index'
-    const q = query(appointmentsRef, ...qParts)
-    const snapshot = await getDocs(q)
-
+    // OTIMIZAÇÃO: Filtro de data no SERVER (Firestore)
+    // Isso requer um Índice Composto: professional_id (ASC) + schedules.start_time (ASC)
     const startStr = startDate.toISOString()
     const endStr = endDate.toISOString()
 
-    const filteredDocs = snapshot.docs.filter(d => {
-      const data = d.data()
-      // Se a data já vazou da query base, confere se tá no RANGE desejado do calendário
-      if (!data.schedules?.start_time) return false
-      return data.schedules.start_time >= startStr && data.schedules.start_time <= endStr
-    })
+    qParts.push(where('schedules.start_time', '>=', startStr))
+    qParts.push(where('schedules.start_time', '<=', endStr))
 
-    const promises = filteredDocs.map(hydrateAppointment)
+    const q = query(appointmentsRef, ...qParts)
+    const snapshot = await getDocs(q)
+
+    const promises = snapshot.docs.map(hydrateAppointment)
     const hydratedAppts = await Promise.all(promises)
 
     return { data: hydratedAppts, error: null }
-  } catch (error) { return { data: null, error } }
+  } catch (error) { 
+    console.error("Erro em getAppointmentsForRange:", error)
+    return { data: null, error } 
+  }
 }
 
 export async function getAppointmentsByProfessional(professionalId: string): Promise<{ data: Appointment[] | null; error: any }> {

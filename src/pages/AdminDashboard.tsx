@@ -37,7 +37,9 @@ import { PartnershipsManager } from '@/components/admin/PartnershipsManager'
 import { FinancialManagement } from '@/components/admin/FinancialManagement'
 import { TimeSheetReport } from '@/components/admin/TimeSheetReport'
 import { MessageConfirmation } from '@/components/admin/MessageConfirmation'
+import { DataMaintenance } from '@/components/admin/DataMaintenance'
 import { Button } from '@/components/ui/button'
+import { Database } from 'lucide-react'
 
 import { PatientFormDialog } from '@/components/admin/PatientFormDialog'
 import { ProfessionalFormDialog } from '@/components/admin/ProfessionalFormDialog'
@@ -169,6 +171,7 @@ const AdminDashboard = () => {
     { value: 'services', label: 'Serviços e Pacotes', icon: Stethoscope },
 
     { value: 'partnerships', label: 'Parcerias', icon: Handshake },
+    { value: 'maintenance', label: 'Manutenção', icon: Database },
   ]
 
   // Role-Based Rendering Check: Wait for profile to be fully loaded
@@ -408,6 +411,10 @@ const AdminDashboard = () => {
                 <PartnershipsManager />
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="maintenance">
+            <DataMaintenance />
           </TabsContent>
         </Tabs>
       </div>

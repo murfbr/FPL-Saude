@@ -19,105 +19,91 @@ export function computeEventLayout(
   getTop: (date: Date) => number,
   getHeight: (date: Date, duration: number) => number,
 ): LayoutedEvent[] {
-  // 1. Sort events by start time, then duration (descending)
-  const sortedEvents = [...events].sort((a, b) => {
-    const startA = new Date(a.schedules.start_time).getTime()
-    const startB = new Date(b.schedules.start_time).getTime()
+  if (events.length === 0) return []
+
+  // 1. Sort events by start time, then duration
+  const sorted = [...events].sort((a, b) => {
+    const startA = new Date(a.schedules?.start_time || 0).getTime()
+    const startB = new Date(b.schedules?.start_time || 0).getTime()
     if (startA !== startB) return startA - startB
-
-    // If start times are equal, longer duration first
-    const durA = a.services.duration_minutes
-    const durB = b.services.duration_minutes
-    return durB - durA
+    return (b.services?.duration_minutes || 0) - (a.services?.duration_minutes || 0)
   })
 
-  // 2. Assign events to columns
-  const columns: LayoutedEvent[][] = []
-
-  const layoutedEvents: LayoutedEvent[] = sortedEvents.map((event) => {
-    const startTime = new Date(event.schedules.start_time).getTime()
-    // end_time is often not stored; derive it from duration
-    const durationMs = (event.services?.duration_minutes || 60) * 60 * 1000
-    const endTime = startTime + durationMs
-
-    // Find first column where this event fits
-    let colIndex = -1
-    for (let i = 0; i < columns.length; i++) {
-      const lastEventInCol = columns[i][columns[i].length - 1]
-      const lastStart = new Date(lastEventInCol.schedules.start_time).getTime()
-      const lastDurMs = (lastEventInCol.services?.duration_minutes || 60) * 60 * 1000
-      const lastEventEnd = lastStart + lastDurMs
-
-      if (startTime >= lastEventEnd) {
-        colIndex = i
-        break
-      }
-    }
-
-    if (colIndex === -1) {
-      colIndex = columns.length
-      columns.push([])
-    }
-
-    columns[colIndex].push(event as LayoutedEvent)
-
-    // Calculate vertical position immediately
-    const top = getTop(new Date(event.schedules.start_time))
-    const height = getHeight(
-      new Date(event.schedules.start_time),
-      event.services.duration_minutes,
-    )
-
-    return {
-      ...event,
-      _endTime: endTime, // store for cluster grouping below
-      layout: {
-        top,
-        height: Math.max(height, 28), // Minimum height
-        left: 0, // Placeholder
-        width: 0, // Placeholder
-        colIndex, // Temporary property
-      },
-    } as LayoutedEvent & { layout: { colIndex: number }; _endTime: number }
-  })
-
-  // 3. Group events into colliding clusters to determine width
-  const clusters: (LayoutedEvent & { layout: { colIndex: number }; _endTime: number })[][] = []
-  let currentCluster: (LayoutedEvent & { layout: { colIndex: number }; _endTime: number })[] = []
+  // 2. Group into overlapping clusters
+  const clusters: Appointment[][] = []
+  let currentCluster: Appointment[] = []
   let clusterEnd = 0
 
-  ;(layoutedEvents as (LayoutedEvent & { layout: { colIndex: number }; _endTime: number })[]).forEach((event) => {
-    const start = new Date(event.schedules.start_time).getTime()
-    const end = event._endTime
+  sorted.forEach(appt => {
+    const start = new Date(appt.schedules?.start_time || 0).getTime()
+    const end = start + (appt.services?.duration_minutes || 60) * 60 * 1000
 
     if (currentCluster.length === 0) {
-      currentCluster.push(event)
+      currentCluster.push(appt)
       clusterEnd = end
+    } else if (start < clusterEnd) {
+      currentCluster.push(appt)
+      clusterEnd = Math.max(clusterEnd, end)
     } else {
-      // If this event starts after the current cluster ends, start new cluster
-      if (start >= clusterEnd) {
-        clusters.push(currentCluster)
-        currentCluster = [event]
-        clusterEnd = end
-      } else {
-        currentCluster.push(event)
-        clusterEnd = Math.max(clusterEnd, end)
-      }
+      clusters.push(currentCluster)
+      currentCluster = [appt]
+      clusterEnd = end
     }
   })
   if (currentCluster.length > 0) clusters.push(currentCluster)
 
-  // 4. Assign Final Left/Width based on clusters
-  clusters.forEach((cluster) => {
-    // Find max column index used in this cluster (0-based)
-    const maxColIndex = Math.max(...cluster.map((e) => e.layout.colIndex))
-    const totalCols = maxColIndex + 1
+  // 3. Layout each cluster independently
+  const results: LayoutedEvent[] = []
 
-    cluster.forEach((event) => {
-      event.layout.width = 100 / totalCols
-      event.layout.left = (event.layout.colIndex / totalCols) * 100
+  clusters.forEach(cluster => {
+    const columns: Appointment[][] = []
+    
+    cluster.forEach(appt => {
+      const start = new Date(appt.schedules?.start_time || 0).getTime()
+      
+      let colIndex = -1
+      for (let i = 0; i < columns.length; i++) {
+        const last = columns[i][columns[i].length - 1]
+        const lastStart = new Date(last.schedules?.start_time || 0).getTime()
+        const lastEnd = lastStart + (last.services?.duration_minutes || 60) * 60 * 1000
+        
+        if (start >= lastEnd) {
+          colIndex = i
+          break
+        }
+      }
+
+      if (colIndex === -1) {
+        colIndex = columns.length
+        columns.push([])
+      }
+      columns[colIndex].push(appt)
+      
+      const top = getTop(new Date(appt.schedules?.start_time || 0))
+      const height = getHeight(new Date(appt.schedules?.start_time || 0), appt.services?.duration_minutes || 60)
+      
+      results.push({
+        ...appt,
+        layout: {
+          top,
+          height: Math.max(height, 28),
+          left: colIndex, // Temporary store colIndex here
+          width: columns.length // Temporary store total columns needed so far in cluster
+        }
+      } as any)
+    })
+
+    // Update widths for the whole cluster once we know the final columns.length
+    const totalCols = columns.length
+    const clusterIds = cluster.map(a => a.id)
+    results.forEach(r => {
+      if (clusterIds.includes(r.id)) {
+        const colIdx = r.layout.left
+        r.layout.width = 100 / totalCols
+        r.layout.left = (colIdx / totalCols) * 100
+      }
     })
   })
 
-  return layoutedEvents
+  return results
 }

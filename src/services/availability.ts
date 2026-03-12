@@ -3,6 +3,9 @@ import { collection, query, where, getDocs, doc, setDoc, deleteDoc, writeBatch }
 import { RecurringAvailability, AvailabilityOverride, Professional, Service } from '@/types'
 import { startOfMonth, endOfMonth, format, parseISO, isBefore, isAfter, addMinutes, setHours, setMinutes } from 'date-fns'
 import { formatInTimeZone, toZonedTime } from 'date-fns-tz'
+import { computeSlotsForDay } from '@/lib/availability-logic'
+import { getAppointmentsByProfessionalForRange } from './appointments'
+import { getServiceById } from './services'
 
 const COMPANY_ID = 'fpl-saude'
 
@@ -182,20 +185,40 @@ export async function getAvailableDatesForRange(
   endDate: Date,
 ): Promise<{ data: string[] | null; error: any }> {
   try {
-    const { getFilteredAvailableSchedules } = await import('./schedules')
-
     const startStr = format(startDate, 'yyyy-MM-dd')
     const endStr = format(endDate, 'yyyy-MM-dd')
 
-    // We query day by day. This is a simplified client-side check.
-    // In a real large app we'd fetch all appointments in range first to compute faster,
-    // but the `getFilteredAvailableSchedules` abstracts this.
+    // 1. Fetch ALL data for the range in BATCH (4 queries total instead of 4 * days)
+    const [
+      { data: recurring },
+      { data: overrides },
+      { data: appointments },
+      { data: service }
+    ] = await Promise.all([
+      getRecurringAvailability(professionalId),
+      getAvailabilityOverridesForRange(professionalId, startDate, endDate),
+      getAppointmentsByProfessionalForRange(professionalId, startDate.toISOString(), endDate.toISOString()),
+      getServiceById(serviceId)
+    ])
+
+    if (!recurring || !overrides || !appointments || !service) {
+      return { data: null, error: 'Erro ao carregar dados de disponibilidade' }
+    }
+
+    const availabilityData = {
+      recurring: recurring || [],
+      overrides: overrides || [],
+      appointments: appointments || [],
+      service: service
+    }
+
     const availableDates: string[] = []
 
+    // 2. Compute slots for each day in memory (Zero Firestore reads here!)
     let currentDate = new Date(startDate)
     while (currentDate <= endDate) {
-      const dayResult = await getFilteredAvailableSchedules(professionalId, serviceId, currentDate)
-      if (dayResult.data && dayResult.data.length > 0) {
+      const slots = computeSlotsForDay(currentDate, availabilityData, professionalId)
+      if (slots.length > 0) {
         availableDates.push(format(currentDate, 'yyyy-MM-dd'))
       }
       currentDate.setDate(currentDate.getDate() + 1)
@@ -203,7 +226,7 @@ export async function getAvailableDatesForRange(
 
     return { data: availableDates, error: null }
   } catch (error) {
-    console.error('Error calculating available dates:', error)
+    console.error('Error calculating available dates in batch:', error)
     return { data: null, error }
   }
 }

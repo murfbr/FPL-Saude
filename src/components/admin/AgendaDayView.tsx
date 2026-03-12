@@ -168,7 +168,7 @@ export const AgendaDayView = ({
         <div className="relative border-l border-r border-b">
           <div className="flex relative min-h-full">
             {/* Time Column - Centered Alignment */}
-            <div className="w-16 shrink-0 border-r bg-muted/10">
+            <div className="w-12 shrink-0 border-r bg-muted/30 sticky left-0 z-40 bg-background">
               {hours.map((h) => (
                 <div
                   key={h}

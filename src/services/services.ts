@@ -5,6 +5,10 @@ import { Service } from '@/types'
 // ID mockado por enquanto. O ideal seria o contexto de Tenant injetar isso
 const COMPANY_ID = 'fpl-saude'
 
+// Cache em memória para reduzir reads de serviços (TTL de 5 min)
+const serviceCache = new Map<string, { data: Service, expiry: number }>()
+const CACHE_TTL = 5 * 60 * 1000
+
 export async function getServices(): Promise<{ data: Service[] | null; error: any }> {
   try {
     const servicesRef = collection(db, 'companies', COMPANY_ID, 'services')
@@ -86,11 +90,21 @@ export async function getServiceById(
   serviceId: string,
 ): Promise<{ data: Service | null; error: any }> {
   try {
+    const now = Date.now()
+    const cached = serviceCache.get(serviceId)
+    if (cached && now < cached.expiry) {
+      return { data: cached.data, error: null }
+    }
+
     const docRef = doc(db, 'companies', COMPANY_ID, 'services', serviceId)
     const snapshot = await getDoc(docRef)
 
     if (!snapshot.exists()) return { data: null, error: new Error('Serviço não encontrado') }
-    return { data: { id: snapshot.id, ...snapshot.data() } as Service, error: null }
+    
+    const serviceData = { id: snapshot.id, ...snapshot.data() } as Service
+    serviceCache.set(serviceId, { data: serviceData, expiry: now + CACHE_TTL })
+    
+    return { data: serviceData, error: null }
   } catch (error) {
     return { data: null, error }
   }

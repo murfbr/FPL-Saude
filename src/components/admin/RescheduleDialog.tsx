@@ -29,10 +29,13 @@ import { useToast } from '@/hooks/use-toast'
 import { Schedule, Client, Service, Professional } from '@/types'
 import { getFilteredAvailableSchedules } from '@/services/schedules'
 import { getAvailableDatesForRange } from '@/services/availability'
-import { rescheduleAppointment } from '@/services'
+import { rescheduleAppointment, rescheduleFutureAppointments } from '@/services'
 import { getProfessionalsByService } from '@/services'
 import { AvailableSlots } from '@/components/AvailableSlots'
 import { getFriendlyErrorMessage } from '@/lib/error-mapping'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Label } from '@/components/ui/label'
+import { Repeat } from 'lucide-react'
 
 interface RescheduleDialogProps {
   isOpen: boolean
@@ -42,6 +45,8 @@ interface RescheduleDialogProps {
   service: Service
   professionalId: string
   onRescheduleSuccess: () => void
+  is_recurring?: boolean
+  currentStartTime?: string
 }
 
 export const RescheduleDialog = ({
@@ -52,12 +57,15 @@ export const RescheduleDialog = ({
   service,
   professionalId,
   onRescheduleSuccess,
+  is_recurring,
+  currentStartTime,
 }: RescheduleDialogProps) => {
   const { toast } = useToast()
 
   // Selection State
   const [date, setDate] = useState<Date | undefined>(undefined)
   const [selectedSlotTime, setSelectedSlotTime] = useState<string | null>(null)
+  const [rescheduleMode, setRescheduleMode] = useState<'only-this' | 'this-and-future'>('only-this')
 
   // Data State
   const [schedules, setSchedules] = useState<Schedule[]>([])
@@ -79,10 +87,16 @@ export const RescheduleDialog = ({
   useEffect(() => {
     if (isOpen) {
       setCurrentMonth(new Date())
-      setDate(undefined)
-      setSelectedSlotTime(null)
-      setSchedules([])
-      setAvailableDates(null)
+      if (currentStartTime) {
+        const initialDate = new Date(currentStartTime)
+        setDate(initialDate)
+        setCurrentMonth(initialDate)
+        setSelectedSlotTime(currentStartTime)
+      } else {
+        setDate(undefined)
+        setSelectedSlotTime(null)
+      }
+
       // Reset professional to the one currently assigned to the appointment or keep selected if reasonable
       if (!selectedProfessionalId) {
         setSelectedProfessionalId(professionalId)
@@ -147,10 +161,14 @@ export const RescheduleDialog = ({
   useEffect(() => {
     if (isOpen && date && selectedProfessionalId && service.id) {
       setIsLoadingSchedules(true)
-      getFilteredAvailableSchedules(selectedProfessionalId, service.id, date)
+      getFilteredAvailableSchedules(selectedProfessionalId, service.id, date, oldAppointmentId)
         .then((res) => {
           setSchedules(res.data || [])
-          setSelectedSlotTime(null)
+          // If we have an initial slot and it's for this date, keep it selected initially
+          const hasInitialSlotForThisDate = currentStartTime && res.data?.some(s => s.start_time === currentStartTime)
+          if (!hasInitialSlotForThisDate) {
+            setSelectedSlotTime(null)
+          }
         })
         .finally(() => {
           setIsLoadingSchedules(false)
@@ -164,7 +182,11 @@ export const RescheduleDialog = ({
     if (!selectedSlotTime || !date || !selectedProfessionalId) return
     setIsSubmitting(true)
 
-    const { error } = await rescheduleAppointment(
+    const serviceFn = rescheduleMode === 'this-and-future' 
+      ? rescheduleFutureAppointments 
+      : rescheduleAppointment
+
+    const { error } = await serviceFn(
       oldAppointmentId,
       selectedProfessionalId,
       selectedSlotTime,
@@ -193,18 +215,45 @@ export const RescheduleDialog = ({
             Selecione um profissional, uma nova data e horário para{' '}
             {client.name} ({service.name}).
             <br />
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs text-muted-foreground mr-2">
               Mostrando apenas horários a partir das 07:00.
-              {service.max_attendees > 1 && (
-                <span className="block mt-1 text-orange-700 font-medium">
-                  Nota: Horários com vagas parciais são indicados em laranja.
-                </span>
-              )}
             </span>
+            {service.max_attendees > 1 && (
+              <span className="inline-block mt-1 text-orange-700 font-medium text-xs">
+                Nota: Horários com vagas parciais são indicados em laranja.
+              </span>
+            )}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="space-y-6 py-4">
+          {is_recurring && (
+            <div className="space-y-3 bg-muted/30 p-4 rounded-lg border border-primary/10">
+              <label className="text-sm font-semibold flex items-center gap-2">
+                <Repeat className="w-4 h-4 text-primary" />
+                Este é um agendamento recorrente
+              </label>
+              <RadioGroup
+                value={rescheduleMode}
+                onValueChange={(val: any) => setRescheduleMode(val)}
+                className="flex flex-col space-y-2 mt-2"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="only-this" id="only-this" />
+                  <Label htmlFor="only-this" className="font-normal cursor-pointer">
+                    Apenas este agendamento
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="this-and-future" id="this-and-future" />
+                  <Label htmlFor="this-and-future" className="font-normal cursor-pointer">
+                    Este e todos os futuros agendamentos da série
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+          )}
+
           <div className="flex flex-col space-y-2">
             <label className="text-sm font-medium">Profissional</label>
             <Select
