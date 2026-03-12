@@ -181,7 +181,7 @@ export const AppointmentFormDialog = ({
   const date = form.watch('date')
   const usePackage = form.watch('usePackage')
   const isRecurring = form.watch('isRecurring')
-  const discount = form.watch('discount') || 0
+  const discount = Number(form.watch('discount')) || 0
 
   const selectedService = services.find((s) => s.id === serviceId)
   const selectedClient = clients.find((c) => c.id === clientId)
