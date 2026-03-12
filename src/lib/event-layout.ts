@@ -36,13 +36,17 @@ export function computeEventLayout(
 
   const layoutedEvents: LayoutedEvent[] = sortedEvents.map((event) => {
     const startTime = new Date(event.schedules.start_time).getTime()
-    const endTime = new Date(event.schedules.end_time).getTime()
+    // end_time is often not stored; derive it from duration
+    const durationMs = (event.services?.duration_minutes || 60) * 60 * 1000
+    const endTime = startTime + durationMs
 
     // Find first column where this event fits
     let colIndex = -1
     for (let i = 0; i < columns.length; i++) {
       const lastEventInCol = columns[i][columns[i].length - 1]
-      const lastEventEnd = new Date(lastEventInCol.schedules.end_time).getTime()
+      const lastStart = new Date(lastEventInCol.schedules.start_time).getTime()
+      const lastDurMs = (lastEventInCol.services?.duration_minutes || 60) * 60 * 1000
+      const lastEventEnd = lastStart + lastDurMs
 
       if (startTime >= lastEventEnd) {
         colIndex = i
@@ -66,6 +70,7 @@ export function computeEventLayout(
 
     return {
       ...event,
+      _endTime: endTime, // store for cluster grouping below
       layout: {
         top,
         height: Math.max(height, 28), // Minimum height
@@ -73,17 +78,17 @@ export function computeEventLayout(
         width: 0, // Placeholder
         colIndex, // Temporary property
       },
-    } as LayoutedEvent & { layout: { colIndex: number } }
+    } as LayoutedEvent & { layout: { colIndex: number }; _endTime: number }
   })
 
   // 3. Group events into colliding clusters to determine width
-  const clusters: (LayoutedEvent & { layout: { colIndex: number } })[][] = []
-  let currentCluster: (LayoutedEvent & { layout: { colIndex: number } })[] = []
+  const clusters: (LayoutedEvent & { layout: { colIndex: number }; _endTime: number })[][] = []
+  let currentCluster: (LayoutedEvent & { layout: { colIndex: number }; _endTime: number })[] = []
   let clusterEnd = 0
 
-  layoutedEvents.forEach((event) => {
+  ;(layoutedEvents as (LayoutedEvent & { layout: { colIndex: number }; _endTime: number })[]).forEach((event) => {
     const start = new Date(event.schedules.start_time).getTime()
-    const end = new Date(event.schedules.end_time).getTime()
+    const end = event._endTime
 
     if (currentCluster.length === 0) {
       currentCluster.push(event)
