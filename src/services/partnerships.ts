@@ -62,13 +62,19 @@ export async function getDiscountsForPartnership(
     
     // Hidratação opcional dos nomes dos serviços
     const hydrated = await Promise.all(discounts.map(async (d: any) => {
-      const sRef = doc(db, 'companies', COMPANY_ID, 'services', d.service_id)
-      const sSnap = await getDoc(sRef)
+      // service_id pode ser null ou 'global' (sentinel) para descontos globais
+      const isGlobal = !d.service_id || d.service_id === 'global'
+      let serviceName: string | null = null
+      if (!isGlobal) {
+        const sRef = doc(db, 'companies', COMPANY_ID, 'services', d.service_id)
+        const sSnap = await getDoc(sRef)
+        serviceName = sSnap.data()?.name ?? null
+      }
       return { 
-        service_id: d.service_id, 
+        service_id: isGlobal ? null : d.service_id, 
         discount_percentage: d.percentage,
         partnership_id: partnershipId,
-        services: { name: sSnap.data()?.name }
+        services: { name: serviceName }
       }
     }))
 
@@ -83,8 +89,9 @@ export async function setPartnershipDiscounts(
 ): Promise<{ error: any }> {
   try {
     const docRef = doc(db, 'companies', COMPANY_ID, 'partnerships', partnershipId)
+    // Usamos 'global' como sentinel em vez de null para compatibilidade com Firestore
     const formatted = discounts.map(d => ({
-      service_id: d.service_id,
+      service_id: d.service_id ?? 'global',
       percentage: d.discount_percentage
     }))
     await updateDoc(docRef, { discounts: formatted })
