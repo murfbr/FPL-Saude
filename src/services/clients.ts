@@ -229,7 +229,7 @@ export async function assignPackageToClient(clientId: string, packageId: string,
 export async function cancelClientPackage(clientId: string, clientPackageId: string): Promise<{ error: any }> {
   try {
     const docRef = doc(db, 'companies', COMPANY_ID, 'clients', clientId, 'packages', clientPackageId)
-    await deleteDoc(docRef)
+    await updateDoc(docRef, { status: 'cancelled', cancelled_at: new Date().toISOString() })
     return { error: null }
   } catch (error) { return { error } }
 }
@@ -276,8 +276,12 @@ export async function createClientSubscription(data: any): Promise<{ data: any |
 export async function updateClientSubscription(subId: string, updates: any): Promise<{ error: any }> {
   return { error: null }
 }
-export async function cancelClientSubscription(subId: string): Promise<{ error: any }> {
-  return { error: null }
+export async function cancelClientSubscription(clientId: string, subId: string): Promise<{ error: any }> {
+  try {
+    const docRef = doc(db, 'companies', COMPANY_ID, 'clients', clientId, 'subscriptions', subId)
+    await updateDoc(docRef, { status: 'cancelled', cancelled_at: new Date().toISOString() })
+    return { error: null }
+  } catch (error) { return { error } }
 }
 export async function exportClientData(clientId: string, exportType: string, formatType: 'pdf' | 'docx'): Promise<{ data: any | null; error: any }> {
   try {

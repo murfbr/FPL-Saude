@@ -48,7 +48,7 @@ export const ClientSubscriptionsList = ({
   const fetchSubscriptions = async () => {
     setIsLoading(true)
     const { data } = await getClientSubscriptions(clientId)
-    setSubscriptions(data || [])
+    setSubscriptions((data || []).filter(s => !s.status || s.status === 'active'))
 
     // Fetch usage for each active subscription
     if (data) {
@@ -75,7 +75,7 @@ export const ClientSubscriptionsList = ({
   }, [clientId])
 
   const handleCancel = async (id: string) => {
-    const { error } = await cancelClientSubscription(id)
+    const { error } = await cancelClientSubscription(clientId, id)
     if (error) {
       toast({
         title: 'Erro ao cancelar assinatura',
