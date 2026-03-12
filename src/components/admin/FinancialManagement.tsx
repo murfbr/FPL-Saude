@@ -58,7 +58,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PackageFinancials } from './PackageFinancials'
 
 export const FinancialManagement = () => {
-  const { professionalId } = useAuth()
+  const { professionalId, user } = useAuth()
   const { toast } = useToast()
   const [subscriptions, setSubscriptions] = useState<
     (ClientSubscription & { financial_record_id?: string })[]
@@ -137,10 +137,15 @@ export const FinancialManagement = () => {
   }, [currentDate])
 
   const handlePay = async (sub: ClientSubscription) => {
-    if (!professionalId) return
+    // Use professionalId if available, otherwise fall back to the logged-in user's id
+    const actorId = professionalId || user?.id
+    if (!actorId) {
+      toast({ title: 'Erro', description: 'Usuário não identificado.', variant: 'destructive' })
+      return
+    }
     setIsProcessing(sub.id)
 
-    const { error } = await paySubscription(sub, professionalId)
+    const { error } = await paySubscription(sub, actorId)
 
     if (error) {
       toast({
@@ -163,6 +168,7 @@ export const FinancialManagement = () => {
   ) => {
     if (!sub.financial_record_id) return
     setIsProcessing(sub.id)
+
 
     const { error } = await deleteSubscriptionPayment(sub.financial_record_id)
 

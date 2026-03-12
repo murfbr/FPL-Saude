@@ -177,12 +177,19 @@ export async function getClientPackages(clientId: string): Promise<{ data: any[]
 export async function getAllActiveClientPackages(): Promise<{ data: any[] | null; error: any }> {
   try {
     const pkgsRef = collectionGroup(db, 'packages')
-    const q = query(pkgsRef, where('sessions_remaining', '>', 0))
-    const snap = await getDocs(q)
+    // Remove the where filter (requires a special Collection Group index)
+    // Instead, fetch all and filter on the client side
+    const snap = await getDocs(pkgsRef)
 
     const results = []
     for (const d of snap.docs) {
+      // Only include packages inside our own company tree
+      if (!d.ref.path.startsWith(`companies/${COMPANY_ID}/`)) continue
+      
       const data = d.data()
+      // Filter: only packages with sessions remaining
+      if ((data.sessions_remaining || 0) <= 0) continue
+      
       const cp = { id: d.id, ...data } as any
       // Hidratação de Cliente
       if (data.client_id) {
@@ -198,7 +205,7 @@ export async function getAllActiveClientPackages(): Promise<{ data: any[] | null
     }
     return { data: results, error: null }
   } catch (error) {
-    console.error("🔥 ERRO EM getAllActiveClientPackages (falta de índice?): ", error)
+    console.error("🔥 ERRO EM getAllActiveClientPackages: ", error)
     return { data: null, error }
   }
 }

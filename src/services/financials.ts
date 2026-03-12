@@ -60,6 +60,11 @@ export async function getActiveSubscriptions(): Promise<{ data: ClientSubscripti
     const q = query(subsRef, where('status', '==', 'active'))
     const snap = await getDocs(q)
     
+    console.log(`[getActiveSubscriptions] Found ${snap.docs.length} docs from collectionGroup`)
+    snap.docs.forEach(d => {
+      console.log(`  - doc.id: ${d.id} | path: ${d.ref.path} | data:`, d.data())
+    })
+    
     const promises = snap.docs.map(async (docSnap) => {
       const sub = { id: docSnap.id, ...docSnap.data() } as any
       // Hydrating foreign relations for table
@@ -79,12 +84,14 @@ export async function getActiveSubscriptions(): Promise<{ data: ClientSubscripti
     })
     
     const results = await Promise.all(promises)
+    console.log('[getActiveSubscriptions] Hydrated results:', results)
     return { data: results as ClientSubscription[], error: null }
   } catch (error) {
     console.error("🔥 ERRO EM getActiveSubscriptions (possível falta de índice?): ", error)
     return { data: null, error }
   }
 }
+
 
 export async function getSubscriptionPayments(subscriptionIds: string[], monthDate: Date): Promise<{ data: any[] | null; error: any }> {
   if (!subscriptionIds || subscriptionIds.length === 0) return { data: [], error: null }
@@ -94,19 +101,30 @@ export async function getSubscriptionPayments(subscriptionIds: string[], monthDa
     const end = endOfMonth(monthDate).toISOString()
 
     const finRef = collection(db, 'companies', COMPANY_ID, 'financial_records')
-    // Batch lookup chunks
     const chunks = []
     for (let i = 0; i < subscriptionIds.length; i += 10) { chunks.push(subscriptionIds.slice(i, i + 10)) }
 
     let results: any[] = []
     for (const chunk of chunks) {
-      const q = query(finRef, where('client_subscription_id', 'in', chunk), where('payment_date', '>=', start), where('payment_date', '<=', end))
+      // Only filter by subscription ID — avoids composite index requirement
+      const q = query(finRef, where('client_subscription_id', 'in', chunk))
       const snap = await getDocs(q)
-      snap.forEach(d => results.push({ id: d.id, ...d.data() }))
+      snap.forEach(d => {
+        const rec = { id: d.id, ...d.data() } as any
+        // Filter by date range client-side
+        if (rec.payment_date >= start && rec.payment_date <= end) {
+          results.push(rec)
+        }
+      })
     }
+    console.log(`[getSubscriptionPayments] Found ${results.length} payments for month`, start.substring(0, 7))
     return { data: results, error: null }
-  } catch (error) { return { data: null, error } }
+  } catch (error) {
+    console.error('[getSubscriptionPayments] Error:', error)
+    return { data: null, error }
+  }
 }
+
 
 export async function paySubscription(subscription: ClientSubscription, professionalId: string): Promise<{ error: any }> {
   try {
@@ -141,7 +159,6 @@ export async function getPackagePayments(clientPackageIds: string[]): Promise<{ 
   
   try {
     const finRef = collection(db, 'companies', COMPANY_ID, 'financial_records')
-    // Batch lookup chunks
     const chunks = []
     for (let i = 0; i < clientPackageIds.length; i += 10) { chunks.push(clientPackageIds.slice(i, i + 10)) }
 
@@ -151,18 +168,23 @@ export async function getPackagePayments(clientPackageIds: string[]): Promise<{ 
       const snap = await getDocs(q)
       snap.forEach(d => results.push({ id: d.id, ...d.data() }))
     }
+    console.log(`[getPackagePayments] Found ${results.length} payments for ${clientPackageIds.length} package IDs`, results)
     return { data: results, error: null }
-  } catch (error) { return { data: null, error } }
+  } catch (error) {
+    console.error('[getPackagePayments] Error:', error)
+    return { data: null, error }
+  }
 }
 
 export async function payPackage(clientPackage: any, professionalId: string): Promise<{ error: any }> {
   try {
+    console.log('[payPackage] Input:', { clientPackage, professionalId })
     const amount = (clientPackage.packages?.price || 0) - (clientPackage.discount_amount || 0)
     const description = `Pacote ${clientPackage.packages?.name || ''}`
 
     const finRef = collection(db, 'companies', COMPANY_ID, 'financial_records')
     const newDoc = doc(finRef)
-    await setDoc(newDoc, {
+    const payload = {
       id: newDoc.id,
       client_id: clientPackage.client_id,
       professional_id: professionalId,
@@ -171,9 +193,15 @@ export async function payPackage(clientPackage: any, professionalId: string): Pr
       payment_date: new Date().toISOString(),
       description: description,
       payment_method: 'manual',
-    })
+    }
+    console.log('[payPackage] Writing payload:', payload)
+    await setDoc(newDoc, payload)
+    console.log('[payPackage] Success!')
     return { error: null }
-  } catch (error) { return { error } }
+  } catch (error) {
+    console.error('[payPackage] Error:', error)
+    return { error }
+  }
 }
 
 export async function deletePackagePayment(recordId: string): Promise<{ error: any }> {

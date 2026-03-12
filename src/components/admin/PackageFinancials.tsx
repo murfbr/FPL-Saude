@@ -30,7 +30,7 @@ import {
 } from '@/components/ui/alert-dialog'
 
 export const PackageFinancials = () => {
-  const { professionalId } = useAuth()
+  const { professionalId, user } = useAuth()
   const { toast } = useToast()
   const [packages, setPackages] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -67,10 +67,14 @@ export const PackageFinancials = () => {
   }, [])
 
   const handlePay = async (pkg: any) => {
-    if (!professionalId) return
+    const actorId = professionalId || user?.id
+    if (!actorId) {
+      toast({ title: 'Erro', description: 'Usuário não identificado.', variant: 'destructive' })
+      return
+    }
     setIsProcessing(pkg.id)
 
-    const { error } = await payPackage(pkg, professionalId)
+    const { error } = await payPackage(pkg, actorId)
 
     if (error) {
       toast({
