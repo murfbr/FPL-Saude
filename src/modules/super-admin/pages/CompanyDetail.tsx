@@ -573,9 +573,21 @@ const CompanyDetail = () => {
           <h1 className="text-xl font-bold">{company.name}</h1>
           <p className="text-sm text-muted-foreground font-mono">{company.slug}</p>
         </div>
-        <Badge variant={company.is_active ? 'default' : 'secondary'} className="ml-auto">
-          {company.is_active ? 'Ativa' : 'Inativa'}
-        </Badge>
+        <div className="ml-auto flex items-center gap-2">
+          <Badge variant={company.is_active ? 'default' : 'secondary'}>
+            {company.is_active ? 'Ativa' : 'Inativa'}
+          </Badge>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              const { error } = await setCompanyActive(company.id, !company.is_active)
+              if (!error) setCompany({ ...company, is_active: !company.is_active })
+            }}
+          >
+            {company.is_active ? 'Desativar' : 'Ativar'}
+          </Button>
+        </div>
       </div>
 
       <Card>

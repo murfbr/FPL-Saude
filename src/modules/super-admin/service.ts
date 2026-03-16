@@ -30,7 +30,20 @@ export async function getCompanyConfig(companyId: string): Promise<{ data: Compa
   try {
     const snap = await getDoc(doc(db, 'companies', companyId))
     if (!snap.exists()) return { data: null, error: 'not-found' }
-    return { data: snap.data() as CompanyConfig, error: null }
+    const raw = snap.data()
+    const defaultModules = Object.fromEntries(
+      MODULE_REGISTRY.map(({ key, label, defaultEnabled }) => [key, { enabled: defaultEnabled, label }])
+    ) as CompanyConfig['modules']
+    const data: CompanyConfig = {
+      id: raw.id ?? companyId,
+      name: raw.name ?? companyId,
+      slug: raw.slug ?? companyId,
+      is_active: raw.is_active ?? false,
+      branding: raw.branding ?? { ...DEFAULT_BRANDING },
+      modules: raw.modules ?? defaultModules,
+      roles: raw.roles ?? { ...DEFAULT_ROLES },
+    }
+    return { data, error: null }
   } catch (error) {
     return { data: null, error }
   }
