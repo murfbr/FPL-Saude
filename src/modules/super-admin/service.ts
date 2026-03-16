@@ -19,7 +19,21 @@ import { MODULE_REGISTRY } from '@/modules/registry'
 export async function getAllCompanies(): Promise<{ data: CompanyConfig[] | null; error: any }> {
   try {
     const snap = await getDocs(collection(db, 'companies'))
-    const data = snap.docs.map((d) => d.data() as CompanyConfig)
+    const defaultModules = Object.fromEntries(
+      MODULE_REGISTRY.map(({ key, label, defaultEnabled }) => [key, { enabled: defaultEnabled, label }])
+    ) as CompanyConfig['modules']
+    const data = snap.docs.map((d) => {
+      const raw = d.data()
+      return {
+        id: d.id,
+        name: raw.name ?? d.id,
+        slug: raw.slug ?? d.id,
+        is_active: raw.is_active ?? false,
+        branding: raw.branding ?? { ...DEFAULT_BRANDING },
+        modules: raw.modules ?? defaultModules,
+        roles: raw.roles ?? { ...DEFAULT_ROLES },
+      } as CompanyConfig
+    })
     return { data, error: null }
   } catch (error) {
     return { data: null, error }
