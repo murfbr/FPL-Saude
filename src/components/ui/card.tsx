@@ -1,7 +1,7 @@
 /* Card Component primitives - A component that displays a card - from shadcn/ui (exposes Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent) */
 import * as React from 'react'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/lib/utils'
 
 const Card = React.forwardRef<
   HTMLDivElement,

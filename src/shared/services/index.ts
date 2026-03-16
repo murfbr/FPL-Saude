@@ -1,0 +1,15 @@
+// Barrel re-export — keeps legacy import paths working during Phase 2 migration.
+// All imports should eventually point directly to their domain module service.
+export * from '@/modules/appointments/service'
+export * from '@/modules/appointments/schedules'
+export * from '@/modules/clients/service'
+export * from '@/modules/professionals/service'
+export * from '@/modules/financial/service'
+export * from '@/modules/kpis/service'
+export * from '@/modules/services-catalog/service'
+export * from '@/modules/packages/service'
+export * from '@/modules/partnerships/service'
+export * from '@/modules/subscriptions/service'
+export * from '@/modules/availability/service'
+export * from '@/modules/time-tracking/service'
+export * from '@/modules/notifications/service'

@@ -4,29 +4,30 @@ import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import { Toaster } from '@/components/ui/toaster'
 import { Toaster as Sonner } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { AuthProvider } from '@/providers/AuthProvider'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
-import { RoleGuard } from '@/components/RoleGuard'
-import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { AuthProvider } from '@/shared/providers/AuthProvider'
+import { TenantProvider } from '@/shared/providers/TenantProvider'
+import { ProtectedRoute } from '@/shared/components/ProtectedRoute'
+import { RoleGuard } from '@/shared/components/RoleGuard'
+import { ErrorBoundary } from '@/shared/components/ErrorBoundary'
 import { Analytics } from '@vercel/analytics/react'
-import Layout from './components/Layout'
-import PublicLayout from './components/PublicLayout'
-import Landing from './pages/Landing'
-import Index from './pages/Index'
-import Login from './pages/Login'
-import Register from './pages/Register'
-import ForgotPassword from './pages/ForgotPassword'
-import ResetPassword from './pages/ResetPassword'
-import ProfessionalArea from './pages/ProfessionalArea'
-import PatientDetail from './pages/admin/PatientDetail'
-import Patients from './pages/admin/Patients'
-import ProfessionalDetail from './pages/admin/ProfessionalDetail'
-import NotFound from './pages/NotFound'
-import ClientAreaUnavailable from './pages/ClientAreaUnavailable'
-import AccessDenied from './pages/AccessDenied'
-import ProfessionalPatientDetail from './pages/professional/PatientDetail'
-import NotificationsPage from './pages/professional/Notifications'
-import AdminDashboard from './pages/AdminDashboard'
+import Layout from '@/shared/components/Layout'
+import PublicLayout from '@/shared/components/PublicLayout'
+import Landing from '@/modules/landing/pages/Landing'
+import Index from '@/shared/pages/Index'
+import Login from '@/modules/auth/pages/Login'
+import Register from '@/modules/auth/pages/Register'
+import ForgotPassword from '@/modules/auth/pages/ForgotPassword'
+import ResetPassword from '@/modules/auth/pages/ResetPassword'
+import ProfessionalArea from '@/shared/pages/ProfessionalArea'
+import PatientDetail from '@/modules/clients/pages/AdminPatientDetail'
+import Patients from '@/modules/clients/pages/Patients'
+import ProfessionalDetail from '@/modules/professionals/pages/ProfessionalDetail'
+import NotFound from '@/shared/pages/NotFound'
+import ClientAreaUnavailable from '@/shared/pages/ClientAreaUnavailable'
+import AccessDenied from '@/shared/pages/AccessDenied'
+import ProfessionalPatientDetail from '@/modules/clients/pages/ProfessionalPatientDetail'
+import NotificationsPage from '@/modules/notifications/pages/Notifications'
+import AdminDashboard from '@/shared/pages/AdminDashboard'
 
 console.log('App.tsx: Initializing application...')
 
@@ -51,6 +52,7 @@ const App = () => (
       <Analytics />
       <OverlayCleanup />
       <AuthProvider>
+        <TenantProvider>
         <TooltipProvider>
           <Toaster />
           <Sonner />
@@ -151,6 +153,7 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
           </Routes>
         </TooltipProvider>
+        </TenantProvider>
       </AuthProvider>
     </BrowserRouter>
   </ErrorBoundary>

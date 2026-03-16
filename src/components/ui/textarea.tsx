@@ -1,7 +1,7 @@
 /* Textarea Component - A component that displays a textarea - from shadcn/ui (exposes Textarea) */
 import * as React from 'react'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/lib/utils'
 
 const Textarea = React.forwardRef<
   HTMLTextAreaElement,
