@@ -98,6 +98,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     while (attempts <= MAX_RETRIES && !success) {
       try {
+        // Check super_admins/{uid} first — if found and active, skip tenant lookup
+        const superAdminRef = doc(firebaseDb, 'super_admins', currentUser.id)
+        const superAdminSnap = await getDoc(superAdminRef)
+        if (superAdminSnap.exists() && superAdminSnap.data()?.is_active === true) {
+          if (isMounted.current) {
+            setRole('super_admin')
+            setProfessionalId(null)
+            setCompanyIdState(null)
+            setCompanyId(null)
+            setError(null)
+            setLoading(false)
+          }
+          success = true
+          break
+        }
+
         // Read from root users/{uid} collection — tenant-agnostic lookup
         const docRef = doc(firebaseDb, 'users', currentUser.id)
         const docSnap = await getDoc(docRef)

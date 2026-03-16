@@ -143,11 +143,16 @@ export const ProtectedRoute = ({
     )
   }
 
-  // 5. Role Authorization Check
+  // 5. Super-admin redirect — keep them in their own area
+  if (role === 'super_admin' && !location.pathname.startsWith('/super-admin')) {
+    return <Navigate to="/super-admin" replace />
+  }
+
+  // 6. Role Authorization Check
   if (allowedRoles && !allowedRoles.includes(role)) {
     return <Navigate to="/access-denied" replace />
   }
 
-  // 6. Render Authorized Content
+  // 7. Render Authorized Content
   return <>{children}</>
 }

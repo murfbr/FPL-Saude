@@ -8,13 +8,13 @@ import { useAuth } from '@/shared/providers/AuthProvider'
  * Will be expanded in Phase 3 to handle super-admin and per-company config loading.
  */
 export const TenantProvider = ({ children }: { children: ReactNode }) => {
-  const { companyId, loading, error } = useAuth()
+  const { companyId, role, loading, error } = useAuth()
 
   return (
     <TenantContext.Provider
       value={{
         companyId,
-        isSuperAdmin: false, // Phase 3: check super_admins/{uid}
+        isSuperAdmin: role === 'super_admin',
         tenantLoading: loading,
         tenantError: error,
       }}

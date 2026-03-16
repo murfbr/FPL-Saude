@@ -28,6 +28,11 @@ import AccessDenied from '@/shared/pages/AccessDenied'
 import ProfessionalPatientDetail from '@/modules/clients/pages/ProfessionalPatientDetail'
 import NotificationsPage from '@/modules/notifications/pages/Notifications'
 import AdminDashboard from '@/shared/pages/AdminDashboard'
+import SuperAdminLayout from '@/modules/super-admin/SuperAdminLayout'
+import SuperAdminDashboard from '@/modules/super-admin/pages/SuperAdminDashboard'
+import CompanyForm from '@/modules/super-admin/pages/CompanyForm'
+import CompanyDetail from '@/modules/super-admin/pages/CompanyDetail'
+import { SuperAdminGuard } from '@/modules/super-admin/SuperAdminGuard'
 
 console.log('App.tsx: Initializing application...')
 
@@ -147,6 +152,40 @@ const App = () => (
                   }
                 />
               </Route>
+            </Route>
+
+            {/* Super-Admin Routes */}
+            <Route
+              element={
+                <ProtectedRoute>
+                  <SuperAdminLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route
+                path="/super-admin"
+                element={
+                  <SuperAdminGuard>
+                    <SuperAdminDashboard />
+                  </SuperAdminGuard>
+                }
+              />
+              <Route
+                path="/super-admin/companies/new"
+                element={
+                  <SuperAdminGuard>
+                    <CompanyForm />
+                  </SuperAdminGuard>
+                }
+              />
+              <Route
+                path="/super-admin/companies/:id"
+                element={
+                  <SuperAdminGuard>
+                    <CompanyDetail />
+                  </SuperAdminGuard>
+                }
+              />
             </Route>
 
             {/* Catch-all for 404 */}
