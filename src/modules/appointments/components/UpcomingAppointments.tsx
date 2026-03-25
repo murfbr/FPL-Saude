@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import {
   Table,
   TableBody,
@@ -46,7 +47,12 @@ export const UpcomingAppointments = ({
             <TableRow key={appt.id}>
               <TableCell>
                 <div className="font-medium">
-                  {appt.clients?.name || 'Cliente não informado'}
+                  <Link
+                    to={`/admin/pacientes/${appt.client_id}`}
+                    className="hover:underline text-primary"
+                  >
+                    {appt.clients?.name || 'Cliente não informado'}
+                  </Link>
                 </div>
                 <div className="text-sm text-muted-foreground">
                   {appt.clients?.email || ''}

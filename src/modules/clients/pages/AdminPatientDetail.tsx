@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom'
 import {
   getClientById,
   updateClient,
@@ -88,6 +88,7 @@ import { useAuth } from '@/shared/providers/AuthProvider'
 const PatientDetail = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const { toast } = useToast()
   const { user, professionalId } = useAuth()
   const [patient, setPatient] = useState<Client | null>(null)
@@ -107,6 +108,14 @@ const PatientDetail = () => {
   const [newExamName, setNewExamName] = useState('')
   const [newExamType, setNewExamType] = useState<'exame' | 'laudo'>('exame')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+
+  const handleBack = () => {
+    if (location.key === 'default') {
+      navigate('/admin?tab=patients')
+    } else {
+      navigate(-1)
+    }
+  }
 
   const fetchPatientData = async () => {
     if (!id) return
@@ -281,8 +290,8 @@ const PatientDetail = () => {
     return (
       <div className="container mx-auto py-8 px-4 text-center">
         <h2 className="text-2xl font-bold">Paciente não encontrado</h2>
-        <Button asChild className="mt-4">
-          <Link to="/admin?tab=patients">Voltar para Pacientes</Link>
+        <Button onClick={handleBack} className="mt-4">
+          Voltar para Pacientes
         </Button>
       </div>
     )
@@ -291,11 +300,9 @@ const PatientDetail = () => {
   return (
     <>
       <div className="container mx-auto py-8 px-4">
-        <Button asChild variant="outline" className="mb-6">
-          <Link to="/admin?tab=patients">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Voltar para Pacientes
-          </Link>
+        <Button onClick={handleBack} variant="outline" className="mb-6">
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Voltar
         </Button>
         <div className="grid md:grid-cols-3 gap-6">
           <div className="md:col-span-1 space-y-6">

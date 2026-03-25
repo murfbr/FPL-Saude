@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Card,
   CardContent,
@@ -58,7 +59,12 @@ export const UpcomingAppointments = () => {
             {validAppointments.map((appt) => (
               <li key={appt.id} className="flex items-center justify-between">
                 <div className="font-medium">
-                  <p>{appt.clients?.name || 'Cliente não informado'}</p>
+                  <Link
+                    to={`/admin/pacientes/${appt.client_id}`}
+                    className="hover:underline text-primary"
+                  >
+                    {appt.clients?.name || 'Cliente não informado'}
+                  </Link>
                   <p className="text-sm text-muted-foreground">
                     com{' '}
                     {appt.professionals?.name || 'Profissional não informado'}

@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { getClientById, getAppointmentsByClientId, getClientExams, uploadClientExam, deleteClientExam } from '@/shared/services'
 import { Client, Appointment, NoteEntry, ClientExam } from '@/shared/types'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -47,6 +47,7 @@ import { useToast } from '@/shared/hooks/use-toast'
 const ProfessionalPatientDetail = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const [patient, setPatient] = useState<Client | null>(null)
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -56,6 +57,14 @@ const ProfessionalPatientDetail = () => {
   const { toast } = useToast()
   const { user, professionalId } = useAuth()
   const [localNotes, setLocalNotes] = useState<NoteEntry[]>([])
+
+  const handleBack = () => {
+    if (location.key === 'default') {
+      navigate('/profissional?tab=clients')
+    } else {
+      navigate(-1)
+    }
+  }
 
   const fetchData = async () => {
     if (!id) return
@@ -123,7 +132,7 @@ const ProfessionalPatientDetail = () => {
     return (
       <div className="container mx-auto py-8 px-4 text-center">
         <h2 className="text-2xl font-bold">Paciente não encontrado</h2>
-        <Button onClick={() => navigate('/profissional?tab=clients')} className="mt-4">
+        <Button onClick={handleBack} className="mt-4">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Voltar
         </Button>
@@ -134,9 +143,9 @@ const ProfessionalPatientDetail = () => {
   return (
     <>
       <div className="container mx-auto py-8 px-4">
-        <Button onClick={() => navigate('/profissional?tab=clients')} variant="outline" className="mb-6">
+        <Button onClick={handleBack} variant="outline" className="mb-6">
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Voltar para a lista
+          Voltar
         </Button>
         <div className="grid md:grid-cols-3 gap-6">
           <div className="md:col-span-1 space-y-6">
