@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { LogOut, Briefcase, LayoutDashboard, Bell } from 'lucide-react'
+import { LogOut, Briefcase, LayoutDashboard, Bell, ShieldHalf } from 'lucide-react'
 import { NotificationBell } from './NotificationBell'
 
 export const UserNav = () => {
@@ -73,6 +73,12 @@ export const UserNav = () => {
             <DropdownMenuItem onClick={() => navigate('/admin')}>
               <LayoutDashboard className="mr-2 h-4 w-4" />
               <span>Dashboard Admin</span>
+            </DropdownMenuItem>
+          )}
+          {role === 'super_admin' && (
+            <DropdownMenuItem onClick={() => navigate('/super-admin')}>
+              <ShieldHalf className="mr-2 h-4 w-4" />
+              <span>Painel Super Admin</span>
             </DropdownMenuItem>
           )}
           {(role === 'admin' || role === 'professional') && (

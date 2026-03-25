@@ -4,10 +4,12 @@ import { UserNav } from './header/UserNav'
 import { MobileNav } from './header/MobileNav'
 import { useAuth } from '@/shared/providers/AuthProvider'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
+import { XCircle } from 'lucide-react'
 
 export const Header = () => {
   const isMobile = useIsMobile()
-  const { user, loading, role } = useAuth()
+  const { user, loading, role, isImpersonating, impersonateCompany } = useAuth()
   const location = useLocation()
 
   // Determine if we are in an admin context for branding
@@ -31,6 +33,26 @@ export const Header = () => {
             </>
           )}
         </Link>
+        
+        {isImpersonating && role === 'super_admin' && (
+          <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-amber-100 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-full animate-in fade-in slide-in-from-top-1 duration-300">
+            <span className="text-xs font-medium text-amber-800 dark:text-amber-300 whitespace-nowrap">
+              Modo Visualização (Empresa)
+            </span>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => {
+                impersonateCompany(null)
+                window.location.href = '/super-admin'
+              }}
+              className="h-6 px-2 text-xs text-amber-900 dark:text-amber-200 hover:bg-amber-200 dark:hover:bg-amber-800"
+            >
+              <XCircle className="h-3 w-3 mr-1" />
+              Sair
+            </Button>
+          </div>
+        )}
         <nav>
           {loading ? (
             <div className="flex items-center space-x-2">

@@ -46,6 +46,8 @@ interface AuthContextType {
   loading: boolean
   error: Error | null
   refreshProfile: () => Promise<void>
+  impersonateCompany: (companyId: string | null) => void
+  isImpersonating: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -69,6 +71,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [companyId, setCompanyIdState] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
+  const [impersonatedCompanyId, setImpersonatedCompanyIdState] = useState<string | null>(
+    localStorage.getItem('fpl_impersonated_company')
+  )
 
   const isMounted = useRef(true)
 
@@ -191,6 +196,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [fetchProfileAndRole])
 
+  const impersonateCompany = useCallback((id: string | null) => {
+    setImpersonatedCompanyIdState(id)
+    if (id) {
+      localStorage.setItem('fpl_impersonated_company', id)
+      setCompanyId(id) // sync to module-level store
+    } else {
+      localStorage.removeItem('fpl_impersonated_company')
+      setCompanyId(companyId) // revert to original resolved company
+    }
+  }, [companyId])
+
   // signUp writes to root users/{uid} with companyId.
   // companyId defaults to 'fpl-saude' until Phase 3 super-admin panel
   // manages company assignment automatically.
@@ -214,14 +230,36 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signIn = async (email: string, password: string) => {
     setLoading(true)
     setError(null)
-    try {
-      await signInWithEmailAndPassword(firebaseAuth, email, password)
-      return { error: null }
-    } catch (error) {
-      setLoading(false)
-      setError(error as Error)
-      return { error }
+    console.log('[Auth] Attempting sign in for:', email)
+
+    let attempts = 0
+    const SIGNIN_MAX_RETRIES = 1
+
+    while (attempts <= SIGNIN_MAX_RETRIES) {
+      try {
+        await signInWithEmailAndPassword(firebaseAuth, email, password)
+        console.log('[Auth] Sign in successful')
+        return { error: null }
+      } catch (error: any) {
+        attempts++
+        const isTransient =
+          error.code === 'auth/network-request-failed' ||
+          error.code === 'auth/internal-error' ||
+          error.code === 'auth/too-many-requests'
+
+        if (isTransient && attempts <= SIGNIN_MAX_RETRIES) {
+          console.warn(`[Auth] Transient sign in error (attempt ${attempts}):`, error.code, 'Retrying...')
+          await new Promise((resolve) => setTimeout(resolve, 1000))
+          continue
+        }
+
+        console.error('[Auth] Sign in failed:', error.code || error.message)
+        setLoading(false)
+        setError(error as Error)
+        return { error }
+      }
     }
+    return { error: new Error('Falha na autenticação após várias tentativas.') }
   }
 
   const signOut = async () => {
@@ -240,6 +278,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setCompanyId(null)
         setError(null)
         setLoading(false)
+        // Also clear impersonation on sign out
+        localStorage.removeItem('fpl_impersonated_company')
+        setImpersonatedCompanyIdState(null)
       }
     }
     return { error: null }
@@ -277,7 +318,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     session,
     role,
     professionalId,
-    companyId,
+    companyId: impersonatedCompanyId || companyId,
+    isImpersonating: !!impersonatedCompanyId,
     signUp,
     signIn,
     signOut,
@@ -286,6 +328,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     loading,
     error,
     refreshProfile,
+    impersonateCompany,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

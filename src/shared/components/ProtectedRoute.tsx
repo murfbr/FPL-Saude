@@ -23,7 +23,7 @@ export const ProtectedRoute = ({
   children,
   allowedRoles,
 }: ProtectedRouteProps) => {
-  const { user, role, loading, error, signOut, refreshProfile } = useAuth()
+  const { user, role, loading, error, signOut, refreshProfile, isImpersonating } = useAuth()
   const location = useLocation()
 
   const [showLongLoadingMessage, setShowLongLoadingMessage] = useState(false)
@@ -143,8 +143,8 @@ export const ProtectedRoute = ({
     )
   }
 
-  // 5. Super-admin redirect — keep them in their own area
-  if (role === 'super_admin' && !location.pathname.startsWith('/super-admin')) {
+  // 5. Super-admin redirect — keep them in their own area unless impersonating
+  if (role === 'super_admin' && !location.pathname.startsWith('/super-admin') && !isImpersonating) {
     return <Navigate to="/super-admin" replace />
   }
 

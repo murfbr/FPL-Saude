@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Save, Upload, Trash2, PlusCircle, UserPlus } from 'lucide-react'
+import { ArrowLeft, Save, Upload, Trash2, PlusCircle, UserPlus, ExternalLink } from 'lucide-react'
+import { useAuth } from '@/shared/providers/AuthProvider'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -35,6 +36,7 @@ import {
   getUsersByCompany,
   updateUserRole,
   createCompanyUser,
+  setCompanyActive,
   type CompanyUser,
 } from '@/modules/super-admin/service'
 import { MODULE_REGISTRY } from '@/modules/registry'
@@ -531,6 +533,7 @@ const UsersTab = ({ company }: { company: CompanyConfig }) => {
 const CompanyDetail = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { impersonateCompany } = useAuth()
   const [company, setCompany] = useState<CompanyConfig | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -577,6 +580,18 @@ const CompanyDetail = () => {
           <Badge variant={company.is_active ? 'default' : 'secondary'}>
             {company.is_active ? 'Ativa' : 'Inativa'}
           </Badge>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              impersonateCompany(company.id)
+              navigate('/admin')
+            }}
+            className="flex items-center gap-2 border-primary/50 hover:bg-primary/5"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Entrar no App
+          </Button>
           <Button
             variant="outline"
             size="sm"

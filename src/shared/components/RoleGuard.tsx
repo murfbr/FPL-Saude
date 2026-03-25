@@ -11,7 +11,8 @@ export const RoleGuard = ({ children, allowedRoles }: RoleGuardProps) => {
   const { role } = useAuth()
 
   // This component assumes Auth is already verified by a parent ProtectedRoute
-  if (!role || !allowedRoles.includes(role)) {
+  // Super Admins bypass role checks (they have universal access)
+  if (!role || (role !== 'super_admin' && !allowedRoles.includes(role))) {
     return <Navigate to="/access-denied" replace />
   }
 

@@ -7,7 +7,7 @@ import {
   SheetTrigger,
   SheetClose,
 } from '@/components/ui/sheet'
-import { LogOut, Briefcase, LayoutDashboard, Menu, X, Bell } from 'lucide-react'
+import { LogOut, Briefcase, LayoutDashboard, Menu, X, Bell, ShieldHalf } from 'lucide-react'
 import { NotificationBell } from './NotificationBell'
 
 export const MobileNav = () => {
@@ -74,6 +74,18 @@ export const MobileNav = () => {
                         >
                           <LayoutDashboard className="mr-2 h-4 w-4" />
                           Dashboard Admin
+                        </Button>
+                      </SheetClose>
+                    )}
+                    {role === 'super_admin' && (
+                      <SheetClose asChild>
+                        <Button
+                          variant="ghost"
+                          className="w-full justify-start"
+                          onClick={() => handleNavigate('/super-admin')}
+                        >
+                          <ShieldHalf className="mr-2 h-4 w-4" />
+                          Painel Super Admin
                         </Button>
                       </SheetClose>
                     )}
