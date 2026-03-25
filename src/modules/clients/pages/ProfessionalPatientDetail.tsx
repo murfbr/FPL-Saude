@@ -1,8 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getClientById } from '@/shared/services'
-import { getAppointmentsByClientId } from '@/shared/services'
-import { Client, Appointment, NoteEntry } from '@/shared/types'
+import { getClientById, getAppointmentsByClientId, getClientExams, uploadClientExam, deleteClientExam } from '@/shared/services'
+import { Client, Appointment, NoteEntry, ClientExam } from '@/shared/types'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Card,
@@ -22,9 +21,16 @@ import {
   ArrowLeft,
   CreditCard,
   Phone,
-  FileText,
-  Edit,
   StickyNote,
+  Plus,
+  File,
+  Download,
+  X,
+  Trash2,
+  Loader2,
+  Repeat,
+  History,
+  ExternalLink,
 } from 'lucide-react'
 import { format, isValid } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -35,6 +41,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { formatCPF } from '@/shared/lib/utils'
 import { GeneralAssessmentForm } from '@/modules/clients/components/GeneralAssessmentForm'
 import { ClientPackagesList } from '@/modules/packages/components/ClientPackagesList'
+import { useAuth } from '@/shared/providers/AuthProvider'
+import { useToast } from '@/shared/hooks/use-toast'
 
 const ProfessionalPatientDetail = () => {
   const { id } = useParams<{ id: string }>()
@@ -45,6 +53,9 @@ const ProfessionalPatientDetail = () => {
   const [selectedAppointment, setSelectedAppointment] =
     useState<Appointment | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const { toast } = useToast()
+  const { user, professionalId } = useAuth()
+  const [localNotes, setLocalNotes] = useState<NoteEntry[]>([])
 
   const fetchData = async () => {
     if (!id) return
@@ -168,10 +179,10 @@ const ProfessionalPatientDetail = () => {
               <CardHeader>
                 <CardTitle className="flex items-center gap-3">
                   <StickyNote className="w-6 h-6" />
-                  Anotações da Sessão (Consolidado)
+                  Histórico de Anotações
                 </CardTitle>
                 <CardDescription>
-                  Histórico completo de anotações em ordem cronológica.
+                  Histórico consolidado de todas as sessões.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -212,13 +223,13 @@ const ProfessionalPatientDetail = () => {
                     </p>
                   )}
                 </ScrollArea>
-              </CardContent>
-            </Card>
+            </CardContent>
+          </Card>
 
-            <Card>
+          <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-3">
-                  <FileText className="w-6 h-6" />
+                  <StickyNote className="w-6 h-6" />
                   Histórico de Agendamentos
                 </CardTitle>
                 <CardDescription>
@@ -264,7 +275,7 @@ const ProfessionalPatientDetail = () => {
                             variant="outline"
                             onClick={() => handleEditNotes(appt)}
                           >
-                            <Edit className="mr-2 h-4 w-4" />
+                            <ExternalLink className="mr-2 h-4 w-4" />
                             Detalhes
                           </Button>
                         </div>

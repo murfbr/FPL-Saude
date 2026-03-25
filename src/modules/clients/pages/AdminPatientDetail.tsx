@@ -5,9 +5,12 @@ import {
   updateClient,
   deleteClient,
   exportClientData,
+  getAppointmentsByClientId,
+  getClientExams,
+  uploadClientExam,
+  deleteClientExam,
 } from '@/shared/services'
-import { getAppointmentsByClientId } from '@/shared/services'
-import { Client, Appointment, Partnership, NoteEntry } from '@/shared/types'
+import { Client, Appointment, Partnership, NoteEntry, ClientExam } from '@/shared/types'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Card,
@@ -46,7 +49,12 @@ import {
   Trash2,
   Handshake,
   StickyNote,
+  CheckCircle2,
+  Upload,
+  Plus,
+  File,
   Download,
+  X,
   Loader2,
 } from 'lucide-react'
 import { format, isValid } from 'date-fns'
@@ -75,11 +83,13 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { GeneralAssessmentForm } from '@/modules/clients/components/GeneralAssessmentForm'
 import { ClientPackagesList } from '@/modules/packages/components/ClientPackagesList'
 import { ClientSubscriptionsList } from '@/modules/subscriptions/components/ClientSubscriptionsList'
+import { useAuth } from '@/shared/providers/AuthProvider'
 
 const PatientDetail = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { toast } = useToast()
+  const { user, professionalId } = useAuth()
   const [patient, setPatient] = useState<Client | null>(null)
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [partnerships, setPartnerships] = useState<Partnership[]>([])
@@ -88,7 +98,15 @@ const PatientDetail = () => {
   const [selectedAppointment, setSelectedAppointment] =
     useState<Appointment | null>(null)
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false)
-  const [isExportingNotes, setIsExportingNotes] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
+
+  const [exams, setExams] = useState<ClientExam[]>([])
+  const [isUploadingExam, setIsUploadingExam] = useState(false)
+  const [isLoadingExams, setIsLoadingExams] = useState(false)
+  const [isExamDialogOpen, setIsExamDialogOpen] = useState(false)
+  const [newExamName, setNewExamName] = useState('')
+  const [newExamType, setNewExamType] = useState<'exame' | 'laudo'>('exame')
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
   const fetchPatientData = async () => {
     if (!id) return
@@ -104,8 +122,17 @@ const PatientDetail = () => {
     setIsLoading(false)
   }
 
+  const fetchExams = async () => {
+    if (!id) return
+    setIsLoadingExams(true)
+    const { data } = await getClientExams(id)
+    if (data) setExams(data)
+    setIsLoadingExams(false)
+  }
+
   useEffect(() => {
     fetchPatientData()
+    fetchExams()
   }, [id])
 
   const handleStatusChange = async (isActive: boolean) => {
@@ -157,31 +184,56 @@ const PatientDetail = () => {
     setIsDetailDialogOpen(true)
   }
 
-  const handleExportSessionNotes = async (format: 'pdf' | 'docx') => {
-    if (!patient) return
-    setIsExportingNotes(true)
-    const { data, error } = await exportClientData(
-      patient.id,
-      'session_notes',
-      format,
-    )
-
+  const handleExport = async (format: 'pdf' | 'docx') => {
+    if (!id) return
+    setIsExporting(true)
+    const { data, error } = await exportClientData(id, 'clinical_history', format)
     if (error) {
       toast({
-        title: 'Erro ao exportar anotações',
+        title: 'Erro ao exportar',
         description: error.message,
         variant: 'destructive',
       })
     } else if (data) {
-      const link = document.createElement('a')
-      link.href = `data:application/${format === 'pdf' ? 'pdf' : 'vnd.openxmlformats-officedocument.wordprocessingml.document'};base64,${data.content}`
-      link.download = data.filename
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      toast({ title: 'Download iniciado!' })
+      const linkSource = `data:application/${format === 'pdf' ? 'pdf' : 'vnd.openxmlformats-officedocument.wordprocessingml.document'};base64,${data.content}`
+      const downloadLink = document.createElement('a')
+      downloadLink.href = linkSource
+      downloadLink.download = data.filename
+      downloadLink.click()
     }
-    setIsExportingNotes(false)
+    setIsExporting(false)
+  }
+
+  const handleUploadExam = async () => {
+    if (!id || !selectedFile || !newExamName.trim()) return
+    setIsUploadingExam(true)
+
+    const { data, error } = await uploadClientExam(
+      id,
+      {
+        client_id: id,
+        name: newExamName,
+        type: newExamType,
+        professional_id: professionalId || undefined,
+        professional_name: user?.displayName || user?.email || 'Administrador'
+      },
+      selectedFile
+    )
+
+    if (error) {
+       toast({ title: 'Erro ao enviar arquivo', description: error.message, variant: 'destructive' })
+    } else {
+       toast({ title: 'Arquivo enviado com sucesso!' })
+       setIsExamDialogOpen(false)
+       setNewExamName('')
+       setSelectedFile(null)
+       fetchExams()
+    }
+    setIsUploadingExam(false)
+  }
+
+  const handleDeleteExam = async (exam: ClientExam) => {
+    // Moved to GeneralAssessmentForm
   }
 
   const validAppointments = appointments.filter(
@@ -365,10 +417,10 @@ const PatientDetail = () => {
                 <div className="flex flex-col space-y-1.5">
                   <CardTitle className="flex items-center gap-3">
                     <StickyNote className="w-6 h-6" />
-                    Anotações da Sessão (Consolidado)
+                    Prontuário / Evolução (Agendamentos)
                   </CardTitle>
                   <CardDescription>
-                    Histórico completo de anotações em ordem cronológica.
+                    Histórico consolidado de todas as sessões.
                   </CardDescription>
                 </div>
                 <DropdownMenu>
@@ -376,9 +428,9 @@ const PatientDetail = () => {
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={isExportingNotes}
+                      disabled={isExporting}
                     >
-                      {isExportingNotes ? (
+                      {isExporting ? (
                         <Loader2 className="w-4 h-4 animate-spin mr-2" />
                       ) : (
                         <Download className="w-4 h-4 mr-2" />
@@ -388,12 +440,12 @@ const PatientDetail = () => {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent>
                     <DropdownMenuItem
-                      onClick={() => handleExportSessionNotes('pdf')}
+                      onClick={() => handleExport('pdf')}
                     >
                       Exportar como PDF
                     </DropdownMenuItem>
                     <DropdownMenuItem
-                      onClick={() => handleExportSessionNotes('docx')}
+                      onClick={() => handleExport('docx')}
                     >
                       Exportar como DOCX
                     </DropdownMenuItem>

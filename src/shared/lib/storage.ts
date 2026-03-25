@@ -3,7 +3,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
 
 export const uploadFile = async (bucket: string, path: string, file: File) => {
   try {
-    const storageRef = ref(storage, `${bucket}/${path}`)
+    const storageRef = ref(storage, path)
     const snapshot = await uploadBytesResumable(storageRef, file)
 
     return { data: snapshot, error: null }
@@ -14,7 +14,7 @@ export const uploadFile = async (bucket: string, path: string, file: File) => {
 
 export const getPublicUrl = async (bucket: string, path: string) => {
   try {
-    const storageRef = ref(storage, `${bucket}/${path}`)
+    const storageRef = ref(storage, path)
     const url = await getDownloadURL(storageRef)
     return url
   } catch (error) {

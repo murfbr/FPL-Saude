@@ -499,3 +499,34 @@ export async function addAppointmentNote(appointmentId: string, note: NoteEntry)
 export async function getAppointmentsByScheduleId(scheduleId: string): Promise<{ data: Appointment[] | null; error: any }> {
   return { data: [], error: null }
 }
+
+export async function getLastClientNotes(clientId: string, limit: number = 5): Promise<{ data: NoteEntry[] | null; hasMore: boolean; totalCount: number; error: any }> {
+  try {
+    const appointmentsRef = collection(db, 'companies', getCompanyId(), 'appointments')
+    const q = query(
+      appointmentsRef,
+      where('client_id', '==', clientId),
+      orderBy('schedules.start_time', 'desc')
+    )
+    const snapshot = await getDocs(q)
+    
+    let allNotes: NoteEntry[] = []
+    snapshot.forEach(doc => {
+      const data = doc.data()
+      if (data.notes && Array.isArray(data.notes)) {
+        allNotes.push(...data.notes)
+      }
+    })
+    
+    allNotes.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    
+    const totalCount = allNotes.length
+    const hasMore = totalCount > limit
+    const slicedNotes = allNotes.slice(0, limit)
+    
+    return { data: slicedNotes, hasMore, totalCount, error: null }
+  } catch (error) {
+    console.error("Error fetching last client notes:", error)
+    return { data: null, hasMore: false, totalCount: 0, error }
+  }
+}

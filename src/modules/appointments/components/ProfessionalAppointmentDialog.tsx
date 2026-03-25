@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Dialog,
   DialogContent,
@@ -29,6 +30,7 @@ import {
   completeAppointment,
   cancelAppointment,
   getAppointmentsByScheduleId,
+  getLastClientNotes,
 } from '@/shared/services'
 import { Appointment, NoteEntry } from '@/shared/types'
 import { format, isValid } from 'date-fns'
@@ -45,6 +47,9 @@ import {
   Send,
   Users,
   Trash2,
+  History,
+  ExternalLink,
+  StickyNote,
 } from 'lucide-react'
 import { useAuth } from '@/shared/providers/AuthProvider'
 import { getProfessionalById } from '@/shared/services'
@@ -74,6 +79,10 @@ export const ProfessionalAppointmentDialog = ({
   const [professionalName, setProfessionalName] = useState('')
   const [groupAppointments, setGroupAppointments] = useState<Appointment[]>([])
   const [isLoadingGroup, setIsLoadingGroup] = useState(false)
+  const [lastNotes, setLastNotes] = useState<NoteEntry[]>([])
+  const [hasMoreNotes, setHasMoreNotes] = useState(false)
+  const [isLoadingLastNotes, setIsLoadingLastNotes] = useState(false)
+  const navigate = useNavigate()
 
   useEffect(() => {
     if (professionalId) {
@@ -96,6 +105,18 @@ export const ProfessionalAppointmentDialog = ({
       getAppointmentsByScheduleId(appointment.schedule_id).then(({ data }) => {
         setGroupAppointments(data || [])
         setIsLoadingGroup(false)
+      })
+
+      // Fetch last 5 notes
+      setIsLoadingLastNotes(true)
+      getLastClientNotes(appointment.client_id, 5).then((res: any) => {
+        if (res.data) {
+          const currentNoteDates = (appointment.notes || []).map((n: any) => n.date)
+          const filtered = res.data.filter((n: any) => !currentNoteDates.includes(n.date))
+          setLastNotes(filtered)
+          setHasMoreNotes(res.hasMore)
+        }
+        setIsLoadingLastNotes(false)
       })
     }
   }, [isOpen, appointment])
@@ -321,36 +342,88 @@ export const ProfessionalAppointmentDialog = ({
           <Separator />
 
           <div className="space-y-3">
-            <Label>Prontuário / Anotações</Label>
-            <ScrollArea className="h-[200px] w-full rounded-md border p-4 bg-muted/20">
-              {appointment.notes && appointment.notes.length > 0 ? (
-                <div className="space-y-4">
-                  {appointment.notes.map((note, index) => (
-                    <div
-                      key={index}
-                      className="bg-background p-3 rounded-lg border shadow-sm"
-                    >
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="font-semibold text-xs text-primary">
-                          {note.professional_name}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {format(new Date(note.date), "dd/MM/yy 'às' HH:mm", {
-                            locale: ptBR,
-                          })}
-                        </span>
+            <div className="flex justify-between items-center">
+              <Label className="text-sm font-semibold flex items-center gap-2">
+                <StickyNote className="w-4 h-4 text-primary" />
+                Prontuário e Histórico
+              </Label>
+              {hasMoreNotes && (
+                 <button
+                   onClick={() => {
+                     onOpenChange(false)
+                     navigate(`/profissional/pacientes/${(appointment as any).client_id}`)
+                   }}
+                   className="text-[10px] text-primary hover:underline flex items-center gap-1"
+                 >
+                   Ver Perfil Completo
+                   <ExternalLink className="h-2.5 w-2.5" />
+                 </button>
+               )}
+            </div>
+            <ScrollArea className="h-[250px] w-full rounded-md border p-4 bg-muted/10">
+              <div className="space-y-6">
+                {/* Previous Notes (History) */}
+                {isLoadingLastNotes ? (
+                  <div className="flex justify-center py-4">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  </div>
+                ) : lastNotes.length > 0 && (
+                  <div className="space-y-4">
+                    {lastNotes.map((note, index) => (
+                      <div key={`history-${index}`} className="relative pl-4 border-l-2 border-muted">
+                         <div className="flex justify-between items-center mb-1">
+                           <span className="font-semibold text-[10px] text-muted-foreground italic">
+                             Histórico: {note.professional_name}
+                           </span>
+                           <span className="text-[10px] text-muted-foreground">
+                             {format(new Date(note.date), "dd/MM/yy", { locale: ptBR })}
+                           </span>
+                         </div>
+                         <p className="text-xs text-muted-foreground/80 line-clamp-3">
+                           {note.content}
+                         </p>
                       </div>
-                      <p className="text-sm whitespace-pre-wrap">
-                        {note.content}
-                      </p>
+                    ))}
+                    <div className="flex items-center gap-2 py-2">
+                      <div className="h-[1px] flex-1 bg-border" />
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Início da Sessão Atual</span>
+                      <div className="h-[1px] flex-1 bg-border" />
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  Nenhuma anotação registrada.
-                </p>
-              )}
+                  </div>
+                )}
+
+                {/* Current Session Notes */}
+                {appointment.notes && appointment.notes.length > 0 ? (
+                  <div className="space-y-4">
+                    {appointment.notes.map((note, index) => (
+                      <div
+                        key={`current-${index}`}
+                        className="bg-background p-3 rounded-lg border shadow-sm"
+                      >
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="font-semibold text-xs text-primary">
+                            {note.professional_name}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {format(
+                              new Date(note.date),
+                              "dd/MM/yy 'às' HH:mm",
+                              { locale: ptBR },
+                            )}
+                          </span>
+                        </div>
+                        <p className="text-sm whitespace-pre-wrap">
+                          {note.content}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    {lastNotes.length > 0 ? 'Nenhuma evolução registrada nesta sessão ainda.' : 'Nenhuma anotação registrada.'}
+                  </p>
+                )}
+              </div>
             </ScrollArea>
 
             <div className="flex gap-2">

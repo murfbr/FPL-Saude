@@ -21,8 +21,30 @@ import {
 } from '@/components/ui/form'
 import { useToast } from '@/shared/hooks/use-toast'
 import { Client } from '@/shared/types'
-import { updateClient, exportClientData } from '@/shared/services'
-import { FileText, Loader2, Save, Download, History, Plus } from 'lucide-react'
+import { FileText, Loader2, Save, Download, History, Plus, File, Upload, Download as DownloadIcon, Trash2 } from 'lucide-react'
+import { updateClient, exportClientData, getClientExams, uploadClientExam, deleteClientExam } from '@/shared/services'
+import { ClientExam } from '@/shared/types'
+import { useAuth } from '@/shared/providers/AuthProvider'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select as UiSelect,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   DropdownMenu,
@@ -58,6 +80,15 @@ export const GeneralAssessmentForm = ({
   const [isExporting, setIsExporting] = useState(false)
   const [historyText, setHistoryText] = useState('')
   const [activeTab, setActiveTab] = useState('assessment')
+  const { user, role, professionalId } = useAuth()
+
+  const [exams, setExams] = useState<ClientExam[]>([])
+  const [isUploadingExam, setIsUploadingExam] = useState(false)
+  const [isLoadingExams, setIsLoadingExams] = useState(false)
+  const [newExamName, setNewExamName] = useState('')
+  const [newExamType, setNewExamType] = useState<'exame' | 'laudo'>('exame')
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [isExamDialogOpen, setIsExamDialogOpen] = useState(false)
 
   // Data parsing
   const { assessmentData, historyData } = useMemo(() => {
@@ -92,6 +123,64 @@ export const GeneralAssessmentForm = ({
   useEffect(() => {
     form.reset(assessmentData as AssessmentFormValues)
   }, [assessmentData, form])
+
+  const fetchExams = async () => {
+    if (!client.id) return
+    setIsLoadingExams(true)
+    const { data } = await getClientExams(client.id)
+    if (data) setExams(data)
+    setIsLoadingExams(false)
+  }
+
+  useEffect(() => {
+    if (activeTab === 'exams') {
+      fetchExams()
+    }
+  }, [activeTab, client.id])
+
+  const handleUploadExam = async () => {
+    if (!client.id || !selectedFile || !newExamName.trim()) return
+    setIsUploadingExam(true)
+
+    const examPayload: any = {
+      client_id: client.id,
+      name: newExamName,
+      type: newExamType,
+      professional_name: user?.displayName || user?.email || (role === 'admin' ? 'Administrador' : 'Profissional')
+    }
+
+    if (professionalId) {
+      examPayload.professional_id = professionalId
+    }
+
+    const { data, error } = await uploadClientExam(
+      client.id,
+      examPayload,
+      selectedFile
+    )
+
+    if (error) {
+       toast({ title: 'Erro ao enviar arquivo', description: error.message, variant: 'destructive' })
+    } else {
+       toast({ title: 'Arquivo enviado com sucesso!' })
+       setIsExamDialogOpen(false)
+       setNewExamName('')
+       setSelectedFile(null)
+       fetchExams()
+    }
+    setIsUploadingExam(false)
+  }
+
+  const handleDeleteExam = async (exam: ClientExam) => {
+    if (!client.id) return
+    const { error } = await deleteClientExam(client.id, exam.id, exam.file_path)
+    if (error) {
+       toast({ title: 'Erro ao excluir arquivo', variant: 'destructive' })
+    } else {
+       toast({ title: 'Arquivo excluído com sucesso!' })
+       fetchExams()
+    }
+  }
 
   const onSubmit = async (values: AssessmentFormValues) => {
     setIsSubmitting(true)
@@ -196,7 +285,7 @@ export const GeneralAssessmentForm = ({
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <div className="flex flex-col space-y-1.5">
           <CardTitle className="flex items-center gap-2">
-            <FileText className="w-5 h-5" /> Avaliação Geral
+            <FileText className="w-5 h-5" /> Informações Gerais
           </CardTitle>
           <CardDescription>
             Ficha de avaliação fisioterapêutica e anamnese.
@@ -225,9 +314,10 @@ export const GeneralAssessmentForm = ({
       </CardHeader>
       <CardContent className="pt-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-6">
+          <TabsList className="grid w-full grid-cols-3 mb-6">
             <TabsTrigger value="assessment">Ficha de Avaliação</TabsTrigger>
             <TabsTrigger value="history">Histórico Importado</TabsTrigger>
+            <TabsTrigger value="exams">Laudos / Exames</TabsTrigger>
           </TabsList>
 
           <TabsContent value="assessment">
@@ -449,6 +539,135 @@ export const GeneralAssessmentForm = ({
                 )}
               </ScrollArea>
             </div>
+          </TabsContent>
+
+          <TabsContent value="exams" className="space-y-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold flex items-center gap-2">
+                <File className="w-4 h-4" /> Arquivos Anexados ({exams.length})
+              </h3>
+              <AlertDialog open={isExamDialogOpen} onOpenChange={setIsExamDialogOpen}>
+                <AlertDialogTrigger asChild>
+                  <Button size="sm" className="gap-2">
+                    <Plus className="w-4 h-4" />
+                    Novo Anexo
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Anexar Documento</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Selecione um arquivo (PDF ou Imagem) para anexar ao prontuário.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Nome do Documento</Label>
+                      <Input 
+                        placeholder="Ex: Laudo Ressonância" 
+                        value={newExamName}
+                        onChange={(e) => setNewExamName(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Tipo</Label>
+                      <UiSelect value={newExamType} onValueChange={(val: any) => setNewExamType(val)}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="exame">Exame</SelectItem>
+                          <SelectItem value="laudo">Laudo</SelectItem>
+                        </SelectContent>
+                      </UiSelect>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Arquivo</Label>
+                      <Input 
+                        type="file" 
+                        onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                      />
+                    </div>
+                  </div>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <Button 
+                      onClick={handleUploadExam} 
+                      disabled={isUploadingExam || !selectedFile || !newExamName.trim()}
+                    >
+                      {isUploadingExam ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Upload className="w-4 h-4 mr-2" />}
+                      Fazer Upload
+                    </Button>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+
+            <ScrollArea className="h-[400px] w-full rounded-md border p-4 bg-background">
+              {isLoadingExams ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : exams.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-muted-foreground opacity-50">
+                  <File className="w-12 h-12 mb-4" />
+                  <p>Nenhum documento anexado.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3">
+                  {exams.map((exam) => (
+                    <div 
+                      key={exam.id} 
+                      className="flex items-center justify-between p-4 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`p-2.5 rounded-full ${exam.type === 'laudo' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}`}>
+                          <FileText className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-sm">{exam.name}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {exam.type.charAt(0).toUpperCase() + exam.type.slice(1)} • {format(new Date(exam.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground mt-1">
+                            Enviado por: {exam.professional_name || 'Desconhecido'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="icon" asChild title="Baixar">
+                          <a href={exam.file_url} target="_blank" rel="noopener noreferrer">
+                            <DownloadIcon className="w-4 h-4" />
+                          </a>
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10" title="Excluir">
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Excluir Anexo</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Tem certeza que deseja excluir o arquivo <strong>{exam.name}</strong>?
+                                Esta ação não pode ser desfeita.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDeleteExam(exam)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                Confirmar Exclusão
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
           </TabsContent>
         </Tabs>
       </CardContent>

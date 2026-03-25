@@ -36,6 +36,8 @@ import {
   Banknote,
   ExternalLink,
   Repeat,
+  History,
+  StickyNote,
 } from 'lucide-react'
 import { useToast } from '@/shared/hooks/use-toast'
 import {
@@ -44,6 +46,7 @@ import {
   deleteFutureAppointments,
   updateAppointmentStatus,
   updateAppointment,
+  getLastClientNotes,
 } from '@/shared/services'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
@@ -121,6 +124,9 @@ export const AppointmentDetailDialog = ({
   const [isSavingNote, setIsSavingNote] = useState(false)
   const [localStatus, setLocalStatus] = useState<string | null>(null)
   const [localNotes, setLocalNotes] = useState<NoteEntry[]>([])
+  const [lastNotes, setLastNotes] = useState<NoteEntry[]>([])
+  const [hasMoreNotes, setHasMoreNotes] = useState(false)
+  const [isLoadingLastNotes, setIsLoadingLastNotes] = useState(false)
   const [deleteMode, setDeleteMode] = useState<'only-this' | 'this-and-future'>('only-this')
   const [packageDetails, setPackageDetails] = useState<{ name: string; sessions_remaining: number; sessions_total: number } | null>(null)
   const [subscriptionDetails, setSubscriptionDetails] = useState<{ plan_name: string } | null>(null)
@@ -142,6 +148,24 @@ export const AppointmentDetailDialog = ({
 
       const clientPackageId = (appointment as any).client_package_id
       const serviceValueType = (appointment.services as any).value_type
+
+      // Fetch last 5 notes
+      const clientId = (appointment as any).client_id
+      if (clientId) {
+        setIsLoadingLastNotes(true)
+        getLastClientNotes(clientId, 5)
+          .then((res: any) => {
+            if (res.data) {
+              // Filter out notes that are already in the current appointment
+              const currentNoteDates = (appointment.notes || []).map((n: any) => n.date)
+              const filtered = res.data.filter((n: any) => !currentNoteDates.includes(n.date))
+              setLastNotes(filtered)
+              setHasMoreNotes(res.hasMore)
+            }
+          })
+          .catch(() => {})
+          .finally(() => setIsLoadingLastNotes(false))
+      }
 
       // Fetch package details if this appointment uses a package
       if (clientPackageId) {
@@ -564,39 +588,86 @@ export const AppointmentDetailDialog = ({
               </div>
             </div>
 
+
             <div className="space-y-3">
-              <Label>Anotações</Label>
-              <ScrollArea className="h-[150px] w-full rounded-md border p-4 bg-muted/20">
-                {localNotes && localNotes.length > 0 ? (
-                  <div className="space-y-4">
-                    {localNotes.map((note, index) => (
-                      <div
-                        key={index}
-                        className="bg-background p-3 rounded-lg border shadow-sm"
-                      >
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="font-semibold text-xs text-primary">
-                            {note.professional_name}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {format(
-                              new Date(note.date),
-                              "dd/MM/yy 'às' HH:mm",
-                              { locale: ptBR },
-                            )}
-                          </span>
+              <div className="flex justify-between items-center">
+                <Label className="text-sm font-semibold flex items-center gap-2">
+                  <StickyNote className="w-4 h-4 text-primary" />
+                  Prontuário e Histórico
+                </Label>
+                {hasMoreNotes && (
+                   <button
+                     onClick={() => {
+                       onOpenChange(false)
+                       navigate(`/admin/pacientes/${(appointment as any).client_id}`)
+                     }}
+                     className="text-[10px] text-primary hover:underline flex items-center gap-1"
+                   >
+                     Ver Perfil Completo
+                     <ExternalLink className="h-2.5 w-2.5" />
+                   </button>
+                 )}
+              </div>
+              <ScrollArea className="h-[250px] w-full rounded-md border p-4 bg-muted/10">
+                <div className="space-y-6">
+                  {/* Previous Notes (History) */}
+                  {lastNotes.length > 0 && (
+                    <div className="space-y-4">
+                      {lastNotes.map((note, index) => (
+                        <div key={`history-${index}`} className="relative pl-4 border-l-2 border-muted">
+                           <div className="flex justify-between items-center mb-1">
+                             <span className="font-semibold text-[10px] text-muted-foreground italic">
+                               Histórico: {note.professional_name}
+                             </span>
+                             <span className="text-[10px] text-muted-foreground">
+                               {format(new Date(note.date), "dd/MM/yy", { locale: ptBR })}
+                             </span>
+                           </div>
+                           <p className="text-xs text-muted-foreground/80 line-clamp-3">
+                             {note.content}
+                           </p>
                         </div>
-                        <p className="text-sm whitespace-pre-wrap">
-                          {note.content}
-                        </p>
+                      ))}
+                      <div className="flex items-center gap-2 py-2">
+                        <div className="h-[1px] flex-1 bg-border" />
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Início da Sessão Atual</span>
+                        <div className="h-[1px] flex-1 bg-border" />
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground text-center py-8">
-                    Nenhuma anotação registrada.
-                  </p>
-                )}
+                    </div>
+                  )}
+
+                  {/* Current Session Notes */}
+                  {localNotes && localNotes.length > 0 ? (
+                    <div className="space-y-4">
+                      {localNotes.map((note, index) => (
+                        <div
+                          key={`current-${index}`}
+                          className="bg-background p-3 rounded-lg border shadow-sm"
+                        >
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="font-semibold text-xs text-primary">
+                              {note.professional_name}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {format(
+                                new Date(note.date),
+                                "dd/MM/yy 'às' HH:mm",
+                                { locale: ptBR },
+                              )}
+                            </span>
+                          </div>
+                          <p className="text-sm whitespace-pre-wrap">
+                            {note.content}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-8">
+                      {lastNotes.length > 0 ? 'Nenhuma evolução registrada nesta sessão ainda.' : 'Nenhuma anotação registrada.'}
+                    </p>
+                  )}
+                </div>
               </ScrollArea>
               <div className="flex gap-2">
                 <Textarea

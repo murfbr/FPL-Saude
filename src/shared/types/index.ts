@@ -192,3 +192,15 @@ export interface Notification {
   link: string | null
   created_at: string
 }
+
+export interface ClientExam {
+  id: string
+  client_id: string
+  name: string
+  type: 'exame' | 'laudo'
+  file_url: string
+  file_path: string
+  created_at: string
+  professional_id?: string
+  professional_name?: string
+}
