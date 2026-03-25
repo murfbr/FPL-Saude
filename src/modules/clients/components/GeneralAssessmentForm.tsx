@@ -25,6 +25,8 @@ import { FileText, Loader2, Save, Download, History, Plus, File, Upload, Downloa
 import { updateClient, exportClientData, getClientExams, uploadClientExam, deleteClientExam } from '@/shared/services'
 import { ClientExam } from '@/shared/types'
 import { useAuth } from '@/shared/providers/AuthProvider'
+import { ref, getDownloadURL } from 'firebase/storage'
+import { storage } from '@/shared/lib/firebase'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -89,6 +91,7 @@ export const GeneralAssessmentForm = ({
   const [newExamType, setNewExamType] = useState<'exame' | 'laudo'>('exame')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isExamDialogOpen, setIsExamDialogOpen] = useState(false)
+  const [isDownloading, setIsDownloading] = useState<string | null>(null)
 
   // Data parsing
   const { assessmentData, historyData } = useMemo(() => {
@@ -179,6 +182,26 @@ export const GeneralAssessmentForm = ({
     } else {
        toast({ title: 'Arquivo excluído com sucesso!' })
        fetchExams()
+    }
+  }
+
+  const handleDownload = async (exam: ClientExam) => {
+    try {
+      setIsDownloading(exam.id)
+      const storageRef = ref(storage, exam.file_path)
+      const url = await getDownloadURL(storageRef)
+      window.open(url, '_blank')
+    } catch (error: any) {
+      console.error("Erro ao baixar arquivo:", error)
+      toast({ 
+        title: 'Erro ao baixar arquivo', 
+        description: error.message === 'Firebase Storage: User does not have permission to access the object.' 
+          ? 'Sem permissão. Verifique as regras de acesso do Storage.' 
+          : 'Erro ao gerar link de acesso.',
+        variant: 'destructive' 
+      })
+    } finally {
+      setIsDownloading(null)
     }
   }
 
@@ -635,10 +658,18 @@ export const GeneralAssessmentForm = ({
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="icon" asChild title="Baixar">
-                          <a href={exam.file_url} target="_blank" rel="noopener noreferrer">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => handleDownload(exam)} 
+                          disabled={isDownloading === exam.id}
+                          title="Baixar"
+                        >
+                          {isDownloading === exam.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
                             <DownloadIcon className="w-4 h-4" />
-                          </a>
+                          )}
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
