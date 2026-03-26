@@ -401,7 +401,37 @@ export async function updateAppointment(appointmentId: string, updates: Partial<
 
 export async function deleteAppointment(appointmentId: string): Promise<{ error: any }> {
   try {
-    const docRef = doc(db, 'companies', getCompanyId(), 'appointments', appointmentId)
+    const companyId = getCompanyId()
+    const docRef = doc(db, 'companies', companyId, 'appointments', appointmentId)
+    
+    // Processar devolução de sessão e/ou finanças
+    const appSnap = await getDoc(docRef)
+    if (appSnap.exists()) {
+       const appData = appSnap.data()
+       const isPackage = !!appData.client_package_id
+       const isMonthlySubscription = appData.services?.value_type === 'monthly'
+       const isAvulsa = !isPackage && !isMonthlySubscription
+       const wasConsumingStatus = appData.status === 'completed' || appData.status === 'no_show'
+       
+       if (isPackage && wasConsumingStatus) {
+         const packageRef = doc(db, 'companies', companyId, 'clients', appData.client_id, 'packages', appData.client_package_id)
+         const pkgSnap = await getDoc(packageRef)
+         if (pkgSnap.exists()) {
+           const pkgData = pkgSnap.data()
+           const newRemaining = (pkgData.sessions_remaining || 0) + 1
+           await updateDoc(packageRef, { sessions_remaining: newRemaining })
+         }
+       }
+       
+       if (isAvulsa && appData.status === 'completed') {
+         const finRef = collection(db, 'companies', companyId, 'financial_records')
+         const q = query(finRef, where('appointment_id', '==', appointmentId))
+         const existingSnap = await getDocs(q)
+         const deletePromises = existingSnap.docs.map(d => deleteDoc(d.ref))
+         await Promise.all(deletePromises)
+       }
+    }
+    
     await deleteDoc(docRef)
     return { error: null }
   } catch (error) { return { error } }
@@ -409,7 +439,8 @@ export async function deleteAppointment(appointmentId: string): Promise<{ error:
 
 export async function deleteFutureAppointments(appointmentId: string): Promise<{ error: any }> {
   try {
-    const sourceDocRef = doc(db, 'companies', getCompanyId(), 'appointments', appointmentId)
+    const companyId = getCompanyId()
+    const sourceDocRef = doc(db, 'companies', companyId, 'appointments', appointmentId)
     const sourceSnap = await getDoc(sourceDocRef)
     if (!sourceSnap.exists()) return { error: new Error('Agendamento não encontrado') }
     
@@ -421,7 +452,7 @@ export async function deleteFutureAppointments(appointmentId: string): Promise<{
       return deleteAppointment(appointmentId)
     }
 
-    const appointmentsRef = collection(db, 'companies', getCompanyId(), 'appointments')
+    const appointmentsRef = collection(db, 'companies', companyId, 'appointments')
     const q = query(
       appointmentsRef,
       where('recurrence_group_id', '==', groupId),
@@ -430,9 +461,51 @@ export async function deleteFutureAppointments(appointmentId: string): Promise<{
     const snapshot = await getDocs(q)
     
     const batch = writeBatch(db)
+    
+    const packageRefunds = new Map<string, number>()
+    const finAppointmentsToDelete: string[] = []
+
     snapshot.docs.forEach(d => {
+      const appData = d.data()
+      const isPackage = !!appData.client_package_id
+      const isMonthlySubscription = appData.services?.value_type === 'monthly'
+      const isAvulsa = !isPackage && !isMonthlySubscription
+      const wasConsumingStatus = appData.status === 'completed' || appData.status === 'no_show'
+      
+      if (isPackage && wasConsumingStatus) {
+        const pkgPath = `companies/${companyId}/clients/${appData.client_id}/packages/${appData.client_package_id}`
+        const currentRefunds = packageRefunds.get(pkgPath) || 0
+        packageRefunds.set(pkgPath, currentRefunds + 1)
+      }
+      
+      if (isAvulsa && appData.status === 'completed') {
+        finAppointmentsToDelete.push(d.id)
+      }
+
       batch.delete(d.ref)
     })
+    
+    // Aplicar devoluções de pacotes
+    for (const [pkgPath, refundsCount] of packageRefunds.entries()) {
+      const pkgRef = doc(db, pkgPath)
+      const pkgSnap = await getDoc(pkgRef)
+      if (pkgSnap.exists()) {
+        const pkgData = pkgSnap.data()
+        const newRemaining = (pkgData.sessions_remaining || 0) + refundsCount
+        batch.update(pkgRef, { sessions_remaining: newRemaining })
+      }
+    }
+    
+    // Deletar registros financeiros associados
+    if (finAppointmentsToDelete.length > 0) {
+      const finRef = collection(db, 'companies', companyId, 'financial_records')
+      // Pode processar em baterias de 30 para evitar erro de query "IN"
+      const finQuery = query(finRef, where('appointment_id', 'in', finAppointmentsToDelete.slice(0, 30)))
+      const finSnap = await getDocs(finQuery)
+      finSnap.docs.forEach((docSnap) => {
+        batch.delete(docSnap.ref)
+      })
+    }
 
     await batch.commit()
     return { error: null }

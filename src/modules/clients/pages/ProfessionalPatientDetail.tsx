@@ -43,6 +43,13 @@ import { GeneralAssessmentForm } from '@/modules/clients/components/GeneralAsses
 import { ClientPackagesList } from '@/modules/packages/components/ClientPackagesList'
 import { useAuth } from '@/shared/providers/AuthProvider'
 import { useToast } from '@/shared/hooks/use-toast'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 const ProfessionalPatientDetail = () => {
   const { id } = useParams<{ id: string }>()
@@ -57,6 +64,7 @@ const ProfessionalPatientDetail = () => {
   const { toast } = useToast()
   const { user, professionalId } = useAuth()
   const [localNotes, setLocalNotes] = useState<NoteEntry[]>([])
+  const [statusFilter, setStatusFilter] = useState<string>('all')
 
   const handleBack = () => {
     if (location.key === 'default') {
@@ -87,11 +95,21 @@ const ProfessionalPatientDetail = () => {
     setIsDialogOpen(true)
   }
 
-  const validAppointments = appointments.filter(
-    (appt) =>
-      appt.schedules?.start_time &&
-      isValid(new Date(appt.schedules.start_time)),
-  )
+  const validAppointments = useMemo(() => {
+    let filtered = appointments.filter(
+      (appt) =>
+        appt.schedules?.start_time &&
+        isValid(new Date(appt.schedules.start_time)),
+    )
+    
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(appt => appt.status === statusFilter)
+    }
+    
+    return filtered.sort((a, b) => 
+      new Date(b.schedules.start_time).getTime() - new Date(a.schedules.start_time).getTime()
+    )
+  }, [appointments, statusFilter])
 
   const consolidatedNotes = useMemo(() => {
     const allNotes: (NoteEntry & { appointmentId: string })[] = []
@@ -235,15 +253,31 @@ const ProfessionalPatientDetail = () => {
             </CardContent>
           </Card>
 
-          <Card>
+            <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-3">
-                  <StickyNote className="w-6 h-6" />
-                  Histórico de Agendamentos
-                </CardTitle>
-                <CardDescription>
-                  Total de {validAppointments.length} agendamentos.
-                </CardDescription>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div>
+                    <CardTitle className="flex items-center gap-3">
+                      <StickyNote className="w-6 h-6" />
+                      Histórico de Agendamentos
+                    </CardTitle>
+                    <CardDescription>
+                      Total de {validAppointments.length} agendamentos.
+                    </CardDescription>
+                  </div>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-full sm:w-[180px]">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="scheduled">Agendado</SelectItem>
+                      <SelectItem value="completed">Concluído</SelectItem>
+                      <SelectItem value="cancelled">Cancelado</SelectItem>
+                      <SelectItem value="no_show">Faltou</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </CardHeader>
               <CardContent>
                 <Accordion type="single" collapsible className="w-full">

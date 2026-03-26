@@ -100,6 +100,7 @@ const PatientDetail = () => {
     useState<Appointment | null>(null)
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
+  const [statusFilter, setStatusFilter] = useState<string>('all')
 
   const [exams, setExams] = useState<ClientExam[]>([])
   const [isUploadingExam, setIsUploadingExam] = useState(false)
@@ -245,11 +246,21 @@ const PatientDetail = () => {
     // Moved to GeneralAssessmentForm
   }
 
-  const validAppointments = appointments.filter(
-    (appt) =>
-      appt.schedules?.start_time &&
-      isValid(new Date(appt.schedules.start_time)),
-  )
+  const validAppointments = useMemo(() => {
+    let filtered = appointments.filter(
+      (appt) =>
+        appt.schedules?.start_time &&
+        isValid(new Date(appt.schedules.start_time)),
+    )
+    
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(appt => appt.status === statusFilter)
+    }
+    
+    return filtered.sort((a, b) => 
+      new Date(b.schedules.start_time).getTime() - new Date(a.schedules.start_time).getTime()
+    )
+  }, [appointments, statusFilter])
 
   const consolidatedNotes = useMemo(() => {
     const allNotes: (NoteEntry & { appointmentId: string })[] = []
@@ -502,13 +513,29 @@ const PatientDetail = () => {
 
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-3">
-                  <FileText className="w-6 h-6" />
-                  Histórico de Agendamentos
-                </CardTitle>
-                <CardDescription>
-                  Total de {validAppointments.length} agendamentos.
-                </CardDescription>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div>
+                    <CardTitle className="flex items-center gap-3">
+                      <FileText className="w-6 h-6" />
+                      Histórico de Agendamentos
+                    </CardTitle>
+                    <CardDescription>
+                      Total de {validAppointments.length} agendamentos.
+                    </CardDescription>
+                  </div>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-full sm:w-[180px]">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="scheduled">Agendado</SelectItem>
+                      <SelectItem value="completed">Concluído</SelectItem>
+                      <SelectItem value="cancelled">Cancelado</SelectItem>
+                      <SelectItem value="no_show">Faltou</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </CardHeader>
               <CardContent>
                 <Accordion type="single" collapsible className="w-full">
