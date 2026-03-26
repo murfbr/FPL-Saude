@@ -83,9 +83,9 @@ import { Badge } from '@/components/ui/badge'
 
 const appointmentSchema = z
   .object({
-    clientId: z.string().uuid('Selecione um cliente.'),
-    serviceId: z.string().uuid('Selecione um serviço.'),
-    professionalId: z.string().uuid('Selecione um profissional.'),
+    clientId: z.string().min(1, 'Selecione um cliente.'),
+    serviceId: z.string().min(1, 'Selecione um serviço.'),
+    professionalId: z.string().min(1, 'Selecione um profissional.'),
     date: z.date({ required_error: 'Selecione uma data.' }),
     startTime: z.string().min(1, 'Selecione um horário.'),
     usePackage: z.boolean().default(true),

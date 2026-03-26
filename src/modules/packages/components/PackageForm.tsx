@@ -28,7 +28,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 const packageSchema = z.object({
   name: z.string().min(3, 'O nome deve ter pelo menos 3 caracteres.'),
   description: z.string().optional(),
-  service_id: z.string().uuid('Selecione um serviço.'),
+  service_id: z.string().min(1, 'Selecione um serviço.'),
   session_count: z.coerce
     .number()
     .int()

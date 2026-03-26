@@ -47,7 +47,7 @@ const patientSchema = z.object({
     message: 'CPF inválido. Deve conter 11 dígitos numéricos.',
   }),
   phone: z.string().optional(),
-  partnership_id: z.string().uuid().nullable().optional(),
+  partnership_id: z.string().min(1).nullable().optional(),
   birth_date: z
     .string()
     .optional()
@@ -103,7 +103,8 @@ export const PatientFormDialog = ({
     setIsSubmitting(true)
     const cpfClean = cleanCPF(values.email)
     const { data, error } = await createClient({
-      ...values,
+      name: values.name,
+      phone: values.phone,
       email: cpfClean,
       partnership_id: values.partnership_id || null,
       birth_date: convertDateToISO(values.birth_date),

@@ -39,8 +39,8 @@ import { format } from 'date-fns'
 import { Percent } from 'lucide-react'
 
 const subscriptionSchema = z.object({
-  serviceId: z.string().uuid('Selecione um serviço.'),
-  planId: z.string().uuid('Selecione um plano.'),
+  serviceId: z.string().min(1, 'Selecione um serviço.'),
+  planId: z.string().min(1, 'Selecione um plano.'),
   startDate: z.string().refine((val) => !isNaN(Date.parse(val)), {
     message: 'Data inválida',
   }),
