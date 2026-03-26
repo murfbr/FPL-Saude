@@ -301,10 +301,94 @@ export async function rescheduleFutureAppointments(
 
 export async function updateAppointmentStatus(appointmentId: string, status: string): Promise<{ error: any }> {
   try {
-    const docRef = doc(db, 'companies', getCompanyId(), 'appointments', appointmentId)
+    const companyId = getCompanyId()
+    const docRef = doc(db, 'companies', companyId, 'appointments', appointmentId)
+    const appSnap = await getDoc(docRef)
+    
+    if (!appSnap.exists()) {
+       return { error: new Error('Agendamento não encontrado') }
+    }
+    
+    const appData = appSnap.data()
+    const oldStatus = appData.status
+    
+    if (oldStatus === status) {
+       return { error: null }
+    }
+
+    const isPackage = !!appData.client_package_id
+    const isMonthlySubscription = appData.services?.value_type === 'monthly'
+    const isAvulsa = !isPackage && !isMonthlySubscription
+
+    // 1. Pacotes: Consumir ou estornar sessão
+    if (isPackage) {
+      const packageRef = doc(db, 'companies', companyId, 'clients', appData.client_id, 'packages', appData.client_package_id)
+      
+      const isConsumingStatus = status === 'completed' || status === 'no_show'
+      const wasConsumingStatus = oldStatus === 'completed' || oldStatus === 'no_show'
+
+      if (isConsumingStatus && !wasConsumingStatus) {
+        // Consumir sessão
+        const pkgSnap = await getDoc(packageRef)
+        if (pkgSnap.exists()) {
+           const pkgData = pkgSnap.data()
+           const newRemaining = Math.max(0, (pkgData.sessions_remaining || 0) - 1)
+           await updateDoc(packageRef, { sessions_remaining: newRemaining })
+        }
+      } else if (wasConsumingStatus && !isConsumingStatus) {
+        // Estornar devolução da sessão
+        const pkgSnap = await getDoc(packageRef)
+        if (pkgSnap.exists()) {
+           const pkgData = pkgSnap.data()
+           const newRemaining = (pkgData.sessions_remaining || 0) + 1
+           await updateDoc(packageRef, { sessions_remaining: newRemaining })
+        }
+      }
+    }
+
+    // 2. Avulsas: Criar ou remover registro financeiro
+    if (isAvulsa) {
+      const finRef = collection(db, 'companies', companyId, 'financial_records')
+      
+      if (status === 'completed' && oldStatus !== 'completed') {
+        const price = appData.services?.price || 0
+        const discount = appData.discount_amount || 0
+        const finalPrice = Math.max(0, price - discount)
+        
+        if (finalPrice > 0) {
+          const q = query(finRef, where('appointment_id', '==', appointmentId))
+          const existingSnap = await getDocs(q)
+          
+          if (existingSnap.empty) {
+            const newDoc = doc(finRef)
+            await setDoc(newDoc, {
+              id: newDoc.id,
+              client_id: appData.client_id,
+              professional_id: appData.professional_id,
+              appointment_id: appointmentId,
+              amount: finalPrice,
+              payment_date: new Date().toISOString(),
+              description: `Sessão Avulsa - ${appData.services?.name || 'Serviço'}`,
+              payment_method: 'manual'
+            })
+          }
+        }
+      } else if (oldStatus === 'completed' && status !== 'completed') {
+        const q = query(finRef, where('appointment_id', '==', appointmentId))
+        const existingSnap = await getDocs(q)
+        
+        const deletePromises = existingSnap.docs.map(d => deleteDoc(d.ref))
+        await Promise.all(deletePromises)
+      }
+    }
+
+    // Atualiza o status do agendamento ao final
     await updateDoc(docRef, { status })
     return { error: null }
-  } catch (error) { return { error } }
+  } catch (error) { 
+    console.error("Erro ao atualizar status do agendamento: ", error)
+    return { error } 
+  }
 }
 
 export async function updateAppointment(appointmentId: string, updates: Partial<Appointment>): Promise<{ data: Appointment | null; error: any }> {

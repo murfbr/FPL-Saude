@@ -174,14 +174,14 @@ export const AppointmentDetailDialog = ({
           .then((snap) => {
             if (snap.exists()) {
               const data = snap.data()
-              // Fetch the package template to get the name
+              // Fetch the package template to get the name and session_count
               if (data.package_id) {
                 getDoc(doc(db, 'companies', 'fpl-saude', 'packages', data.package_id))
                   .then((pkgSnap) => {
                     setPackageDetails({
                       name: pkgSnap.exists() ? pkgSnap.data().name : 'Pacote',
                       sessions_remaining: data.sessions_remaining ?? 0,
-                      sessions_total: data.sessions_total ?? 0,
+                      sessions_total: pkgSnap.exists() ? (pkgSnap.data().session_count ?? 0) : 0,
                     })
                   })
               }
@@ -562,18 +562,27 @@ export const AppointmentDetailDialog = ({
                 </p>
                 {isPackage && (
                   packageDetails ? (
-                    <div className="text-xs text-blue-700 space-y-0.5">
-                      <p><span className="font-medium">Pacote:</span> {packageDetails.name}</p>
-                      <p>
-                        <span className="font-medium">Sessões restantes:</span>{' '}
-                        <span className={packageDetails.sessions_remaining <= 2 ? 'text-red-600 font-bold' : ''}>
-                          {packageDetails.sessions_remaining}
-                        </span>{' '}
-                        / {packageDetails.sessions_total}
-                      </p>
+                    <div className="text-xs text-blue-800 bg-blue-100/50 p-2 rounded mt-2 space-y-1">
+                      <p><span className="font-bold">Pacote vinculado:</span> {packageDetails.name}</p>
+                      <div className="grid grid-cols-2 gap-2 mt-1">
+                        <p>
+                          <span className="font-medium">Uso do pacote:</span>{' '}
+                          <span className="font-bold text-blue-600">
+                            {Math.max(0, packageDetails.sessions_total - packageDetails.sessions_remaining)}
+                          </span>{' '}
+                          / {packageDetails.sessions_total}
+                        </p>
+                        <p>
+                          <span className="font-medium">Restam:</span>{' '}
+                          <span className={packageDetails.sessions_remaining <= 2 ? 'text-red-600 font-bold' : 'font-bold'}>
+                            {packageDetails.sessions_remaining}
+                          </span>{' '}
+                          sessões
+                        </p>
+                      </div>
                     </div>
                   ) : (
-                    <p className="text-xs text-blue-500 italic">Carregando detalhes do pacote...</p>
+                    <p className="text-xs text-blue-500 italic mt-2">Carregando detalhes do pacote...</p>
                   )
                 )}
                 {isMonthlySubscription && (
