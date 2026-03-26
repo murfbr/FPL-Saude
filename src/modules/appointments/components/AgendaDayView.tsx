@@ -66,13 +66,13 @@ export const AgendaDayView = ({
   }, [selectedProfessional, currentDate])
 
   // If Expanded: Show 00-23
-  // If Collapsed: Show 06-20 (covers until 21:00)
-  // Hidden: 00-05 and 21-23
+  // If Collapsed: Show 06-21 (covers until 22:00)
+  // Hidden: 00-05 and 22-23
   const hours = useMemo(() => {
     if (isExpanded) {
       return Array.from({ length: 24 }, (_, i) => i)
     }
-    return Array.from({ length: 15 }, (_, i) => i + 6) // 06:00 to 20:59
+    return Array.from({ length: 16 }, (_, i) => i + 6) // 06:00 to 21:59
   }, [isExpanded])
 
   const getTopOffset = (time: Date) => {
@@ -100,7 +100,7 @@ export const AgendaDayView = ({
       if (!appt.schedules?.start_time) return false
       // Filter collapsed hours
       const h = parseInt(formatInTimeZone(appt.schedules.start_time, 'HH'))
-      if (!isExpanded && (h < 6 || h >= 21)) return false
+      if (!isExpanded && (h < 6 || h >= 22)) return false
 
       return (
         formatInTimeZone(appt.schedules.start_time, 'yyyy-MM-dd') ===
@@ -126,7 +126,7 @@ export const AgendaDayView = ({
     const hourIndex = Math.floor(y / NORMAL_HEIGHT)
     const currentHour = startHour + hourIndex
 
-    const maxHour = isExpanded ? 23 : 20
+    const maxHour = isExpanded ? 23 : 21
     if (currentHour > maxHour) {
       setHoveredSlot(null)
       return

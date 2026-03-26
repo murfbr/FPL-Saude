@@ -80,7 +80,7 @@ export const AgendaWeekView = ({
     if (isExpanded) {
       return Array.from({ length: 24 }, (_, i) => i)
     }
-    return Array.from({ length: 15 }, (_, i) => i + 6)
+    return Array.from({ length: 16 }, (_, i) => i + 6)
   }, [isExpanded])
 
   const getTopOffset = (time: Date) => {
@@ -119,7 +119,7 @@ export const AgendaWeekView = ({
 
       const h = parseInt(formatInTimeZone(appt.schedules.start_time, 'HH'))
       // If collapsed, filter out times outside 06-21 range
-      if (!isExpanded && (h < 6 || h >= 21)) {
+      if (!isExpanded && (h < 6 || h >= 22)) {
         return
       }
 
@@ -150,7 +150,7 @@ export const AgendaWeekView = ({
     const hourIndex = Math.floor(y / NORMAL_HEIGHT)
     const currentHour = startHour + hourIndex
 
-    const maxHour = isExpanded ? 23 : 20
+    const maxHour = isExpanded ? 23 : 21
     if (currentHour > maxHour) {
       setHoveredSlot(null)
       return

@@ -103,10 +103,10 @@ export function computeSlotsForDay(
     })
   }
 
-  // Business hours filter (07:00 - 20:00)
+  // Business hours filter (07:00 - 22:00)
   return candidateSlots.filter(slot => {
     const timeStr = formatInTimeZone(slot.start_time, TIMEZONE, 'HH:mm')
     const [hours] = timeStr.split(':').map(Number)
-    return hours >= 7 && hours < 20
+    return hours >= 7 && hours < 22
   })
 }
