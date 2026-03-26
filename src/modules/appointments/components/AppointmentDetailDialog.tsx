@@ -67,6 +67,7 @@ import { Label } from '@/components/ui/label'
 import { useAuth } from '@/shared/providers/AuthProvider'
 import { formatInTimeZone } from '@/shared/lib/utils'
 import { getFriendlyErrorMessage } from '@/shared/lib/error-mapping'
+import { getCompanyId } from '@/shared/lib/tenantStore'
 import {
   Select,
   SelectContent,
@@ -119,6 +120,7 @@ export const AppointmentDetailDialog = ({
   const { user, professionalId, role } = useAuth()
   const [isDeleting, setIsDeleting] = useState(false)
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [isRescheduleOpen, setIsRescheduleOpen] = useState(false)
   const [newNote, setNewNote] = useState('')
   const [isSavingNote, setIsSavingNote] = useState(false)
@@ -170,27 +172,37 @@ export const AppointmentDetailDialog = ({
       // Fetch package details if this appointment uses a package
       if (clientPackageId) {
         const clientId = (appointment as any).client_id
-        getDoc(doc(db, 'companies', 'fpl-saude', 'clients', clientId, 'client_packages', clientPackageId))
+        const companyId = getCompanyId() || 'fpl-saude'
+        getDoc(doc(db, 'companies', companyId, 'clients', clientId, 'packages', clientPackageId))
           .then((snap) => {
             if (snap.exists()) {
               const data = snap.data()
               // Fetch the package template to get the name and session_count
               if (data.package_id) {
-                getDoc(doc(db, 'companies', 'fpl-saude', 'packages', data.package_id))
+                getDoc(doc(db, 'companies', companyId, 'packages', data.package_id))
                   .then((pkgSnap) => {
                     setPackageDetails({
                       name: pkgSnap.exists() ? pkgSnap.data().name : 'Pacote',
                       sessions_remaining: data.sessions_remaining ?? 0,
                       sessions_total: pkgSnap.exists() ? (pkgSnap.data().session_count ?? 0) : 0,
                     })
+                  }).catch(() => {
+                    setPackageDetails({ name: 'Erro de pacote', sessions_remaining: data.sessions_remaining ?? 0, sessions_total: 0 })
                   })
+              } else {
+                 setPackageDetails({ name: 'Pacote Sem Template', sessions_remaining: data.sessions_remaining ?? 0, sessions_total: 0 })
               }
+            } else {
+              setPackageDetails({ name: 'Pacote Removido/Inexistente', sessions_remaining: 0, sessions_total: 0 })
             }
           })
-          .catch(() => {})
+          .catch(() => {
+             setPackageDetails({ name: 'Erro ao carregar', sessions_remaining: 0, sessions_total: 0 })
+          })
       } else if (serviceValueType === 'monthly') {
         const clientId = (appointment as any).client_id
-        getDoc(doc(db, 'companies', 'fpl-saude', 'clients', clientId))
+        const companyId = getCompanyId() || 'fpl-saude'
+        getDoc(doc(db, 'companies', companyId, 'clients', clientId))
           .then(() => {
             setSubscriptionDetails({
               plan_name: appointment.services?.name || 'Assinatura Mensal',
@@ -199,7 +211,7 @@ export const AppointmentDetailDialog = ({
           .catch(() => {})
       }
     }
-  }, [appointment])
+  }, [appointment, refreshTrigger])
 
   if (
     !appointment ||
@@ -247,6 +259,7 @@ export const AppointmentDetailDialog = ({
     } else {
       toast({ title: 'Status atualizado com sucesso.' })
       onAppointmentUpdated()
+      setRefreshTrigger(prev => prev + 1)
     }
     setIsUpdatingStatus(false)
   }
