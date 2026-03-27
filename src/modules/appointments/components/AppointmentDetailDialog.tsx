@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { db } from '@/shared/lib/firebase'
-import { doc, getDoc } from 'firebase/firestore'
+import { doc, getDoc, collection, query, where, getDocs, limit } from 'firebase/firestore'
 import {
   Dialog,
   DialogContent,
@@ -133,6 +133,8 @@ export const AppointmentDetailDialog = ({
   const [deleteMode, setDeleteMode] = useState<'only-this' | 'this-and-future'>('only-this')
   const [packageDetails, setPackageDetails] = useState<{ name: string; sessions_remaining: number; sessions_total: number } | null>(null)
   const [subscriptionDetails, setSubscriptionDetails] = useState<{ plan_name: string } | null>(null)
+  const [recurrenceDays, setRecurrenceDays] = useState<number[]>([])
+  const [isLoadingRecurrenceDays, setIsLoadingRecurrenceDays] = useState(false)
 
   const navigate = useNavigate()
 
@@ -215,6 +217,33 @@ export const AppointmentDetailDialog = ({
             })
             .catch(() => {})
         }
+      }
+
+      // Fetch recurring days
+      if (appointment.is_recurring && (appointment as any).recurrence_group_id) {
+        setIsLoadingRecurrenceDays(true)
+        const companyId = getCompanyId() || 'fpl-saude'
+        const q = query(
+          collection(db, 'companies', companyId, 'appointments'),
+          where('recurrence_group_id', '==', (appointment as any).recurrence_group_id),
+          limit(10)
+        )
+        getDocs(q).then(snap => {
+          const days = new Set<number>()
+          snap.forEach(d => {
+            const start = d.data().schedules?.start_time
+            if (start) {
+              const dateObj = new Date(start)
+              if (isValid(dateObj)) {
+                days.add(dateObj.getDay())
+              }
+            }
+          })
+          // Sort such that sequence makes sense (e.g. 1 2 3 for Mon Tue Wed)
+          setRecurrenceDays(Array.from(days).sort()) 
+        }).catch(() => {}).finally(() => setIsLoadingRecurrenceDays(false))
+      } else {
+        setRecurrenceDays([])
       }
     }
   }, [appointment, refreshTrigger])
@@ -403,6 +432,16 @@ export const AppointmentDetailDialog = ({
                     {appointment.is_recurring && (
                       <span className="text-xs text-primary font-medium flex items-center gap-1 mt-0.5">
                         <Repeat className="h-3 w-3" /> Recorrente
+                        {recurrenceDays.length > 0 && (
+                          <span className="text-muted-foreground ml-1 font-normal">
+                            ({recurrenceDays.map(d => ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][d]).join(', ')})
+                          </span>
+                        )}
+                        {isLoadingRecurrenceDays && (
+                          <span className="text-muted-foreground ml-1 font-normal animate-pulse">
+                            (...)
+                          </span>
+                        )}
                       </span>
                     )}
                   </div>
