@@ -317,7 +317,17 @@ export async function updateAppointmentStatus(appointmentId: string, status: str
     }
 
     const isPackage = !!appData.client_package_id
-    const isMonthlySubscription = appData.services?.value_type === 'monthly'
+    let isMonthlySubscription = appData.services?.value_type === 'monthly'
+
+    if (!isPackage && !isMonthlySubscription) {
+      const subsRef = collection(db, 'companies', companyId, 'clients', appData.client_id, 'subscriptions')
+      const subsSnap = await getDocs(subsRef)
+      const serviceId = appData.service_id || appData.services?.id
+      if (subsSnap.docs.some(d => d.data().service_id === serviceId)) {
+        isMonthlySubscription = true
+      }
+    }
+
     const isAvulsa = !isPackage && !isMonthlySubscription
 
     // 1. Pacotes: Consumir ou estornar sessão
@@ -409,7 +419,17 @@ export async function deleteAppointment(appointmentId: string): Promise<{ error:
     if (appSnap.exists()) {
        const appData = appSnap.data()
        const isPackage = !!appData.client_package_id
-       const isMonthlySubscription = appData.services?.value_type === 'monthly'
+       let isMonthlySubscription = appData.services?.value_type === 'monthly'
+
+       if (!isPackage && !isMonthlySubscription) {
+         const subsRef = collection(db, 'companies', companyId, 'clients', appData.client_id, 'subscriptions')
+         const subsSnap = await getDocs(subsRef)
+         const serviceId = appData.service_id || appData.services?.id
+         if (subsSnap.docs.some(d => d.data().service_id === serviceId)) {
+           isMonthlySubscription = true
+         }
+       }
+
        const isAvulsa = !isPackage && !isMonthlySubscription
        const wasConsumingStatus = appData.status === 'completed' || appData.status === 'no_show'
        
@@ -461,6 +481,11 @@ export async function deleteFutureAppointments(appointmentId: string): Promise<{
     const snapshot = await getDocs(q)
     
     const batch = writeBatch(db)
+
+    const subsRef = collection(db, 'companies', companyId, 'clients', sourceData.client_id, 'subscriptions')
+    const subsSnap = await getDocs(subsRef)
+    const clientSubs = subsSnap.docs.map(d => d.data())
+    
     
     const packageRefunds = new Map<string, number>()
     const finAppointmentsToDelete: string[] = []
@@ -468,7 +493,15 @@ export async function deleteFutureAppointments(appointmentId: string): Promise<{
     snapshot.docs.forEach(d => {
       const appData = d.data()
       const isPackage = !!appData.client_package_id
-      const isMonthlySubscription = appData.services?.value_type === 'monthly'
+      let isMonthlySubscription = appData.services?.value_type === 'monthly'
+      
+      if (!isPackage && !isMonthlySubscription) {
+        const serviceId = appData.service_id || appData.services?.id
+        if (clientSubs.some(sub => sub.service_id === serviceId)) {
+          isMonthlySubscription = true
+        }
+      }
+
       const isAvulsa = !isPackage && !isMonthlySubscription
       const wasConsumingStatus = appData.status === 'completed' || appData.status === 'no_show'
       

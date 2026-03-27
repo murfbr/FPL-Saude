@@ -68,6 +68,7 @@ import { useAuth } from '@/shared/providers/AuthProvider'
 import { formatInTimeZone } from '@/shared/lib/utils'
 import { getFriendlyErrorMessage } from '@/shared/lib/error-mapping'
 import { getCompanyId } from '@/shared/lib/tenantStore'
+import { getClientSubscriptions } from '@/modules/clients/service'
 import {
   Select,
   SelectContent,
@@ -199,16 +200,21 @@ export const AppointmentDetailDialog = ({
           .catch(() => {
              setPackageDetails({ name: 'Erro ao carregar', sessions_remaining: 0, sessions_total: 0 })
           })
-      } else if (serviceValueType === 'monthly') {
+      } else {
         const clientId = (appointment as any).client_id
-        const companyId = getCompanyId() || 'fpl-saude'
-        getDoc(doc(db, 'companies', companyId, 'clients', clientId))
-          .then(() => {
-            setSubscriptionDetails({
-              plan_name: appointment.services?.name || 'Assinatura Mensal',
+        const serviceId = (appointment as any).service_id || appointment.services?.id
+        if (clientId && serviceId) {
+          getClientSubscriptions(clientId)
+            .then(({ data: subs }) => {
+              const matchingSub = subs?.find((sub: any) => sub.service_id === serviceId)
+              if (matchingSub) {
+                setSubscriptionDetails({
+                  plan_name: matchingSub.subscription_plans?.name || appointment.services?.name || 'Assinatura Mensal',
+                })
+              }
             })
-          })
-          .catch(() => {})
+            .catch(() => {})
+        }
       }
     }
   }, [appointment, refreshTrigger])
@@ -334,7 +340,7 @@ export const AppointmentDetailDialog = ({
   const serviceValueType = (appointment.services as any).value_type
 
   const isPackage = !!clientPackageId
-  const isMonthlySubscription = serviceValueType === 'monthly'
+  const isMonthlySubscription = serviceValueType === 'monthly' || !!subscriptionDetails
   const isZeroCost = isPackage || isMonthlySubscription
 
   const servicePrice = appointment.services.price || 0
