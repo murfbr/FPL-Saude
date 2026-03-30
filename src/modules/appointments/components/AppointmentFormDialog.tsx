@@ -43,6 +43,7 @@ import {
   ExternalLink,
   DollarSign,
   Percent,
+  AlertCircle,
 } from 'lucide-react'
 import { cn, formatInTimeZone } from '@/shared/lib/utils'
 import { format } from 'date-fns'
@@ -150,9 +151,9 @@ export const AppointmentFormDialog = ({
   })
 
   // Entitlements & Discounts
-  const [availablePackages, setAvailablePackages] = useState<
-    ClientPackageWithDetails[]
-  >([])
+  const [availablePackages, setAvailablePackages] = useState<ClientPackageWithDetails[]>([])
+  const [exhaustedPackages, setExhaustedPackages] = useState<ClientPackageWithDetails[]>([])
+  const [allowExhausted, setAllowExhausted] = useState(false)
   const [activeSubscription, setActiveSubscription] =
     useState<ClientSubscription | null>(null)
   const [checkingEntitlements, setCheckingEntitlements] = useState(false)
@@ -223,6 +224,8 @@ export const AppointmentFormDialog = ({
       setSchedules([])
       setProfessionals([])
       setAvailablePackages([])
+      setExhaustedPackages([])
+      setAllowExhausted(false)
       setActiveSubscription(null)
       setAppliedPartnershipDiscount(null)
       setAvailableWeekdays(null)
@@ -284,7 +287,13 @@ export const AppointmentFormDialog = ({
       const { data: pkgs } = await getClientPackages(clientId)
       const matchingPackages =
         pkgs?.filter((pkg) => pkg.packages.service_id === serviceId) || []
-      setAvailablePackages(matchingPackages)
+      
+      const validPackages = matchingPackages.filter(p => (p.sessions_remaining || 0) > 0)
+      const exhausted = matchingPackages.filter(p => (p.sessions_remaining || 0) <= 0)
+
+      setAvailablePackages(validPackages)
+      setExhaustedPackages(exhausted)
+      setAllowExhausted(false)
 
       // 3. Check Partnership Discounts
       let foundDiscount: PartnershipDiscount | null = null
@@ -316,14 +325,12 @@ export const AppointmentFormDialog = ({
       }
 
       // Default logic for packages/subscription selection
-      if (!matchingSub && matchingPackages.length > 0) {
-        form.setValue('packageId', matchingPackages[0].id)
+      if (!matchingSub && validPackages.length > 0) {
+        form.setValue('packageId', validPackages[0].id)
         form.setValue('usePackage', true)
       } else {
         form.setValue('packageId', undefined)
-        if (matchingPackages.length === 0) {
-          form.setValue('usePackage', false)
-        }
+        form.setValue('usePackage', false)
       }
 
       setCheckingEntitlements(false)
@@ -413,12 +420,14 @@ export const AppointmentFormDialog = ({
     navigate(`${basePath}/${clientId}`)
   }
 
+  const displayablePackages = allowExhausted ? [...availablePackages, ...exhaustedPackages] : availablePackages
+
   const onSubmit = async (values: AppointmentFormValues) => {
     const hasActiveSubscription = !!activeSubscription
     const usesPackage =
       values.usePackage &&
       !hasActiveSubscription &&
-      availablePackages.length > 0
+      displayablePackages.length > 0
 
     const packageIdToUse = usesPackage ? values.packageId : undefined
 
@@ -481,7 +490,7 @@ export const AppointmentFormDialog = ({
   const finalPrice = Math.max(0, originalPrice - discount)
 
   const isPackageMode =
-    !activeSubscription && usePackage && availablePackages.length > 0
+    !activeSubscription && usePackage && displayablePackages.length > 0
   const isSubscriptionMode = !!activeSubscription
   const isCasualMode = !isSubscriptionMode && !isPackageMode
 
@@ -620,8 +629,45 @@ export const AppointmentFormDialog = ({
                       </div>
                     )}
 
+                    {/* Exhausted Package Warning */}
+                    {!isSubscriptionMode && availablePackages.length === 0 && exhaustedPackages.length > 0 && !allowExhausted && (
+                       <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-800 space-y-2 mb-3">
+                         <div className="flex items-center gap-2 font-semibold text-sm">
+                           <AlertCircle className="w-4 h-4" />
+                           Pacote Esgotado
+                         </div>
+                         <p className="text-xs">O cliente esgotou todas as sessões do pacote contratado para este serviço.</p>
+                         <div className="flex gap-2 pt-1">
+                           <Button
+                             type="button"
+                             variant="outline"
+                             size="sm"
+                             className="bg-white flex-1 text-xs"
+                             onClick={() => {
+                               form.setValue('usePackage', false)
+                             }}
+                           >
+                              Agendar Avulso
+                           </Button>
+                           <Button
+                             type="button"
+                             variant="secondary"
+                             size="sm"
+                             className="bg-white text-red-700 hover:bg-red-100 flex-1 text-xs"
+                             onClick={() => {
+                               setAllowExhausted(true)
+                               form.setValue('usePackage', true)
+                               form.setValue('packageId', exhaustedPackages[0].id)
+                             }}
+                           >
+                              Usar mesmo assim
+                           </Button>
+                         </div>
+                       </div>
+                    )}
+
                     {/* Package Option */}
-                    {!isSubscriptionMode && availablePackages.length > 0 && (
+                    {!isSubscriptionMode && displayablePackages.length > 0 && (
                       <FormField
                         control={form.control}
                         name="usePackage"
@@ -630,13 +676,18 @@ export const AppointmentFormDialog = ({
                             <FormControl>
                               <Checkbox
                                 checked={field.value}
-                                onCheckedChange={field.onChange}
+                                onCheckedChange={(val) => {
+                                  field.onChange(val)
+                                  if (!val && allowExhausted) {
+                                    setAllowExhausted(false)
+                                  }
+                                }}
                               />
                             </FormControl>
                             <div className="space-y-1 leading-none">
                               <FormLabel>Usar Pacote de Sessões</FormLabel>
                               <FormDescription>
-                                {availablePackages.length} pacote(s) disponível.
+                                {displayablePackages.length} pacote(s) disponível(eis).
                               </FormDescription>
                             </div>
                           </FormItem>
@@ -663,7 +714,7 @@ export const AppointmentFormDialog = ({
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  {availablePackages.map((pkg) => (
+                                  {displayablePackages.map((pkg) => (
                                     <SelectItem key={pkg.id} value={pkg.id}>
                                       {pkg.packages.name} (
                                       {pkg.sessions_remaining} restantes)
