@@ -251,18 +251,11 @@ export const AgendaDayView = ({
                         onAppointmentClick(appt)
                       }}
                     >
-                      {hasMissingNotes && (
                         <div className="absolute top-1 right-1">
-                          <Tooltip>
-                            <TooltipTrigger>
-                              <AlertCircle className="h-4 w-4 text-orange-600" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Notas pendentes</p>
-                            </TooltipContent>
-                          </Tooltip>
+                          {hasMissingNotes && (
+                            <AlertCircle className="h-4 w-4 text-red-600" />
+                          )}
                         </div>
-                      )}
                       <div className="flex flex-col h-full">
                         <div className="flex justify-between items-start font-bold pr-4">
                           <span className="truncate">{appt.clients.name}</span>

@@ -211,14 +211,7 @@ export const AgendaCalendarView = ({
                         >
                           <span className="truncate">{appt.clients.name}</span>
                           {hasMissingNotes && (
-                            <Tooltip>
-                              <TooltipTrigger>
-                                <AlertCircle className="h-3 w-3 text-orange-500 shrink-0 ml-1" />
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Notas pendentes</p>
-                              </TooltipContent>
-                            </Tooltip>
+                            <AlertCircle className="h-3 w-3 text-red-600 shrink-0 ml-1" />
                           )}
                         </div>
                       )

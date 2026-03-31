@@ -196,17 +196,10 @@ export const MonthlyAgendaView = ({
                       <p className="font-semibold">{appt.clients.name}</p>
                       <div className="flex items-center gap-2">
                         <p className="text-sm text-muted-foreground">
-                          {appt.services.name}
+                          {appt.services?.name || 'Serviço'}
                         </p>
                         {hasMissingNotes && (
-                          <Tooltip>
-                            <TooltipTrigger>
-                              <AlertCircle className="h-4 w-4 text-orange-500" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Notas pendentes</p>
-                            </TooltipContent>
-                          </Tooltip>
+                          <AlertCircle className="h-4 w-4 text-red-600" />
                         )}
                       </div>
                     </div>

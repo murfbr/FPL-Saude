@@ -325,13 +325,14 @@ export const WeeklyAgendaView = ({ professionalId }: WeeklyAgendaViewProps) => {
                                       )}
                                     >
                                       {hasMissingNotes && (
-                                        <AlertCircle className="h-3 w-3 text-orange-600 shrink-0" />
+                                        <AlertCircle className="h-3 w-3 text-red-600 shrink-0" />
                                       )}
                                       <span className="font-bold truncate max-w-[50%]">
                                         {appointment.clients.name}
                                       </span>
                                       <span className="truncate opacity-80 flex-1">
-                                        {appointment.services.name}
+                                        {appointment.services?.name ||
+                                          'Serviço'}
                                       </span>
                                     </div>
                                   )

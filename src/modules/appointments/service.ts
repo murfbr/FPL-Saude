@@ -47,7 +47,7 @@ async function hydrateAppointment(appDoc: any): Promise<Appointment> {
         max_attendees: s?.max_attendees,
         value_type: s?.value_type,
         price: s?.price,
-        requires_observation: s?.requires_observation,
+        requires_observation: s?.requires_observation !== false,
       }
     }))
   }

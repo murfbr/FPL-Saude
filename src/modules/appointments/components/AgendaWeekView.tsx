@@ -322,18 +322,11 @@ export const AgendaWeekView = ({
                             }}
                             title={`${appt.clients.name} - ${appt.services.name}`}
                           >
-                            {hasMissingNotes && (
-                              <div className="absolute top-0.5 right-0.5 z-30">
-                                <Tooltip>
-                                  <TooltipTrigger>
-                                    <AlertCircle className="h-3 w-3 text-orange-600" />
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Notas pendentes</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </div>
-                            )}
+                            <div className="absolute top-0.5 right-0.5 z-30">
+                              {hasMissingNotes && (
+                                <AlertCircle className="h-3 w-3 text-red-600" />
+                              )}
+                            </div>
                             <div className="font-semibold truncate leading-none mb-0.5">
                               {appt.clients.name}
                             </div>

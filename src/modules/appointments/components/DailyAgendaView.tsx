@@ -107,18 +107,11 @@ export const DailyAgendaView = ({
                           </p>
                           <Badge variant="outline">{appt.status}</Badge>
                           {hasMissingNotes && (
-                            <Tooltip>
-                              <TooltipTrigger>
-                                <AlertCircle className="h-4 w-4 text-orange-500" />
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Notas pendentes</p>
-                              </TooltipContent>
-                            </Tooltip>
+                            <AlertCircle className="h-4 w-4 text-red-600" />
                           )}
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          {appt.services.name} •{' '}
+                          {appt.services?.name || 'Serviço'} •{' '}
                           {formatInTimeZone(appt.schedules.start_time, 'HH:mm')}{' '}
                           - {formatInTimeZone(appt.schedules.end_time, 'HH:mm')}
                         </p>
