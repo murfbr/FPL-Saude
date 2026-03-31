@@ -90,15 +90,18 @@ export const MonthlyAgendaView = ({
   }, [validAppointments])
 
   const CustomDay = (props: DayProps) => {
-    if (!props.date || !isValid(props.date)) {
-      return <CalendarDayButton {...props} />
+    const { day, modifiers, ...rest } = props
+    const date = day.date
+
+    if (!date || !isValid(date)) {
+      return <CalendarDayButton day={day} modifiers={modifiers} {...(rest as any)} />
     }
-    const dayKey = format(props.date, 'yyyy-MM-dd')
+    const dayKey = format(date, 'yyyy-MM-dd')
     const count = appointmentsByDay.get(dayKey)
     return (
       <div className="relative">
-        <CalendarDayButton {...props} />
-        {count && count > 0 && (
+        <CalendarDayButton day={day} modifiers={modifiers} {...(rest as any)} />
+        {count !== undefined && count > 0 && (
           <div className="absolute bottom-0 right-0 text-xs bg-primary text-primary-foreground rounded-full h-4 w-4 flex items-center justify-center pointer-events-none">
             {count}
           </div>
