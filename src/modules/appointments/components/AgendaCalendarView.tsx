@@ -196,6 +196,7 @@ export const AgendaCalendarView = ({
                     {dayAppointments.slice(0, 3).map((appt) => {
                       const hasMissingNotes =
                         appt.status === 'completed' &&
+                        appt.services?.requires_observation !== false &&
                         (!appt.notes || appt.notes.length === 0)
 
                       return (

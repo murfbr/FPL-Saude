@@ -303,6 +303,8 @@ export const WeeklyAgendaView = ({ professionalId }: WeeklyAgendaViewProps) => {
                                 {slotAppointments.map((appointment) => {
                                   const hasMissingNotes =
                                     appointment.status === 'completed' &&
+                                    appointment.services?.requires_observation !==
+                                      false &&
                                     (!appointment.notes ||
                                       appointment.notes.length === 0)
                                   return (

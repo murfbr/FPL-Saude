@@ -289,6 +289,7 @@ export const AgendaWeekView = ({
                         width === 100 ? 'calc(100% - 10px)' : `${width}%`
                       const hasMissingNotes =
                         appt.status === 'completed' &&
+                        appt.services?.requires_observation !== false &&
                         (!appt.notes || appt.notes.length === 0)
 
                       return (

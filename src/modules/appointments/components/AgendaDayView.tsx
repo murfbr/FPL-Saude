@@ -219,6 +219,7 @@ export const AgendaDayView = ({
                   width === 100 ? 'calc(100% - 12px)' : `${width}%`
                 const hasMissingNotes =
                   appt.status === 'completed' &&
+                  appt.services?.requires_observation !== false &&
                   (!appt.notes || appt.notes.length === 0)
 
                 return (

@@ -40,7 +40,15 @@ async function hydrateAppointment(appDoc: any): Promise<Appointment> {
   if (data.service_id && !data.services) {
     promises.push(getDoc(doc(db, 'companies', getCompanyId(), 'services', data.service_id)).then((d) => {
       const s = d.data()
-      appointment.services = { id: d.id, name: s?.name, duration_minutes: s?.duration_minutes, max_attendees: s?.max_attendees, value_type: s?.value_type, price: s?.price }
+      appointment.services = {
+        id: d.id,
+        name: s?.name,
+        duration_minutes: s?.duration_minutes,
+        max_attendees: s?.max_attendees,
+        value_type: s?.value_type,
+        price: s?.price,
+        requires_observation: s?.requires_observation,
+      }
     }))
   }
 
@@ -98,7 +106,8 @@ export async function bookAppointment(
         name: serviceData?.name, 
         duration_minutes: serviceData?.duration_minutes, 
         price: serviceData?.price,
-        value_type: serviceData?.value_type
+        value_type: serviceData?.value_type,
+        requires_observation: serviceData?.requires_observation
       },
       schedules: { 
         start_time: startTime,
@@ -185,7 +194,8 @@ export async function bookRecurringAppointments(
             name: serviceData?.name, 
             duration_minutes: duration, 
             price: serviceData?.price,
-            value_type: serviceData?.value_type
+            value_type: serviceData?.value_type,
+            requires_observation: serviceData?.requires_observation
           },
           schedules: { 
             start_time: occurrenceDate.toISOString(),
