@@ -1,0 +1,44 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    function isAuthenticated() { return request.auth != null; }
+    
+    function isSuperAdmin() {
+      return isAuthenticated() && firestore.exists(/databases/(default)/documents/super_admins/$(request.auth.uid));
+    }
+
+    function getUserData() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Regras para Empresas
+    match /companies/{companyId}/{allPaths=**} {
+      allow read: if isAuthenticated() && (
+        isSuperAdmin() || (getUserData().companyId == companyId)
+      );
+
+      allow write: if isAuthenticated() && isSuperAdmin();
+
+      // Regra específica para Exames
+      match /clients/{clientId}/exams/{fileName} {
+        allow read: if isAuthenticated() && (
+          isSuperAdmin() || (getUserData().companyId == companyId)
+        );
+        allow write: if isAuthenticated() && 
+          getUserData().companyId == companyId && 
+          (getUserData().role == 'admin' || getUserData().role == 'professional');
+      }
+    }
+
+    // Regras para Fotos de Profissionais (Perfil)
+    match /professionals/{companyId}/{profId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (
+        isSuperAdmin() ||
+        (getUserData().companyId == companyId && getUserData().role == 'admin') ||
+        request.auth.uid == firestore.get(/databases/(default)/documents/companies/$(companyId)/professionals/$(profId)).data.user_id
+      );
+    }
+  }
+}

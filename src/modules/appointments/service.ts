@@ -105,6 +105,8 @@ export async function bookAppointment(
         // Calculate end_time based on duration
         end_time: new Date(new Date(startTime).getTime() + (serviceData?.duration_minutes || 60) * 60000).toISOString()
       },
+      // Desnormalizado para sumários de parceria
+      partnership_id: clientData?.partnership_id || null,
     }
 
     await setDoc(newDocRef, appInfo)
@@ -189,6 +191,8 @@ export async function bookRecurringAppointments(
             start_time: occurrenceDate.toISOString(),
             end_time: new Date(occurrenceDate.getTime() + duration * 60000).toISOString()
           },
+          // Desnormalizado para sumários de parceria
+          partnership_id: clientData?.partnership_id || null,
         }
         batch.set(newDocRef, appInfo)
         appointmentsCreated++

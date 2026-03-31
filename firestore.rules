@@ -1,0 +1,57 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Função auxiliar — verifica se o usuário logado é um super-admin ativo  ← NOVO
+    function isSuperAdmin() {                                                  // ← NOVO
+      return request.auth != null                                              // ← NOVO
+        && exists(/databases/$(database)/documents/super_admins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/super_admins/$(request.auth.uid)).data.is_active == true;
+    }                                                                          // ← NOVO
+
+    // Coleção de super-admins — somente leitura do próprio documento         ← NOVO
+    // Escrita bloqueada pelo app (criação só manual no Console do Firebase)   ← NOVO
+    match /super_admins/{uid} {                                                // ← NOVO
+      allow read: if request.auth != null && request.auth.uid == uid;          // ← NOVO
+      allow write: if false;                                                   // ← NOVO
+    }                                                                          // ← NOVO
+
+    // Perfis de usuário na raiz — cada usuário pode ler/escrever o próprio documento
+    // Super-admins podem ler e escrever qualquer documento (gestão de usuários) ← ALTERADO
+    match /users/{uid} {
+      allow read, write: if request.auth != null && (
+        request.auth.uid == uid
+        || isSuperAdmin()                                                       // ← NOVO
+      );
+    }
+
+    // Regra para liberar buscas do tipo collectionGroup nas novas subcoleções
+    match /{path=**}/subscriptions/{subscriptionId} {
+      allow read, write: if request.auth != null;
+    }
+    match /{path=**}/packages/{packageId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Escopo das empresas (SaaS)
+    match /companies/{companyId} {
+      // Leitura pública mantida (igual a antes)
+      allow read: if true;
+      // Super-admins podem escrever o documento de configuração da empresa  ← ALTERADO
+      // (antes era `if false` — agora só super-admins podem)
+      allow write: if isSuperAdmin();                                          // ← ALTERADO
+
+      // Coleção de Usuários dentro da empresa (mantida igual)
+      match /users/{userId} {
+        allow read, write: if request.auth != null;
+      }
+
+      // Demais coleções — qualquer usuário autenticado (mantido igual)
+      match /{document=**} {
+        allow read, write: if request.auth != null;
+      }
+    }
+
+  }
+}

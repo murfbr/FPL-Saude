@@ -1,7 +1,5 @@
-import { db } from '@/shared/lib/firebase'
-import { collection, query, where, getDocs, getDoc, doc } from 'firebase/firestore'
-import { format, subDays, startOfMonth, subMonths, endOfMonth } from 'date-fns'
-
+import { getMultipleMonthlySummaries, getMonthlySummary } from '@/modules/summaries/service'
+import { format, subMonths, startOfMonth } from 'date-fns'
 import { getCompanyId } from '@/shared/lib/tenantStore'
 
 interface KpiFilters {
@@ -10,161 +8,171 @@ interface KpiFilters {
   partnershipId?: string | null
 }
 
-let cachedBaseAppts: any = null
-let cacheTime = 0
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers para filtrar dados do sumário por profissional / serviço / parceria
+// ─────────────────────────────────────────────────────────────────────────────
 
-async function fetchAllAppointmentsBase(filters?: KpiFilters) {
-  const now = Date.now()
-  const cacheKey = `${getCompanyId()}:${JSON.stringify(filters || {})}`
-
-  if (cachedBaseAppts && cachedBaseAppts.key === cacheKey && now - cacheTime < 5000) {
-    return cachedBaseAppts.data
+function filterSummary(summary: any, filters?: KpiFilters) {
+  // Se não houver filtro, retorna os totais gerais
+  if (!filters?.professionalId || filters.professionalId === 'all') {
+    // Sem filtro de profissional — usa os totais do documento
+    return {
+      total_revenue: summary.total_revenue,
+      completed_appointments: summary.completed_appointments,
+      cancelled_appointments: summary.cancelled_appointments,
+      no_show_appointments: summary.no_show_appointments,
+      total_appointments: summary.total_appointments,
+    }
   }
 
-  const apptsRef = collection(db, 'companies', getCompanyId(), 'appointments')
-  const qParts: any[] = []
-  if (filters?.professionalId && filters.professionalId !== 'all') {
-    qParts.push(where('professional_id', '==', filters.professionalId))
+  // Com filtro de profissional — usa o breakdown by_professional
+  const profData = summary.by_professional?.[filters.professionalId]
+  if (!profData) {
+    return { total_revenue: 0, completed_appointments: 0, cancelled_appointments: 0, no_show_appointments: 0, total_appointments: 0 }
   }
-  const q = query(apptsRef, ...qParts)
-
-  const snap = await getDocs(q)
-  const results = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-
-  cachedBaseAppts = { key: cacheKey, data: results }
-  cacheTime = now
-  return results
+  return {
+    total_revenue: profData.revenue,
+    completed_appointments: profData.completed,
+    // Cancelamentos não estão no breakdown por profissional — retorna 0
+    cancelled_appointments: 0,
+    no_show_appointments: 0,
+    total_appointments: profData.completed, // aproximação com dados disponíveis
+  }
 }
 
-async function fetchAppointments(startStr: string, endStr: string, filters?: KpiFilters) {
-  const baseAppts = await fetchAllAppointmentsBase(filters)
-  const results: any[] = []
-
-  // Mem filter
-  for (const data of baseAppts) {
-    if (data.schedules?.start_time >= startStr && data.schedules?.start_time <= endStr) {
-      if (filters?.serviceId && filters.serviceId !== 'all' && data.service_id !== filters.serviceId) continue
-      results.push(data)
-    }
-  }
-
-  // Hydrate services price & name for revenue math (using denormalized data when available)
-  const hydrated = await Promise.all(results.map(async (r: any) => {
-    // Check if we already have the denormalized data from our NoSQL optimization
-    if (r.services?.name && r.services?.price !== undefined) {
-      return r
-    }
-
-    if (r.service_id) {
-      // Legacy Fallback: Only read if denormalization hasn't happened yet
-      const sSnap = await getDoc(doc(db, 'companies', getCompanyId(), 'services', r.service_id))
-      r.services = { name: sSnap.data()?.name, price: sSnap.data()?.price || 0 }
-    }
-    return r
-  }))
-  return hydrated
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// KPI Metrics — agora usa 2 leituras (mês atual + mês anterior)
+// ─────────────────────────────────────────────────────────────────────────────
 
 export async function getKpiMetrics(startDate: Date, endDate: Date, filters?: KpiFilters) {
   try {
-    const startStr = startDate.toISOString()
-    const endStr = endDate.toISOString()
-
     // Pega o mesmo range do tempo anterior para comparação
     const diff = endDate.getTime() - startDate.getTime()
     const prevStartDate = new Date(startDate.getTime() - diff)
-    const prevEndDate = new Date(endDate.getTime() - diff)
 
-    const currAppts = await fetchAppointments(startStr, endStr, filters)
-    const prevAppts = await fetchAppointments(prevStartDate.toISOString(), prevEndDate.toISOString(), filters)
+    // Lê os 2 meses (paralelo)
+    const [currRes, prevRes] = await Promise.all([
+      getMonthlySummary(startDate),
+      getMonthlySummary(prevStartDate),
+    ])
 
-    // Agregações Cur
-    let rev = 0, compAppts = 0, cancels = 0
-    currAppts.forEach(a => {
-      if (a.status === 'completed') { rev += (a.services?.price || 0); compAppts++ }
-      if (a.status === 'cancelled' || a.status === 'no_show') cancels++
-    })
+    const curr = filterSummary(currRes.data, filters)
+    const prev = filterSummary(prevRes.data, filters)
 
-    // Agregações Prev
-    let prevRev = 0, prevCompAppts = 0, prevCancels = 0
-    prevAppts.forEach(a => {
-      if (a.status === 'completed') { prevRev += (a.services?.price || 0); prevCompAppts++ }
-      if (a.status === 'cancelled' || a.status === 'no_show') prevCancels++
-    })
+    const totalCurr = curr.total_appointments || 1
+    const totalPrev = prev.total_appointments || 1
 
-    const totalCurr = currAppts.length || 1
-    const totalPrev = prevAppts.length || 1
+    const currCancels = curr.cancelled_appointments + curr.no_show_appointments
+    const prevCancels = prev.cancelled_appointments + prev.no_show_appointments
 
     return {
       data: {
-        total_revenue: rev,
-        prev_total_revenue: prevRev,
-        completed_appointments: compAppts,
-        prev_completed_appointments: prevCompAppts,
-        total_appointments: currAppts.length,
-        average_ticket: compAppts > 0 ? (rev / compAppts) : 0,
-        prev_average_ticket: prevCompAppts > 0 ? (prevRev / prevCompAppts) : 0,
-        retention_rate: 80, // Mock for NoSQL MVP
-        prev_retention_rate: 75,
-        cancellation_rate: (cancels / totalCurr) * 100,
-        prev_cancellation_rate: (prevCancels / totalPrev) * 100
-      }, error: null
+        total_revenue: curr.total_revenue,
+        prev_total_revenue: prev.total_revenue,
+        completed_appointments: curr.completed_appointments,
+        prev_completed_appointments: prev.completed_appointments,
+        total_appointments: curr.total_appointments,
+        average_ticket: curr.completed_appointments > 0
+          ? curr.total_revenue / curr.completed_appointments
+          : 0,
+        prev_average_ticket: prev.completed_appointments > 0
+          ? prev.total_revenue / prev.completed_appointments
+          : 0,
+        cancellation_rate: (currCancels / totalCurr) * 100,
+        prev_cancellation_rate: (prevCancels / totalPrev) * 100,
+      },
+      error: null,
     }
-  } catch (error) { return { data: null, error } }
-}
-
-export async function getServicePerformance(startDate: Date, endDate: Date, filters?: KpiFilters) {
-  try {
-    const appts = await fetchAppointments(startDate.toISOString(), endDate.toISOString(), filters)
-    const countMap: Record<string, number> = {}
-
-    appts.forEach(a => {
-      const sName = a.services?.name || 'Serviço Deletado'
-      if (a.status !== 'cancelled' && a.status !== 'no_show') {
-        countMap[sName] = (countMap[sName] || 0) + 1
-      }
-    })
-
-    const arr = Object.keys(countMap).map(k => ({ service_name: k, count: countMap[k] }))
-    arr.sort((a, b) => b.count - a.count)
-    return { data: arr, error: null }
-  } catch (e) { return { data: [], error: e } }
-}
-
-export async function getPartnershipPerformance(startDate: Date, endDate: Date, filters?: KpiFilters) {
-  // Mock simplificado. A versão real requereria buscar os clientes, cruzar com a parceria...
-  return {
-    data: [
-      { partnership_name: 'Gympass', client_count: 5, total_revenue: 500 },
-      { partnership_name: 'Unimed', client_count: 3, total_revenue: 300 }
-    ],
-    error: null
+  } catch (error) {
+    return { data: null, error }
   }
 }
 
-export async function getAnnualComparative(filters?: KpiFilters) {
+// ─────────────────────────────────────────────────────────────────────────────
+// Desempenho por Serviço — usa by_service do sumário
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function getServicePerformance(startDate: Date, endDate: Date, filters?: KpiFilters) {
   try {
-    const resultArr = []
+    const { data: summary } = await getMonthlySummary(startDate)
 
-    // Volta 12 meses
-    for (let i = 11; i >= 0; i--) {
-      const date = subMonths(new Date(), i)
-      const st = startOfMonth(date).toISOString()
-      const ed = endOfMonth(date).toISOString()
+    let byService = summary.by_service || {}
 
-      const appts = await fetchAppointments(st, ed, filters)
-
-      let rev = 0, count = 0
-      appts.forEach(a => {
-        if (a.status === 'completed') {
-          rev += (a.services?.price || 0)
-          count++
-        }
-      })
-
-      resultArr.push({ month: format(date, 'MMM/yy'), total_revenue: rev, total_appointments: count })
+    // Filtrar por serviço específico se selecionado
+    if (filters?.serviceId && filters.serviceId !== 'all') {
+      const specific = byService[filters.serviceId]
+      byService = specific ? { [filters.serviceId]: specific } : {}
     }
 
+    const arr = Object.entries(byService).map(([id, s]) => ({
+      service_id: id,
+      service_name: s.name,
+      count: s.count,
+      revenue: s.revenue,
+    }))
+
+    arr.sort((a, b) => b.count - a.count)
+    return { data: arr, error: null }
+  } catch (e) {
+    return { data: [], error: e }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Desempenho por Parceria — agora com dados REAIS via by_partnership
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function getPartnershipPerformance(startDate: Date, endDate: Date, filters?: KpiFilters) {
+  try {
+    const { data: summary } = await getMonthlySummary(startDate)
+
+    const byPartnership = summary.by_partnership || {}
+
+    let entries = Object.entries(byPartnership)
+
+    // Filtrar por parceria específica se selecionada
+    if (filters?.partnershipId && filters.partnershipId !== 'all') {
+      entries = entries.filter(([id]) => id === filters.partnershipId)
+    }
+
+    const arr = entries.map(([id, p]) => ({
+      partnership_id: id,
+      partnership_name: p.name || id,
+      client_count: p.clientCount,
+      session_count: p.sessionCount,
+    }))
+
+    arr.sort((a, b) => b.session_count - a.session_count)
+    return { data: arr, error: null }
+  } catch (e) {
+    return { data: [], error: e }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Comparativo Anual — 12 reads paralelos (era 12 loops sequenciais!)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function getAnnualComparative(filters?: KpiFilters) {
+  try {
+    // Últimos 12 meses
+    const months = Array.from({ length: 12 }, (_, i) =>
+      startOfMonth(subMonths(new Date(), 11 - i))
+    )
+
+    const { data: summaries } = await getMultipleMonthlySummaries(months)
+
+    const resultArr = summaries.map((summary, i) => {
+      const filtered = filterSummary(summary, filters)
+      return {
+        month: format(months[i], 'MMM/yy'),
+        total_revenue: filtered.total_revenue,
+        total_appointments: filtered.completed_appointments,
+      }
+    })
+
     return { data: resultArr, error: null }
-  } catch (e) { return { data: [], error: e } }
+  } catch (e) {
+    return { data: [], error: e }
+  }
 }

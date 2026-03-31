@@ -106,7 +106,7 @@ export const PatientEditDialog = ({
     if (!patient) return
     setIsSubmitting(true)
 
-    let profile_picture_url = patient.profile_picture_url
+    let profile_picture_url = patient.profile_picture_url || null
 
     if (avatarFile) {
       const filePath = `patients/${patient.id}/${Date.now()}-${avatarFile.name}`
@@ -131,7 +131,8 @@ export const PatientEditDialog = ({
     const cpfClean = cleanCPF(values.email)
 
     const { data, error } = await updateClient(patient.id, {
-      ...values,
+      name: values.name,
+      phone: values.phone || null,
       email: cpfClean,
       profile_picture_url,
       birth_date: convertDateToISO(values.birth_date),
