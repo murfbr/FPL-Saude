@@ -125,7 +125,7 @@ export const PatientEditDialog = ({
         setIsSubmitting(false)
         return
       }
-      profile_picture_url = getPublicUrl('avatars', filePath)
+      profile_picture_url = await getPublicUrl('avatars', filePath)
     }
 
     const cpfClean = cleanCPF(values.email)
@@ -171,7 +171,7 @@ export const PatientEditDialog = ({
             <div className="flex flex-col items-center gap-4">
               <div className="relative">
                 <Avatar className="w-24 h-24">
-                  <AvatarImage src={previewUrl || ''} objectFit="cover" />
+                  <AvatarImage src={previewUrl || ''} className="object-cover" />
                   <AvatarFallback className="text-2xl">
                     {patient.name.substring(0, 2).toUpperCase()}
                   </AvatarFallback>

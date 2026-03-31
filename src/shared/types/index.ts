@@ -9,6 +9,7 @@ export interface Service {
   price: number
   value_type: 'session' | 'monthly'
   max_attendees: number
+  requires_observation?: boolean
   packages?: Package[] | null
   subscription_plans?: SubscriptionPlan[] | null
 }

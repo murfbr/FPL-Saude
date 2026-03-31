@@ -13,6 +13,7 @@ import {
   FormMessage,
   FormDescription,
 } from '@/components/ui/form'
+import { Switch } from '@/components/ui/switch'
 import { Service } from '@/shared/types'
 
 const serviceSchema = z.object({
@@ -28,6 +29,7 @@ const serviceSchema = z.object({
     .int()
     .positive('O número máximo de participantes deve ser pelo menos 1.')
     .default(1),
+  requires_observation: z.boolean().default(true),
 })
 
 type ServiceFormValues = z.infer<typeof serviceSchema>
@@ -51,6 +53,7 @@ export const ServiceForm = ({
       duration_minutes: defaultValues?.duration_minutes || 60,
       price: defaultValues?.price || 0,
       max_attendees: defaultValues?.max_attendees || 1,
+      requires_observation: defaultValues?.requires_observation ?? true,
     },
   })
 
@@ -137,6 +140,30 @@ export const ServiceForm = ({
                 <Input type="number" min="1" {...field} />
               </FormControl>
               <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="requires_observation"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+              <div className="space-y-0.5">
+                <FormLabel className="text-base">
+                  Requer Prontuário?
+                </FormLabel>
+                <FormDescription>
+                  Se desativado, o profissional poderá finalizar o atendimento
+                  sem preencher a evolução.
+                </FormDescription>
+              </div>
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              </FormControl>
             </FormItem>
           )}
         />

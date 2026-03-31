@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ServiceForm } from './ServiceForm'
 import { PackageFormDialog } from '../../packages/components/PackageFormDialog'
@@ -339,6 +340,11 @@ export const ServicesManager = () => {
                         <div>
                           <CardTitle className="text-base flex items-center gap-2">
                             {service.name}
+                            {service.requires_observation === false && (
+                              <Badge variant="secondary" className="text-[10px] h-4 px-1.5 font-normal">
+                                Sem Prontuário
+                              </Badge>
+                            )}
                           </CardTitle>
                           <CardDescription className="flex items-center gap-3 mt-1">
                             <span className="flex items-center gap-1">

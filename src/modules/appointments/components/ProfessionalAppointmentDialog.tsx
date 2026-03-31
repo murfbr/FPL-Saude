@@ -161,8 +161,9 @@ export const ProfessionalAppointmentDialog = ({
   const handleComplete = async () => {
     const hasExistingNotes = appointment.notes && appointment.notes.length > 0
     const hasNewNote = newNote.trim().length > 0
+    const requiresObservation = appointment.services?.requires_observation !== false
 
-    if (!hasExistingNotes && !hasNewNote) {
+    if (requiresObservation && !hasExistingNotes && !hasNewNote) {
       toast({
         title: 'Anotação obrigatória',
         description:
