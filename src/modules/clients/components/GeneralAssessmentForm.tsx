@@ -72,10 +72,12 @@ type AssessmentFormValues = z.infer<typeof assessmentSchema>
 
 interface GeneralAssessmentFormProps {
   client: Client
+  onClientUpdated?: (client: Client) => void
 }
 
 export const GeneralAssessmentForm = ({
   client,
+  onClientUpdated,
 }: GeneralAssessmentFormProps) => {
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -223,7 +225,7 @@ export const GeneralAssessmentForm = ({
 
     const updatedAssessment = [newAssessmentEntry, ...otherEntries]
 
-    const { error } = await updateClient(client.id, {
+    const { data, error } = await updateClient(client.id, {
       general_assessment: updatedAssessment,
     })
 
@@ -233,8 +235,9 @@ export const GeneralAssessmentForm = ({
         description: error.message,
         variant: 'destructive',
       })
-    } else {
+    } else if (data) {
       toast({ title: 'Avaliação atualizada com sucesso!' })
+      onClientUpdated?.(data)
     }
     setIsSubmitting(false)
   }
@@ -260,7 +263,7 @@ export const GeneralAssessmentForm = ({
 
     const updatedAssessment = [...currentList, newHistoryEntry]
 
-    const { error } = await updateClient(client.id, {
+    const { data, error } = await updateClient(client.id, {
       general_assessment: updatedAssessment,
     })
 
@@ -270,9 +273,10 @@ export const GeneralAssessmentForm = ({
         description: error.message,
         variant: 'destructive',
       })
-    } else {
+    } else if (data) {
       toast({ title: 'Histórico importado com sucesso!' })
       setHistoryText('')
+      onClientUpdated?.(data)
     }
     setIsSubmitting(false)
   }

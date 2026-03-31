@@ -112,7 +112,9 @@ const ProfessionalPatientDetail = () => {
   }, [appointments, statusFilter])
 
   const consolidatedNotes = useMemo(() => {
-    const allNotes: (NoteEntry & { appointmentId: string })[] = []
+    const allNotes: (NoteEntry & { appointmentId?: string })[] = []
+    
+    // Notas de agendamentos
     appointments.forEach((appt) => {
       if (appt.notes) {
         appt.notes.forEach((note) => {
@@ -120,10 +122,24 @@ const ProfessionalPatientDetail = () => {
         })
       }
     })
+
+    // Histórico importado da ficha de avaliação
+    if (patient?.general_assessment && Array.isArray(patient.general_assessment)) {
+      patient.general_assessment.forEach((entry: any) => {
+        if (entry.type === 'imported_history') {
+          allNotes.push({
+            date: entry.date,
+            content: entry.content,
+            professional_name: 'Histórico Importado',
+          })
+        }
+      })
+    }
+
     return allNotes.sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
     )
-  }, [appointments])
+  }, [appointments, patient?.general_assessment])
 
   const getInitials = (name: string) => {
     return name
@@ -200,7 +216,10 @@ const ProfessionalPatientDetail = () => {
             <ClientPackagesList clientId={patient.id} />
           </div>
           <div className="md:col-span-2 space-y-6">
-            <GeneralAssessmentForm client={patient} />
+            <GeneralAssessmentForm 
+              client={patient} 
+              onClientUpdated={(updated) => setPatient(updated)}
+            />
 
             <Card>
               <CardHeader>
