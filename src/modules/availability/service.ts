@@ -1,6 +1,6 @@
 import { db } from '@/shared/lib/firebase'
 import { collection, query, where, getDocs, doc, setDoc, deleteDoc, writeBatch } from 'firebase/firestore'
-import { RecurringAvailability, AvailabilityOverride, Professional, Service } from '@/shared/types'
+import { RecurringAvailability, AvailabilityOverride, Professional, Service, BlockedDate } from '@/shared/types'
 import { startOfMonth, endOfMonth, format, parseISO, isBefore, isAfter, addMinutes, setHours, setMinutes } from 'date-fns'
 import { formatInTimeZone, toZonedTime } from 'date-fns-tz'
 import { computeSlotsForDay } from '@/shared/lib/availability-logic'
@@ -188,17 +188,19 @@ export async function getAvailableDatesForRange(
     const startStr = format(startDate, 'yyyy-MM-dd')
     const endStr = format(endDate, 'yyyy-MM-dd')
 
-    // 1. Fetch ALL data for the range in BATCH (4 queries total instead of 4 * days)
+    // 1. Fetch ALL data for the range in BATCH (5 queries total instead of 5 * days)
     const [
       { data: recurring },
       { data: overrides },
       { data: appointments },
-      { data: service }
+      { data: service },
+      { data: globalBlockedDates }
     ] = await Promise.all([
       getRecurringAvailability(professionalId),
       getAvailabilityOverridesForRange(professionalId, startDate, endDate),
       getAppointmentsByProfessionalForRange(professionalId, startDate.toISOString(), endDate.toISOString()),
-      getServiceById(serviceId)
+      getServiceById(serviceId),
+      getGlobalBlockedDates()
     ])
 
     if (!recurring || !overrides || !appointments || !service) {
@@ -209,7 +211,8 @@ export async function getAvailableDatesForRange(
       recurring: recurring || [],
       overrides: overrides || [],
       appointments: appointments || [],
-      service: service
+      service: service,
+      globalBlockedDates: globalBlockedDates || []
     }
 
     const availableDates: string[] = []
@@ -245,4 +248,51 @@ export async function getAvailableDatesForProfessional(
     startDate,
     endDate,
   )
+}
+
+export async function getGlobalBlockedDates(): Promise<{ data: BlockedDate[] | null; error: any }> {
+  try {
+    const ref = collection(db, 'companies', getCompanyId(), 'blocked_dates')
+    const snapshot = await getDocs(ref)
+    const data: BlockedDate[] = []
+    snapshot.forEach(d => {
+      data.push({ id: d.id, ...d.data() } as BlockedDate)
+    })
+    // Sort by date (this will be a bit tricky with mixed YYYY-MM-DD and MM-DD, but let's keep it simple for now)
+    data.sort((a, b) => a.date.localeCompare(b.date))
+    return { data, error: null }
+  } catch (error) {
+    return { data: null, error }
+  }
+}
+
+export async function addGlobalBlockedDate(
+  date: string,
+  type: 'single' | 'annual',
+  reason: string | null = null
+): Promise<{ data: BlockedDate | null; error: any }> {
+  try {
+    const ref = doc(collection(db, 'companies', getCompanyId(), 'blocked_dates'))
+    const docData: BlockedDate = {
+      id: ref.id,
+      date,
+      type,
+      reason,
+      created_at: new Date().toISOString()
+    }
+    await setDoc(ref, docData)
+    return { data: docData, error: null }
+  } catch (error) {
+    return { data: null, error }
+  }
+}
+
+export async function deleteGlobalBlockedDate(id: string): Promise<{ error: any }> {
+  try {
+    const ref = doc(db, 'companies', getCompanyId(), 'blocked_dates', id)
+    await deleteDoc(ref)
+    return { error: null }
+  } catch (error) {
+    return { error }
+  }
 }

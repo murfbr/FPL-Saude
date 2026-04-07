@@ -7,6 +7,7 @@ import {
 import { Button } from '@/components/ui/button'
 import {
   Calendar,
+  CalendarDays as CalendarIcon,
   LayoutDashboard,
   BarChart,
   CreditCard,
@@ -29,15 +30,35 @@ interface AdminNavMenuProps {
 export function AdminNavMenu({ currentTab, onTabChange }: AdminNavMenuProps) {
   return (
     <div className="flex flex-wrap gap-2 items-center">
-      {/* Agenda - Direct Link */}
-      <Button
-        variant={currentTab === 'agenda' ? 'secondary' : 'ghost'}
-        className={cn(currentTab === 'agenda' && 'bg-accent')}
-        onClick={() => onTabChange('agenda')}
-      >
-        <Calendar className="w-4 h-4 mr-2" />
-        Agenda
-      </Button>
+      {/* Agenda Dropdown */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant={['agenda', 'blocked_dates'].includes(currentTab) ? 'secondary' : 'ghost'}
+            className={cn(['agenda', 'blocked_dates'].includes(currentTab) && 'bg-accent')}
+          >
+            <Calendar className="w-4 h-4 mr-2" />
+            Agenda
+            <ChevronDown className="ml-2 h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-[200px]">
+          <DropdownMenuItem
+            onClick={() => onTabChange('agenda')}
+            className={cn('cursor-pointer', currentTab === 'agenda' && 'bg-muted')}
+          >
+            <Calendar className="mr-2 h-4 w-4" />
+            Ver Agenda
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => onTabChange('blocked_dates')}
+            className={cn('cursor-pointer', currentTab === 'blocked_dates' && 'bg-muted')}
+          >
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            Bloqueio de Datas
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       {/* Gestão Dropdown */}
       <DropdownMenu>

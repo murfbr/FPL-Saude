@@ -4,7 +4,7 @@ import { formatInTimeZone, toZonedTime } from 'date-fns-tz'
 
 import { getServiceById } from '../services-catalog/service'
 import { getAppointmentsByProfessionalForRange } from './service'
-import { getRecurringAvailability, getAvailabilityOverridesForRange } from '../availability/service'
+import { getRecurringAvailability, getAvailabilityOverridesForRange, getGlobalBlockedDates } from '../availability/service'
 import { getAllProfessionals, getProfessionalsByService } from '../professionals/service'
 import { computeSlotsForDay } from '@/shared/lib/availability-logic'
 
@@ -31,11 +31,13 @@ export async function getFilteredAvailableSchedules(
     const [
       { data: recurring },
       { data: overrides },
-      { data: appointments }
+      { data: appointments },
+      { data: globalBlockedDates }
     ] = await Promise.all([
       getRecurringAvailability(professionalId),
       getAvailabilityOverridesForRange(professionalId, date, date),
-      getAppointmentsByProfessionalForRange(professionalId, startOfD.toISOString(), endOfD.toISOString())
+      getAppointmentsByProfessionalForRange(professionalId, startOfD.toISOString(), endOfD.toISOString()),
+      getGlobalBlockedDates()
     ])
 
     if (!recurring || !overrides || !appointments) {
@@ -48,7 +50,8 @@ export async function getFilteredAvailableSchedules(
       overrides: overrides || [],
       appointments: appointments || [],
       service: service,
-      excludeAppointmentId
+      excludeAppointmentId,
+      globalBlockedDates: globalBlockedDates || []
     }, professionalId)
 
     return { data: candidateSlots, error: null }

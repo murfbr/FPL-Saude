@@ -35,6 +35,7 @@ import { FinancialManagement } from '@/modules/financial/components/FinancialMan
 import { TimeSheetReport } from '@/modules/time-tracking/components/TimeSheetReport'
 import { MessageConfirmation } from '@/modules/messages/components/MessageConfirmation'
 import { DataMaintenance } from '@/modules/maintenance/components/DataMaintenance'
+import { GlobalBlockedDatesManager } from '@/modules/availability/components/GlobalBlockedDatesManager'
 import { Button } from '@/components/ui/button'
 import { Database } from 'lucide-react'
 
@@ -168,6 +169,7 @@ const AdminDashboard = () => {
     { value: 'services', label: 'Serviços e Pacotes', icon: Stethoscope },
 
     { value: 'partnerships', label: 'Parcerias', icon: Handshake },
+    { value: 'blocked_dates', label: 'Bloqueio de Datas', icon: Calendar },
     { value: 'maintenance', label: 'Manutenção', icon: Database },
   ]
 
@@ -412,6 +414,10 @@ const AdminDashboard = () => {
 
           <TabsContent value="maintenance">
             <DataMaintenance />
+          </TabsContent>
+
+          <TabsContent value="blocked_dates">
+            <GlobalBlockedDatesManager />
           </TabsContent>
         </Tabs>
       </div>

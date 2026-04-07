@@ -206,3 +206,11 @@ export interface ClientExam {
   professional_id?: string
   professional_name?: string
 }
+
+export interface BlockedDate {
+  id: string
+  date: string // YYYY-MM-DD or MM-DD
+  type: 'single' | 'annual'
+  reason: string | null
+  created_at: string
+}

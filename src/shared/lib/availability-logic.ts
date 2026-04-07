@@ -1,4 +1,4 @@
-import { Schedule, RecurringAvailability, AvailabilityOverride, Appointment, Service } from '@/shared/types'
+import { Schedule, RecurringAvailability, AvailabilityOverride, Appointment, Service, BlockedDate } from '@/shared/types'
 import { format, parseISO, isBefore, isAfter, addMinutes, startOfDay, endOfDay } from 'date-fns'
 import { formatInTimeZone } from 'date-fns-tz'
 
@@ -10,6 +10,7 @@ export interface AvailabilityData {
   appointments: Appointment[]
   service: Service
   excludeAppointmentId?: string
+  globalBlockedDates?: BlockedDate[]
 }
 
 /**
@@ -21,8 +22,19 @@ export function computeSlotsForDay(
   professionalId: string
 ): Schedule[] {
   const dateStr = format(date, 'yyyy-MM-dd')
+  const monthDayStr = format(date, 'MM-dd')
   const durationMins = data.service.duration_minutes || 60
   const dayOfWeek = parseInt(format(date, 'i'))
+
+  // Check Global Blocked Dates first
+  if (data.globalBlockedDates && data.globalBlockedDates.length > 0) {
+    const isGloballyBlocked = data.globalBlockedDates.some(b => {
+      if (b.type === 'single') return b.date === dateStr
+      if (b.type === 'annual') return b.date === monthDayStr
+      return false
+    })
+    if (isGloballyBlocked) return []
+  }
 
   const dayOverrides = data.overrides.filter(o => o.override_date === dateStr)
   
