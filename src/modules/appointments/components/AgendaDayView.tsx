@@ -21,6 +21,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { useAuth } from '@/shared/providers/AuthProvider'
 
 interface AgendaDayViewProps {
   currentDate: Date
@@ -42,6 +43,7 @@ export const AgendaDayView = ({
   selectedProfessional,
   isExpanded,
 }: AgendaDayViewProps) => {
+  const { loading } = useAuth()
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [hoveredSlot, setHoveredSlot] = useState<{
@@ -51,6 +53,7 @@ export const AgendaDayView = ({
 
   useEffect(() => {
     const fetchData = async () => {
+      if (loading) return
       setIsLoading(true)
       const start = startOfDay(currentDate)
       const end = endOfDay(currentDate)
@@ -63,7 +66,7 @@ export const AgendaDayView = ({
       setIsLoading(false)
     }
     fetchData()
-  }, [selectedProfessional, currentDate])
+  }, [selectedProfessional, currentDate, loading])
 
   // If Expanded: Show 00-23
   // If Collapsed: Show 06-21 (covers until 22:00)

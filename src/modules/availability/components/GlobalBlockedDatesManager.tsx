@@ -22,11 +22,13 @@ import { getAppointmentsForRange } from '../../appointments/service'
 import { BlockedDate, Appointment } from '@/shared/types'
 import { format, parseISO, startOfDay, endOfDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { Trash2, Calendar as CalendarIcon, AlertCircle, Loader2 } from 'lucide-react'
+import { Trash2, Calendar as CalendarIcon, AlertCircle, Loader2, Globe } from 'lucide-react'
 import { useToast } from '@/shared/hooks/use-toast'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { useAuth } from '@/shared/providers/AuthProvider'
 
 export const GlobalBlockedDatesManager = () => {
+  const { companyId, loading } = useAuth()
   const { toast } = useToast()
   const [blockedDates, setBlockedDates] = useState<BlockedDate[]>([])
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date())
@@ -35,6 +37,18 @@ export const GlobalBlockedDatesManager = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [isCheckingImpact, setIsCheckingImpact] = useState(false)
   const [affectedAppointments, setAffectedAppointments] = useState<Appointment[]>([])
+
+  const NATIONAL_HOLIDAYS = [
+    { date: '01-01', reason: 'Confraternização Universal (Ano Novo)' },
+    { date: '04-21', reason: 'Tiradentes' },
+    { date: '05-01', reason: 'Dia do Trabalho' },
+    { date: '09-07', reason: 'Independência do Brasil' },
+    { date: '10-12', reason: 'Nossa Senhora Aparecida' },
+    { date: '11-02', reason: 'Finados' },
+    { date: '11-15', reason: 'Proclamação da República' },
+    { date: '11-20', reason: 'Dia da Consciência Negra' },
+    { date: '12-25', reason: 'Natal' },
+  ]
 
   const fetchBlockedDates = async () => {
     setIsLoading(true)
@@ -51,8 +65,10 @@ export const GlobalBlockedDatesManager = () => {
   }
 
   useEffect(() => {
-    fetchBlockedDates()
-  }, [])
+    if (!loading && companyId) {
+      fetchBlockedDates()
+    }
+  }, [loading, companyId])
 
   // Check impact whenever date changes
   useEffect(() => {
@@ -75,8 +91,10 @@ export const GlobalBlockedDatesManager = () => {
       setIsCheckingImpact(false)
     }
 
-    checkImpact()
-  }, [selectedDate])
+    if (!loading && companyId) {
+      checkImpact()
+    }
+  }, [selectedDate, loading, companyId])
 
   const handleAddBlockedDate = async () => {
     if (!selectedDate) return
@@ -107,6 +125,42 @@ export const GlobalBlockedDatesManager = () => {
     setIsLoading(false)
   }
 
+  const handleImportHolidays = async () => {
+    setIsLoading(true)
+    let importedCount = 0
+
+    // Filter out holidays already blocked
+    const existingDates = new Set(blockedDates.filter(b => b.type === 'annual').map(b => b.date))
+    const toImport = NATIONAL_HOLIDAYS.filter(h => !existingDates.has(h.date))
+
+    if (toImport.length === 0) {
+      toast({
+        title: 'Feriados já importados',
+        description: 'Todos os feriados nacionais já estão na sua lista de bloqueios.',
+      })
+      setIsLoading(false)
+      return
+    }
+
+    try {
+      const promises = toImport.map(h => addGlobalBlockedDate(h.date, 'annual', h.reason))
+      await Promise.all(promises)
+      
+      toast({
+        title: 'Feriados importados',
+        description: `${toImport.length} feriados nacionais foram adicionados como bloqueios anuais.`,
+      })
+      fetchBlockedDates()
+    } catch (error) {
+      toast({
+        title: 'Erro ao importar feriados',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const handleDelete = async (id: string) => {
     const { error } = await deleteGlobalBlockedDate(id)
     if (!error) {
@@ -121,6 +175,14 @@ export const GlobalBlockedDatesManager = () => {
         variant: 'destructive',
       })
     }
+  }
+
+  if (loading || !companyId) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
   }
 
   return (
@@ -189,6 +251,16 @@ export const GlobalBlockedDatesManager = () => {
           >
             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarIcon className="mr-2 h-4 w-4" />}
             Confirmar Bloqueio
+          </Button>
+
+          <Button 
+            variant="outline"
+            className="w-full" 
+            onClick={handleImportHolidays}
+            disabled={isLoading}
+          >
+            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Globe className="mr-2 h-4 w-4" />}
+            Importar Feriados Nacionais
           </Button>
         </CardContent>
       </Card>

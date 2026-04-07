@@ -25,6 +25,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { useAuth } from '@/shared/providers/AuthProvider'
 
 interface AgendaCalendarViewProps {
   currentDate: Date
@@ -45,6 +46,7 @@ export const AgendaCalendarView = ({
   selectedProfessional,
   isExpanded,
 }: AgendaCalendarViewProps) => {
+  const { loading } = useAuth()
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [displayedMonth, setDisplayedMonth] = useState(currentDate)
@@ -55,6 +57,7 @@ export const AgendaCalendarView = ({
 
   useEffect(() => {
     const fetchData = async () => {
+      if (loading) return
       setIsLoading(true)
       const start = startOfMonth(displayedMonth)
       const end = endOfMonth(displayedMonth)
@@ -68,7 +71,7 @@ export const AgendaCalendarView = ({
       setIsLoading(false)
     }
     fetchData()
-  }, [displayedMonth, selectedProfessional])
+  }, [displayedMonth, selectedProfessional, loading])
 
   const daysInMonth = useMemo(() => {
     const start = startOfMonth(displayedMonth)

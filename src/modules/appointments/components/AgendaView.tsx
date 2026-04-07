@@ -17,6 +17,15 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { getAllProfessionals } from '@/shared/services'
+import { GlobalBlockedDatesManager } from '@/modules/availability/components/GlobalBlockedDatesManager'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { CalendarOff } from 'lucide-react'
 
 export type ViewMode = 'month' | 'week' | 'day'
 
@@ -28,6 +37,7 @@ export const AgendaView = () => {
     useState<Appointment | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const [isExpanded, setIsExpanded] = useState(false)
+  const [isBlockedDatesOpen, setIsBlockedDatesOpen] = useState(false)
 
   // Lifted State
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -167,6 +177,18 @@ export const AgendaView = () => {
               ))}
             </SelectContent>
           </Select>
+
+          {!isMobile && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsBlockedDatesOpen(true)}
+              className="text-muted-foreground whitespace-nowrap"
+            >
+              <CalendarOff className="h-4 w-4 mr-2" />
+              Bloquear Datas
+            </Button>
+          )}
         </div>
 
         <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end">
@@ -185,6 +207,16 @@ export const AgendaView = () => {
               {isExpanded ? 'Recolher' : 'Expandir'}
             </span>
           </Button>
+          {isMobile && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsBlockedDatesOpen(true)}
+              className="text-muted-foreground p-2"
+            >
+              <CalendarOff className="h-4 w-4" />
+            </Button>
+          )}
           {renderViewSwitcher()}
         </div>
       </div>
@@ -207,6 +239,17 @@ export const AgendaView = () => {
         appointment={selectedAppointment}
         onAppointmentUpdated={handleDataRefresh}
       />
+      <Dialog open={isBlockedDatesOpen} onOpenChange={setIsBlockedDatesOpen}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Gestão de Bloqueio de Datas</DialogTitle>
+            <DialogDescription className="sr-only">
+              Configure feriados, folgas ou períodos de manutenção para bloquear novos agendamentos em toda a clínica.
+            </DialogDescription>
+          </DialogHeader>
+          <GlobalBlockedDatesManager />
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

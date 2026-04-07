@@ -30,6 +30,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { useAuth } from '@/shared/providers/AuthProvider'
 
 interface AgendaWeekViewProps {
   currentDate: Date
@@ -51,6 +52,7 @@ export const AgendaWeekView = ({
   selectedProfessional,
   isExpanded,
 }: AgendaWeekViewProps) => {
+  const { loading } = useAuth()
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [hoveredSlot, setHoveredSlot] = useState<{
@@ -61,6 +63,7 @@ export const AgendaWeekView = ({
 
   useEffect(() => {
     const fetchData = async () => {
+      if (loading) return
       setIsLoading(true)
       const start = startOfWeek(currentDate, { locale: ptBR, weekStartsOn: 0 })
       const end = endOfWeek(currentDate, { locale: ptBR, weekStartsOn: 0 })
@@ -74,7 +77,7 @@ export const AgendaWeekView = ({
       setIsLoading(false)
     }
     fetchData()
-  }, [selectedProfessional, currentDate])
+  }, [selectedProfessional, currentDate, loading])
 
   const hours = useMemo(() => {
     if (isExpanded) {
