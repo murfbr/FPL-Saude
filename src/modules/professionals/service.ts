@@ -3,7 +3,7 @@ import { collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, query, 
 import { Professional, Service } from '@/shared/types'
 
 import { getCompanyId } from '@/shared/lib/tenantStore'
-import { secondaryAuth } from '@/shared/lib/firebase'
+import { secondaryAuth, secondaryDb } from '@/shared/lib/firebase'
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth'
 
 export async function getProfessionalsByService(
@@ -26,6 +26,7 @@ export async function getProfessionalsByService(
       professionals.push({ id: doc.id, ...doc.data() } as Professional)
     })
 
+    console.log(`[DEBUG] getProfessionalsByService(${serviceId}): Found ${professionals.length} professionals`, professionals.map(p => p.name))
     return { data: professionals, error: null }
   } catch (error: any) {
     console.error("🔥 [AÇÃO NECESSÁRIA - ÍNDICE FIRESTORE]: O Firebase provavelmente bloqueou a query exigindo um índice composto. Verifique o link no console abaixo:", error.message)
@@ -39,6 +40,7 @@ export async function getProfessionalsByService(
           fallbackPros.push({ id: doc.id, ...data } as Professional)
         }
       })
+      console.log(`[DEBUG] getProfessionalsByService(${serviceId}) (fallback): Found ${fallbackPros.length} professionals`, fallbackPros.map(p => p.name))
       return { data: fallbackPros, error: null }
     } catch (fallbackError) {
       return { data: null, error: fallbackError }
@@ -187,7 +189,7 @@ export async function createProfessionalUser(
     await updateProfile(user, { displayName: data.name })
 
     // 2. Criar registro na coleção raiz `users` para roteamento e permissionamento
-    const userDocRef = doc(db, 'users', user.uid)
+    const userDocRef = doc(secondaryDb, 'users', user.uid)
     await setDoc(userDocRef, {
       name: data.name,
       email: data.email,
@@ -197,7 +199,8 @@ export async function createProfessionalUser(
     })
 
     // 3. Criar registro na subcoleção `professionals` da empresa logada
-    const professionalDocRef = doc(collection(db, 'companies', companyId, 'professionals'))
+    // Usamos secondaryDb pois, após o passo 2, este ambiente já passou a pertencer à companyId perante o Firestore Rules
+    const professionalDocRef = doc(collection(secondaryDb, 'companies', companyId, 'professionals'))
     const profData = {
       id: professionalDocRef.id,
       user_id: user.uid,

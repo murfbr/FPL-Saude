@@ -80,32 +80,32 @@ export const PatientHistoryModal = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
-        <DialogHeader className="px-6 py-4 border-b">
-          <DialogTitle className="flex items-center gap-2">
+      <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[90vh] flex flex-col p-0 overflow-hidden rounded-xl">
+        <DialogHeader className="px-4 sm:px-6 py-4 border-b shrink-0">
+          <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
             <FileText className="w-5 h-5 text-primary" />
             Prontuário Completo
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-xs sm:text-sm">
             {client ? `Paciente: ${client.name}` : 'Carregando paciente...'}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-hidden flex flex-col">
-          <ScrollArea className="flex-1 p-6 bg-muted/10 h-[500px]">
+        <div className="flex-1 overflow-hidden flex flex-col bg-muted/10">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6" style={{ WebkitOverflowScrolling: 'touch' }}>
             {isLoading && notes.length === 0 ? (
-              <div className="flex justify-center items-center h-full">
+              <div className="flex justify-center items-center h-full min-h-[200px]">
                 <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
               </div>
             ) : notes.length > 0 ? (
-              <div className="space-y-6">
+              <div className="space-y-4 sm:space-y-6">
                 {notes.map((note, index) => (
                   <div key={index} className="bg-background p-4 rounded-lg border shadow-sm">
-                    <div className="flex justify-between items-center mb-3 pb-2 border-b">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-3 pb-2 border-b gap-1">
                       <span className="font-semibold text-sm text-primary">
                         {note.professional_name || 'Profissional Desconhecido'}
                       </span>
-                      <span className="text-sm text-muted-foreground">
+                      <span className="text-xs sm:text-sm text-muted-foreground">
                         {format(new Date(note.date), "dd 'de' MMMM, yyyy 'às' HH:mm", { locale: ptBR })}
                       </span>
                     </div>
@@ -118,21 +118,22 @@ export const PatientHistoryModal = ({
             ) : (
               <div className="text-center py-10 text-muted-foreground">
                 <FileText className="w-12 h-12 mx-auto opacity-20 mb-3" />
-                <p>Nenhuma evolução ou avaliação encontrada.</p>
+                <p className="text-sm">Nenhuma evolução ou avaliação encontrada.</p>
               </div>
             )}
-          </ScrollArea>
+          </div>
 
           {/* Pagination Controls */}
           {totalCount > pageSize && (
-            <div className="flex items-center justify-between px-6 py-3 border-t bg-background">
-              <span className="text-sm text-muted-foreground">
+            <div className="flex flex-col sm:flex-row items-center justify-between px-4 sm:px-6 py-3 border-t bg-background shrink-0 gap-3">
+              <span className="text-xs sm:text-sm text-muted-foreground text-center">
                 Mostrando {(page - 1) * pageSize + 1} a {Math.min(page * pageSize, totalCount)} de {totalCount} avaliações
               </span>
-              <div className="flex gap-2">
+              <div className="flex gap-2 w-full sm:w-auto">
                 <Button
                   variant="outline"
                   size="sm"
+                  className="flex-1 sm:flex-none"
                   onClick={() => loadNotes(page - 1)}
                   disabled={page === 1 || isLoading}
                 >
@@ -142,6 +143,7 @@ export const PatientHistoryModal = ({
                 <Button
                   variant="outline"
                   size="sm"
+                  className="flex-1 sm:flex-none"
                   onClick={() => loadNotes(page + 1)}
                   disabled={page === totalPages || isLoading}
                 >

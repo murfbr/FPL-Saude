@@ -663,15 +663,13 @@ export const AppointmentDetailDialog = ({
                   <StickyNote className="w-4 h-4 text-primary" />
                   Prontuário e Histórico
                 </Label>
-                {hasMoreNotes && (
-                   <button
-                     onClick={() => setIsHistoryModalOpen(true)}
-                     className="text-[10px] text-primary hover:underline flex items-center gap-1"
-                   >
-                     Ver Prontuário Completo
-                     <ExternalLink className="h-2.5 w-2.5" />
-                   </button>
-                 )}
+                <button
+                  onClick={() => setIsHistoryModalOpen(true)}
+                  className="text-[10px] text-primary hover:underline flex items-center gap-1"
+                >
+                  Ver Prontuário Completo
+                  <ExternalLink className="h-2.5 w-2.5" />
+                </button>
               </div>
               <ScrollArea className="h-[250px] w-full rounded-md border p-4 bg-muted/10">
                 <div className="space-y-6">

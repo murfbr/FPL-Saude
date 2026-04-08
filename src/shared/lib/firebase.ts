@@ -22,3 +22,4 @@ export const storage = getStorage(app)
 // This prevents the current Admin user from being logged out when creating a Professional
 export const secondaryApp = initializeApp(firebaseConfig, 'Secondary')
 export const secondaryAuth = getAuth(secondaryApp)
+export const secondaryDb = getFirestore(secondaryApp)

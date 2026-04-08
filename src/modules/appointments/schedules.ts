@@ -98,7 +98,7 @@ export async function getAvailableProfessionalsAtSlot(
     
     // 3. Filter out nulls
     const availablePros = results.filter((pro): pro is Professional => pro !== null)
-
+    console.log(`[DEBUG] getAvailableProfessionalsAtSlot(${targetTime}): Found ${availablePros.length} available professionals out of ${prosWithService.length} total.`, availablePros.map(p => p.name))
     return { data: availablePros, error: null }
   } catch (error) {
     return { data: null, error }
