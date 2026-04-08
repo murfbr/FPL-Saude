@@ -52,7 +52,7 @@ export const AgendaWeekView = ({
   selectedProfessional,
   isExpanded,
 }: AgendaWeekViewProps) => {
-  const { loading } = useAuth()
+  const { loading, companyId } = useAuth()
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [hoveredSlot, setHoveredSlot] = useState<{
@@ -63,21 +63,32 @@ export const AgendaWeekView = ({
 
   useEffect(() => {
     const fetchData = async () => {
+      // Se ainda estiver carregando Auth ou não houver ID (e não for super-admin), não faz nada
       if (loading) return
-      setIsLoading(true)
-      const start = startOfWeek(currentDate, { locale: ptBR, weekStartsOn: 0 })
-      const end = endOfWeek(currentDate, { locale: ptBR, weekStartsOn: 0 })
+      if (!companyId) {
+        setIsLoading(false)
+        return
+      }
 
-      const { data } = await getAppointmentsForRange(
-        start,
-        end,
-        selectedProfessional,
-      )
-      setAppointments(data || [])
-      setIsLoading(false)
+      setIsLoading(true)
+      try {
+        const start = startOfWeek(currentDate, { locale: ptBR, weekStartsOn: 0 })
+        const end = endOfWeek(currentDate, { locale: ptBR, weekStartsOn: 0 })
+
+        const { data } = await getAppointmentsForRange(
+          start,
+          end,
+          selectedProfessional,
+        )
+        setAppointments(data || [])
+      } catch (e) {
+        console.error(e)
+      } finally {
+        setIsLoading(false)
+      }
     }
     fetchData()
-  }, [selectedProfessional, currentDate, loading])
+  }, [selectedProfessional, currentDate, loading, companyId])
 
   const hours = useMemo(() => {
     if (isExpanded) {

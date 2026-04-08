@@ -56,7 +56,7 @@ import { useIsMobile } from '@/shared/hooks/use-mobile'
 type ClientStatusFilter = 'all' | 'active' | 'inactive'
 
 const AdminDashboard = () => {
-  const { user, professionalId, role, loading } = useAuth()
+  const { user, professionalId, role, loading, companyId } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const [professionals, setProfessionals] = useState<Professional[]>([])
   const [clients, setClients] = useState<Client[]>([])
@@ -113,12 +113,12 @@ const AdminDashboard = () => {
   // Fetch Services for Filter
   useEffect(() => {
     const fetchServices = async () => {
-      if (loading || !user) return
+      if (loading || !user || (!companyId && role !== 'super_admin')) return
       const { data } = await getAllServices()
       if (data) setServices(data)
     }
     fetchServices()
-  }, [loading, user])
+  }, [loading, user, companyId, role])
 
   const fetchData = async () => {
     setIsLoading(true)
@@ -135,10 +135,10 @@ const AdminDashboard = () => {
   }
 
   useEffect(() => {
-    if (!loading && user) {
+    if (!loading && user && (companyId || role === 'super_admin')) {
       fetchData()
     }
-  }, [clientStatusFilter, clientServiceFilter, loading, user])
+  }, [clientStatusFilter, clientServiceFilter, loading, user, companyId, role])
 
   const handlePatientCreated = (client: Client) => {
     fetchData()
@@ -175,7 +175,7 @@ const AdminDashboard = () => {
   ]
 
   // Role-Based Rendering Check: Wait for profile to be fully loaded
-  if (loading || !role) {
+  if (loading || !role || (!companyId && role !== 'super_admin')) {
     return (
       <div className="container mx-auto py-8 px-4 space-y-4">
         <Skeleton className="h-12 w-1/3" />

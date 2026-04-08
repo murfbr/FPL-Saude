@@ -10,6 +10,12 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/super_admins/$(request.auth.uid)).data.is_active == true;
     }                                                                          // ← NOVO
 
+    // Função auxiliar — verifica se o usuário pertence à empresa solicitada
+    function isUserInCompany(companyId) {
+      return request.auth != null 
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == companyId;
+    }
+
     // Coleção de super-admins — somente leitura do próprio documento         ← NOVO
     // Escrita bloqueada pelo app (criação só manual no Console do Firebase)   ← NOVO
     match /super_admins/{uid} {                                                // ← NOVO
@@ -26,12 +32,19 @@ service cloud.firestore {
       );
     }
 
-    // Regra para liberar buscas do tipo collectionGroup nas novas subcoleções
+    // Regra para liberar buscas do tipo collectionGroup nas novas subcoleções  ← ALTERADO
+    // Agora validam se o usuário pertence à empresa correta via o caminho do documento
     match /{path=**}/subscriptions/{subscriptionId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId in path
+        || isSuperAdmin()
+      );
     }
     match /{path=**}/packages/{packageId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId in path
+        || isSuperAdmin()
+      );
     }
 
     // Escopo das empresas (SaaS)
@@ -39,17 +52,22 @@ service cloud.firestore {
       // Leitura pública mantida (igual a antes)
       allow read: if true;
       // Super-admins podem escrever o documento de configuração da empresa  ← ALTERADO
-      // (antes era `if false` — agora só super-admins podem)
       allow write: if isSuperAdmin();                                          // ← ALTERADO
 
       // Coleção de Usuários dentro da empresa (mantida igual)
       match /users/{userId} {
-        allow read, write: if request.auth != null;
+        allow read, write: if request.auth != null && (
+          isUserInCompany(companyId)
+          || isSuperAdmin()
+        );
       }
 
-      // Demais coleções — qualquer usuário autenticado (mantido igual)
+      // Demais coleções — Protegido por Tenant (Apenas membros ou Super-Admin) ← ALTERADO
       match /{document=**} {
-        allow read, write: if request.auth != null;
+        allow read, write: if request.auth != null && (
+          isUserInCompany(companyId)
+          || isSuperAdmin()
+        );
       }
     }
 

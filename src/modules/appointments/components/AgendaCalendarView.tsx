@@ -46,7 +46,7 @@ export const AgendaCalendarView = ({
   selectedProfessional,
   isExpanded,
 }: AgendaCalendarViewProps) => {
-  const { loading } = useAuth()
+  const { loading, companyId } = useAuth()
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [displayedMonth, setDisplayedMonth] = useState(currentDate)
@@ -57,21 +57,32 @@ export const AgendaCalendarView = ({
 
   useEffect(() => {
     const fetchData = async () => {
+      // Se ainda estiver carregando Auth ou não houver ID (e não for super-admin), não faz nada
       if (loading) return
-      setIsLoading(true)
-      const start = startOfMonth(displayedMonth)
-      const end = endOfMonth(displayedMonth)
+      if (!companyId) {
+        setIsLoading(false)
+        return
+      }
 
-      const { data } = await getAppointmentsForRange(
-        start,
-        end,
-        selectedProfessional,
-      )
-      setAppointments(data || [])
-      setIsLoading(false)
+      setIsLoading(true)
+      try {
+        const start = startOfMonth(displayedMonth)
+        const end = endOfMonth(displayedMonth)
+
+        const { data } = await getAppointmentsForRange(
+          start,
+          end,
+          selectedProfessional,
+        )
+        setAppointments(data || [])
+      } catch (e) {
+        console.error(e)
+      } finally {
+        setIsLoading(false)
+      }
     }
     fetchData()
-  }, [displayedMonth, selectedProfessional, loading])
+  }, [displayedMonth, selectedProfessional, loading, companyId])
 
   const daysInMonth = useMemo(() => {
     const start = startOfMonth(displayedMonth)

@@ -24,7 +24,7 @@ export function computeSlotsForDay(
   const dateStr = format(date, 'yyyy-MM-dd')
   const monthDayStr = format(date, 'MM-dd')
   const durationMins = data.service.duration_minutes || 60
-  const dayOfWeek = parseInt(format(date, 'i'))
+  const dayOfWeek = date.getDay() // Use standard JS getDay (0 = Sunday, 1 = Monday, etc.) matching the database rule indexes
 
   // Check Global Blocked Dates first
   if (data.globalBlockedDates && data.globalBlockedDates.length > 0) {
@@ -68,12 +68,15 @@ export function computeSlotsForDay(
 
   let candidateSlots: Schedule[] = []
 
+  const INTERVAL_MINS = 30 // generates candidate slot options every 30 mins
+
   timeBlocks.forEach(block => {
     let slotStart = parseISO(`${dateStr}T${block.start_time}-03:00`)
     const blockEnd = parseISO(`${dateStr}T${block.end_time}-03:00`)
 
     while (isBefore(slotStart, blockEnd)) {
       const slotEnd = addMinutes(slotStart, durationMins)
+      // Check if full service fits inside block end
       if (isAfter(slotEnd, blockEnd)) break
 
       candidateSlots.push({
@@ -85,7 +88,8 @@ export function computeSlotsForDay(
         current_count: 0
       })
 
-      slotStart = slotEnd
+      // increment by interval, not full duration, to allow appointments to start at any 30min block
+      slotStart = addMinutes(slotStart, INTERVAL_MINS)
     }
   })
 

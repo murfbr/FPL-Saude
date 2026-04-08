@@ -43,7 +43,7 @@ export const AgendaDayView = ({
   selectedProfessional,
   isExpanded,
 }: AgendaDayViewProps) => {
-  const { loading } = useAuth()
+  const { loading, companyId } = useAuth()
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [hoveredSlot, setHoveredSlot] = useState<{
@@ -53,20 +53,31 @@ export const AgendaDayView = ({
 
   useEffect(() => {
     const fetchData = async () => {
+      // Se ainda estiver carregando Auth ou não houver ID (e não for super-admin), não faz nada
       if (loading) return
+      if (!companyId) {
+        setIsLoading(false)
+        return
+      }
+
       setIsLoading(true)
-      const start = startOfDay(currentDate)
-      const end = endOfDay(currentDate)
-      const { data } = await getAppointmentsForRange(
-        start,
-        end,
-        selectedProfessional,
-      )
-      setAppointments(data || [])
-      setIsLoading(false)
+      try {
+        const start = startOfDay(currentDate)
+        const end = endOfDay(currentDate)
+        const { data } = await getAppointmentsForRange(
+          start,
+          end,
+          selectedProfessional,
+        )
+        setAppointments(data || [])
+      } catch (e) {
+        console.error(e)
+      } finally {
+        setIsLoading(false)
+      }
     }
     fetchData()
-  }, [selectedProfessional, currentDate, loading])
+  }, [selectedProfessional, currentDate, loading, companyId])
 
   // If Expanded: Show 00-23
   // If Collapsed: Show 06-21 (covers until 22:00)

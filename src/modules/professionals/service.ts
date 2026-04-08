@@ -3,6 +3,8 @@ import { collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, query, 
 import { Professional, Service } from '@/shared/types'
 
 import { getCompanyId } from '@/shared/lib/tenantStore'
+import { secondaryAuth } from '@/shared/lib/firebase'
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth'
 
 export async function getProfessionalsByService(
   serviceId: string,
@@ -175,7 +177,48 @@ export async function removeServiceFromProfessional(
 export async function createProfessionalUser(
   data: any,
 ): Promise<{ data: any; error: any }> {
-  // Nota: Firebase functions seria o análogo de supabase.functions.invoke.
-  // Por ora deixaremos não-implementado até ajustarmos o fluxo de Auth
-  return { data: null, error: new Error('Função de Servidor pendente') }
+  try {
+    const companyId = getCompanyId()
+    
+    // 1. Criar usuário no Firebase Auth usando o app secundário (não desloga o admin atual)
+    const userCredential = await createUserWithEmailAndPassword(secondaryAuth, data.email, data.password)
+    const user = userCredential.user
+
+    await updateProfile(user, { displayName: data.name })
+
+    // 2. Criar registro na coleção raiz `users` para roteamento e permissionamento
+    const userDocRef = doc(db, 'users', user.uid)
+    await setDoc(userDocRef, {
+      name: data.name,
+      email: data.email,
+      role: 'professional',
+      companyId: companyId,
+      created_at: new Date().toISOString(),
+    })
+
+    // 3. Criar registro na subcoleção `professionals` da empresa logada
+    const professionalDocRef = doc(collection(db, 'companies', companyId, 'professionals'))
+    const profData = {
+      id: professionalDocRef.id,
+      user_id: user.uid,
+      name: data.name,
+      email: data.email,
+      specialty: data.specialty || '',
+      bio: data.bio || '',
+      avatar_url: data.avatar_url || '',
+      is_active: true,
+      service_ids: [],
+      created_at: new Date().toISOString(),
+    }
+    await setDoc(professionalDocRef, profData)
+
+    // O secondaryAuth não precisa de signOut explícito, pois a instância auth principal do app 
+    // continua conectada com o Admin. Apenas fechamos as operações.
+    
+    return { data: profData, error: null }
+  } catch (error) {
+    console.error("Erro ao criar usuário profissional:", error)
+    return { data: null, error }
+  }
 }
+

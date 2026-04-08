@@ -26,10 +26,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { CalendarOff } from 'lucide-react'
+import { useAuth } from '@/shared/providers/AuthProvider'
 
 export type ViewMode = 'month' | 'week' | 'day'
 
 export const AgendaView = () => {
+  const { loading, companyId } = useAuth()
   const [viewMode, setViewMode] = useState<ViewMode>('day')
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
@@ -53,10 +55,12 @@ export const AgendaView = () => {
   const isMobile = useIsMobile()
 
   useEffect(() => {
-    getAllProfessionals().then(({ data }) => {
-      setProfessionals(data || [])
-    })
-  }, [])
+    if (!loading && companyId) {
+      getAllProfessionals().then(({ data }) => {
+        setProfessionals(data || [])
+      })
+    }
+  }, [loading, companyId])
 
   const handleAppointmentClick = (appointment: Appointment) => {
     setSelectedAppointment(appointment)

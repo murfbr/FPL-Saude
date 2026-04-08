@@ -76,6 +76,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { PatientHistoryModal } from '@/modules/clients/components/PatientHistoryModal'
 
 interface AppointmentDetailDialogProps {
   appointment: Appointment | null
@@ -142,6 +143,7 @@ export const AppointmentDetailDialog = ({
   const [isEditingDiscount, setIsEditingDiscount] = useState(false)
   const [discountValue, setDiscountValue] = useState('')
   const [isSavingDiscount, setIsSavingDiscount] = useState(false)
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false)
 
   useEffect(() => {
     if (appointment) {
@@ -401,8 +403,7 @@ export const AppointmentDetailDialog = ({
                   <button
                     className="font-medium text-primary hover:underline flex items-center gap-1 text-left"
                     onClick={() => {
-                      onOpenChange(false)
-                      navigate(`/admin/pacientes/${(appointment as any).client_id}`)
+                      setIsHistoryModalOpen(true)
                     }}
                   >
                     {appointment.clients.name}
@@ -664,13 +665,10 @@ export const AppointmentDetailDialog = ({
                 </Label>
                 {hasMoreNotes && (
                    <button
-                     onClick={() => {
-                       onOpenChange(false)
-                       navigate(`/admin/pacientes/${(appointment as any).client_id}`)
-                     }}
+                     onClick={() => setIsHistoryModalOpen(true)}
                      className="text-[10px] text-primary hover:underline flex items-center gap-1"
                    >
-                     Ver Perfil Completo
+                     Ver Prontuário Completo
                      <ExternalLink className="h-2.5 w-2.5" />
                    </button>
                  )}
@@ -850,6 +848,12 @@ export const AppointmentDetailDialog = ({
         onRescheduleSuccess={handleRescheduleSuccess}
         is_recurring={appointment.is_recurring}
         currentStartTime={appointment.schedules?.start_time}
+      />
+      
+      <PatientHistoryModal
+        clientId={(appointment as any).client_id}
+        isOpen={isHistoryModalOpen}
+        onOpenChange={setIsHistoryModalOpen}
       />
     </>
   )

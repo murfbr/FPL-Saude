@@ -734,3 +734,38 @@ export async function getLastClientNotes(clientId: string, limit: number = 5): P
     return { data: null, hasMore: false, totalCount: 0, error }
   }
 }
+
+export async function getClientNotesPaginated(
+  clientId: string,
+  page: number = 1,
+  pageSize: number = 10
+): Promise<{ data: NoteEntry[] | null; totalCount: number; error: any }> {
+  try {
+    const appointmentsRef = collection(db, 'companies', getCompanyId(), 'appointments')
+    const q = query(
+      appointmentsRef,
+      where('client_id', '==', clientId)
+    )
+    const snapshot = await getDocs(q)
+    
+    let allNotes: NoteEntry[] = []
+    snapshot.forEach(doc => {
+      const data = doc.data()
+      if (data.notes && Array.isArray(data.notes)) {
+        allNotes.push(...data.notes)
+      }
+    })
+    
+    allNotes.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    
+    const totalCount = allNotes.length
+    const startIndex = (page - 1) * pageSize
+    const slicedNotes = allNotes.slice(startIndex, startIndex + pageSize)
+    
+    return { data: slicedNotes, totalCount, error: null }
+  } catch (error) {
+    console.error("Error fetching paginated client notes:", error)
+    return { data: null, totalCount: 0, error }
+  }
+}
+
