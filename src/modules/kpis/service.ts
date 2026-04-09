@@ -1,4 +1,5 @@
 import { getMultipleMonthlySummaries, getMonthlySummary } from '@/modules/summaries/service'
+import { getAllPartnerships } from '@/modules/partnerships/service'
 import { format, subMonths, startOfMonth } from 'date-fns'
 import { getCompanyId } from '@/shared/lib/tenantStore'
 
@@ -135,13 +136,18 @@ export async function getPartnershipPerformance(startDate: Date, endDate: Date, 
       entries = entries.filter(([id]) => id === filters.partnershipId)
     }
 
-    const arr = entries.map(([id, p]) => ({
-      partnership_id: id,
-      partnership_name: p.name || id,
-      client_count: p.clientCount,
-      session_count: p.sessionCount,
-      total_revenue: p.revenue || 0,
-    }))
+    const { data: dbPartnerships } = await getAllPartnerships()
+
+    const arr = entries.map(([id, p]) => {
+      const dbMatch = dbPartnerships?.find(dbP => dbP.id === id)
+      return {
+        partnership_id: id,
+        partnership_name: dbMatch?.name || p.name || id,
+        client_count: p.clientCount,
+        session_count: p.sessionCount,
+        total_revenue: p.revenue || 0,
+      }
+    })
 
     arr.sort((a, b) => b.session_count - a.session_count)
     return { data: arr, error: null }

@@ -119,6 +119,10 @@ const serviceChartConfig = {
     label: 'Sessões',
     color: 'hsl(var(--primary))',
   },
+  revenue: {
+    label: 'Faturamento',
+    color: 'hsl(var(--chart-2))',
+  },
 } satisfies ChartConfig
 
 const partnershipChartConfig = {
@@ -392,9 +396,17 @@ export const KpiDashboard = () => {
                       tick={{ fontSize: 12 }}
                     />
                     <Tooltip content={<ChartTooltipContent />} />
+                    <ChartLegend content={<ChartLegendContent />} />
                     <RechartsBar
                       dataKey="count"
                       fill="var(--color-count)"
+                      name="Sessões"
+                      radius={[0, 4, 4, 0]}
+                    />
+                    <RechartsBar
+                      dataKey="revenue"
+                      fill="var(--color-revenue)"
+                      name="Faturamento"
                       radius={[0, 4, 4, 0]}
                     />
                   </RechartsBarChart>
