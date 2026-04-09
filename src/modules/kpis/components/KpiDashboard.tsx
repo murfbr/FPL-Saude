@@ -48,6 +48,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getAllProfessionals } from '@/shared/services'
 import { getAllServices } from '@/shared/services'
 import { getAllPartnerships } from '@/shared/services'
@@ -148,6 +149,7 @@ const annualChartConfig = {
 } satisfies ChartConfig
 
 export const KpiDashboard = () => {
+  const [serviceChartMetric, setServiceChartMetric] = useState<'count' | 'revenue'>('count')
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfMonth(new Date()),
     to: new Date(),
@@ -370,10 +372,16 @@ export const KpiDashboard = () => {
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="flex items-center gap-2">
               <BarChart className="h-5 w-5" /> Desempenho dos Serviços
             </CardTitle>
+            <Tabs value={serviceChartMetric} onValueChange={(val) => setServiceChartMetric(val as any)} className="w-[200px]">
+              <TabsList className="grid w-full grid-cols-2 h-8">
+                <TabsTrigger value="count" className="text-xs">Sessões</TabsTrigger>
+                <TabsTrigger value="revenue" className="text-xs">Faturamento</TabsTrigger>
+              </TabsList>
+            </Tabs>
           </CardHeader>
           <CardContent>
             <ChartContainer
@@ -397,18 +405,21 @@ export const KpiDashboard = () => {
                     />
                     <Tooltip content={<ChartTooltipContent />} />
                     <ChartLegend content={<ChartLegendContent />} />
-                    <RechartsBar
-                      dataKey="count"
-                      fill="var(--color-count)"
-                      name="Sessões"
-                      radius={[0, 4, 4, 0]}
-                    />
-                    <RechartsBar
-                      dataKey="revenue"
-                      fill="var(--color-revenue)"
-                      name="Faturamento"
-                      radius={[0, 4, 4, 0]}
-                    />
+                    {serviceChartMetric === 'count' ? (
+                      <RechartsBar
+                        dataKey="count"
+                        fill="var(--color-count)"
+                        name="Sessões"
+                        radius={[0, 4, 4, 0]}
+                      />
+                    ) : (
+                      <RechartsBar
+                        dataKey="revenue"
+                        fill="var(--color-revenue)"
+                        name="Faturamento"
+                        radius={[0, 4, 4, 0]}
+                      />
+                    )}
                   </RechartsBarChart>
                 </ResponsiveContainer>
               )}
