@@ -104,6 +104,60 @@ export const DataMaintenance = () => {
     }
   }
 
+  const migrateBirthdays = async () => {
+    setIsRunning(true)
+    setProgress('Iniciando indexação de aniversariantes...')
+    try {
+      const clientsRef = collection(db, 'companies', COMPANY_ID, 'clients')
+      const snapshot = await getDocs(clientsRef)
+      
+      setProgress(`Encontrados ${snapshot.size} clientes. Processando...`)
+      
+      let processed = 0
+      let batch = writeBatch(db)
+      let batchCount = 0
+
+      for (const d of snapshot.docs) {
+        const data = d.data()
+        
+        if (data.birth_date && !data.birth_month_day) {
+          const parts = data.birth_date.split('-')
+          if (parts.length >= 3) {
+            batch.update(d.ref, { birth_month_day: `${parts[1]}-${parts[2]}` })
+            batchCount++
+          }
+        }
+        processed++
+        setProgress(`Analisando: ${processed}/${snapshot.size}...`)
+
+        if (batchCount >= 50) {
+          await batch.commit()
+          batch = writeBatch(db)
+          batchCount = 0
+        }
+      }
+
+      if (batchCount > 0) {
+        await batch.commit()
+      }
+
+      toast({
+        title: 'Indexação concluída',
+        description: `Todos os clientes foram verificados com sucesso.`
+      })
+    } catch (error: any) {
+      console.error(error)
+      toast({
+        title: 'Erro na migração',
+        description: error.message,
+        variant: 'destructive'
+      })
+    } finally {
+      setIsRunning(false)
+      setProgress('')
+    }
+  }
+
   return (
     <div className="space-y-6">
       <Card>
@@ -141,6 +195,33 @@ export const DataMaintenance = () => {
                 </>
               ) : (
                 'Corrigir Agendamentos'
+              )}
+            </Button>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 border rounded-lg bg-blue-50 border-blue-100 gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-blue-800 font-medium">
+                <AlertTriangle className="h-4 w-4" />
+                <span>Fix Birthdays (Indexação)</span>
+              </div>
+              <p className="text-sm text-blue-700">
+                Gera o índice nativo 'birth_month_day' nos clientes legados para zerar os custos de leitura no Dashboard.
+              </p>
+            </div>
+            <Button 
+              onClick={migrateBirthdays} 
+              disabled={isRunning}
+              variant="outline"
+              className="bg-white hover:bg-blue-100 shrink-0"
+            >
+              {isRunning ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Indexando...
+                </>
+              ) : (
+                'Corrigir Aniversariantes'
               )}
             </Button>
           </div>

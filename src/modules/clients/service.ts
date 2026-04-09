@@ -11,6 +11,8 @@ import {
   collectionGroup,
   orderBy,
   where,
+  getCountFromServer,
+  limit as fbLimit,
 } from 'firebase/firestore'
 import { Client, ClientPackageWithDetails, ClientSubscription, Appointment, NoteEntry, ClientExam } from '@/shared/types'
 import { format, startOfMonth, endOfMonth, isValid } from 'date-fns'
@@ -92,6 +94,25 @@ export async function getAllClients(filter?: {
   }
 }
 
+export async function getClientsCount(filter?: { status?: 'all' | 'active' | 'inactive' }): Promise<{ count: number; error: any }> {
+  try {
+    const clientsRef = collection(db, 'companies', getCompanyId(), 'clients')
+    let q = query(clientsRef)
+
+    if (filter?.status === 'active') {
+      q = query(clientsRef, where('is_active', '==', true))
+    } else if (filter?.status === 'inactive') {
+      q = query(clientsRef, where('is_active', '==', false))
+    }
+
+    const snapshot = await getCountFromServer(q)
+    return { count: snapshot.data().count, error: null }
+  } catch (error) {
+    console.error("🔥 Erro ao puxar contador de clientes: ", error)
+    return { count: 0, error }
+  }
+}
+
 export async function getClientById(
   clientId: string,
 ): Promise<{ data: Client | null; error: any }> {
@@ -112,7 +133,22 @@ export async function createClient(
   try {
     const clientsRef = collection(db, 'companies', getCompanyId(), 'clients')
     const newDocRef = doc(clientsRef)
-    const newClient = { id: newDocRef.id, ...clientData, is_active: true }
+
+    // Parse birth date for indexing: "YYYY-MM-DD" -> "MM-DD"
+    let birth_month_day = null
+    if (clientData.birth_date) {
+      const parts = clientData.birth_date.split('-')
+      if (parts.length >= 3) {
+        birth_month_day = `${parts[1]}-${parts[2]}`
+      }
+    }
+
+    const newClient = { 
+      id: newDocRef.id, 
+      ...clientData, 
+      is_active: true,
+      birth_month_day,
+    }
 
     await setDoc(newDocRef, newClient)
     return { data: newClient as Client, error: null }
@@ -127,6 +163,15 @@ export async function updateClient(
 ): Promise<{ data: Client | null; error: any }> {
   try {
     const docRef = doc(db, 'companies', getCompanyId(), 'clients', clientId)
+    
+    // Auto-update birth_month_day if birth_date is changed
+    if (updates.birth_date) {
+      const parts = updates.birth_date.split('-')
+      if (parts.length >= 3) {
+        (updates as any).birth_month_day = `${parts[1]}-${parts[2]}`
+      }
+    }
+
     await updateDoc(docRef, updates)
 
     const snapshot = await getDoc(docRef)
@@ -177,12 +222,14 @@ export async function getClientPackages(clientId: string): Promise<{ data: any[]
   } catch (error) { return { data: null, error } }
 }
 
-export async function getAllActiveClientPackages(): Promise<{ data: any[] | null; error: any }> {
+export async function getAllActiveClientPackages(options?: { limit?: number }): Promise<{ data: any[] | null; error: any }> {
   try {
     const pkgsRef = collectionGroup(db, 'packages')
-    // Remove the where filter (requires a special Collection Group index)
-    // Instead, fetch all and filter on the client side
-    const snap = await getDocs(pkgsRef)
+    let q = query(pkgsRef)
+    if (options?.limit) {
+      q = query(pkgsRef, fbLimit(options.limit))
+    }
+    const snap = await getDocs(q)
 
     const results = []
     for (const d of snap.docs) {
@@ -511,33 +558,46 @@ export async function exportClientData(clientId: string, exportType: string, for
 }
 export async function getClientsWithBirthdayThisWeek(startDate: Date, endDate: Date): Promise<{ data: Client[] | null; error: any }> {
   try {
+    const startStr = format(startDate, 'MM-dd')
+    const endStr = format(endDate, 'MM-dd')
     const clientsRef = collection(db, 'companies', getCompanyId(), 'clients')
-    const q = query(clientsRef, where('is_active', '==', true))
-    const snapshot = await getDocs(q)
+    
+    let results: Client[] = []
 
-    const results: Client[] = []
-
-    snapshot.forEach(doc => {
-      const data = doc.data()
-      if (data.birth_date) {
-        // Extract month and day
-        const [, m, d] = data.birth_date.split('-')
-        const birthDateThisYear = new Date(startDate.getFullYear(), parseInt(m) - 1, parseInt(d))
-
-        // Cobre virada de ano e semanas que cruzam anos
-        if (birthDateThisYear >= startDate && birthDateThisYear <= endDate) {
-          results.push({ id: doc.id, ...data } as Client)
-        } else {
-          const birthDateNextYear = new Date(startDate.getFullYear() + 1, parseInt(m) - 1, parseInt(d))
-          if (birthDateNextYear >= startDate && birthDateNextYear <= endDate) {
-            results.push({ id: doc.id, ...data } as Client)
-          }
-        }
-      }
-    })
+    if (startStr <= endStr) {
+      // Normal week inside the same year
+      const q = query(
+        clientsRef,
+        where('is_active', '==', true),
+        where('birth_month_day', '>=', startStr),
+        where('birth_month_day', '<=', endStr)
+      )
+      const snapshot = await getDocs(q)
+      snapshot.forEach(doc => results.push({ id: doc.id, ...doc.data() } as Client))
+    } else {
+      // End of year crossing (e.g. 12-30 to 01-05) - requires two queries
+      const q1 = query(
+        clientsRef,
+        where('is_active', '==', true),
+        where('birth_month_day', '>=', startStr),
+        where('birth_month_day', '<=', '12-31')
+      )
+      const q2 = query(
+        clientsRef,
+        where('is_active', '==', true),
+        where('birth_month_day', '>=', '01-01'),
+        where('birth_month_day', '<=', endStr)
+      )
+      const [snap1, snap2] = await Promise.all([getDocs(q1), getDocs(q2)])
+      snap1.forEach(doc => results.push({ id: doc.id, ...doc.data() } as Client))
+      snap2.forEach(doc => results.push({ id: doc.id, ...doc.data() } as Client))
+    }
 
     return { data: results, error: null }
-  } catch (error) { return { data: null, error } }
+  } catch (error) { 
+    console.error("Erro em getClientsWithBirthdayThisWeek:", error)
+    return { data: null, error } 
+  }
 }
 
 

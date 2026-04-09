@@ -54,10 +54,13 @@ export async function getExpectedRevenue(): Promise<{ data: number | null; error
   } catch (error) { return { data: null, error } }
 }
 
-export async function getActiveSubscriptions(): Promise<{ data: ClientSubscription[] | null; error: any }> {
+export async function getActiveSubscriptions(options?: { limit?: number }): Promise<{ data: ClientSubscription[] | null; error: any }> {
   try {
     const subsRef = collectionGroup(db, 'subscriptions')
-    const q = query(subsRef, where('status', '==', 'active'))
+    let q = query(subsRef, where('status', '==', 'active'))
+    if (options?.limit) {
+      q = query(q, fbLimit(options.limit))
+    }
     const snap = await getDocs(q)
     
     console.log(`[getActiveSubscriptions] Found ${snap.docs.length} docs from collectionGroup`)

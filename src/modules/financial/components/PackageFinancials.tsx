@@ -38,7 +38,7 @@ export const PackageFinancials = () => {
 
   const fetchPackages = async () => {
     setIsLoading(true)
-    const { data } = await getAllActiveClientPackages()
+    const { data } = await getAllActiveClientPackages({ limit: 50 })
     
     if (data && data.length > 0) {
       const packageIds = data.map((p: any) => p.id)

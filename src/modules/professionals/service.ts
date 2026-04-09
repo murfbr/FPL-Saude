@@ -1,5 +1,5 @@
 import { db } from '@/shared/lib/firebase'
-import { collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, query, orderBy, where } from 'firebase/firestore'
+import { collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, query, orderBy, where, getCountFromServer } from 'firebase/firestore'
 import { Professional, Service } from '@/shared/types'
 
 import { getCompanyId } from '@/shared/lib/tenantStore'
@@ -70,6 +70,18 @@ export async function getAllProfessionals(options?: {
     return { data: professionals, error: null }
   } catch (error) {
     return { data: null, error }
+  }
+}
+
+export async function getProfessionalsCount(): Promise<{ count: number; error: any }> {
+  try {
+    const profsRef = collection(db, 'companies', getCompanyId(), 'professionals')
+    const q = query(profsRef)
+    const snapshot = await getCountFromServer(q)
+    return { count: snapshot.data().count, error: null }
+  } catch (error) {
+    console.error("Erro ao puxar contador de profissionais: ", error)
+    return { count: 0, error }
   }
 }
 

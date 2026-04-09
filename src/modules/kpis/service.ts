@@ -140,6 +140,7 @@ export async function getPartnershipPerformance(startDate: Date, endDate: Date, 
       partnership_name: p.name || id,
       client_count: p.clientCount,
       session_count: p.sessionCount,
+      total_revenue: p.revenue || 0,
     }))
 
     arr.sort((a, b) => b.session_count - a.session_count)

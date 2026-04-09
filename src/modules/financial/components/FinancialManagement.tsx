@@ -22,6 +22,7 @@ import {
   paySubscription,
   deleteSubscriptionPayment,
 } from '@/shared/services'
+import { getMonthlySummary } from '@/modules/summaries/service'
 import { ClientSubscription } from '@/shared/types'
 import { useAuth } from '@/shared/providers/AuthProvider'
 import { useToast } from '@/shared/hooks/use-toast'
@@ -63,13 +64,17 @@ export const FinancialManagement = () => {
   const [subscriptions, setSubscriptions] = useState<
     (ClientSubscription & { financial_record_id?: string })[]
   >([])
+  const [summary, setSummary] = useState<any>(null)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [isLoading, setIsLoading] = useState(true)
   const [isProcessing, setIsProcessing] = useState<string | null>(null)
 
   const fetchData = async () => {
     setIsLoading(true)
-    const { data: subs, error } = await getActiveSubscriptions()
+    const { data: summaryData } = await getMonthlySummary(currentDate)
+    setSummary(summaryData)
+
+    const { data: subs, error } = await getActiveSubscriptions({ limit: 50 })
 
     if (error || !subs) {
       toast({
@@ -241,13 +246,9 @@ export const FinancialManagement = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {formatCurrency(
-                subscriptions.reduce(
-                  (acc, sub) => acc + calculateSubscriptionAmount(sub, currentDate),
-                  0,
-                ),
-              )}
+              {formatCurrency(summary?.expected_subscriptions_revenue || 0)}
             </div>
+            <p className="text-xs text-muted-foreground mt-1">Consolidado do Mês</p>
           </CardContent>
         </Card>
 
@@ -257,19 +258,9 @@ export const FinancialManagement = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {formatCurrency(
-                subscriptions
-                  .filter((s) => s.payment_status === 'paid')
-                  .reduce(
-                    (acc, sub) =>
-                      acc +
-                      (sub.subscription_plans?.price ||
-                        sub.services?.price ||
-                        0),
-                    0,
-                  ),
-              )}
+              {formatCurrency(summary?.subscriptions_revenue_received || 0)}
             </div>
+            <p className="text-xs text-muted-foreground mt-1">Consolidado do Mês</p>
           </CardContent>
         </Card>
         <Card>
@@ -279,18 +270,10 @@ export const FinancialManagement = () => {
           <CardContent>
             <div className="text-2xl font-bold text-orange-600">
               {formatCurrency(
-                subscriptions
-                  .filter((s) => s.payment_status !== 'paid')
-                  .reduce(
-                    (acc, sub) =>
-                      acc +
-                      (sub.subscription_plans?.price ||
-                        sub.services?.price ||
-                        0),
-                    0,
-                  ),
+                Math.max(0, (summary?.expected_subscriptions_revenue || 0) - (summary?.subscriptions_revenue_received || 0))
               )}
             </div>
+            <p className="text-xs text-muted-foreground mt-1">Consolidado do Mês</p>
           </CardContent>
         </Card>
       </div>

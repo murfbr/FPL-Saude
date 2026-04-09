@@ -21,8 +21,8 @@ import {
 
 import { useAuth } from '@/shared/providers/AuthProvider'
 import { Professional, Client, Service } from '@/shared/types'
-import { getAllProfessionals, getProfessionalById } from '@/modules/professionals/service'
-import { getAllClients } from '@/modules/clients/service'
+import { getAllProfessionals, getProfessionalById, getProfessionalsCount } from '@/modules/professionals/service'
+import { getAllClients, getClientsCount } from '@/modules/clients/service'
 import { getAllServices } from '@/modules/services-catalog/service'
 import { UpcomingAppointments } from '@/modules/appointments/components/UpcomingAppointmentsAdmin'
 import { ProfessionalsList } from '@/modules/professionals/components/ProfessionalsList'
@@ -61,7 +61,10 @@ const AdminDashboard = () => {
   const [professionals, setProfessionals] = useState<Professional[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [services, setServices] = useState<Service[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [professionalsCount, setProfessionalsCount] = useState<number>(0)
+  const [clientsCount, setClientsCount] = useState<number>(0)
+  const [isLoading, setIsLoading] = useState(false)
+  const [isCountsLoading, setIsCountsLoading] = useState(true)
 
   // Modal State Management - Explicit initialization to false
   const [isPatientFormOpen, setIsPatientFormOpen] = useState(false)
@@ -120,28 +123,46 @@ const AdminDashboard = () => {
     fetchServices()
   }, [loading, user, companyId, role])
 
-  const fetchData = async () => {
+  useEffect(() => {
+    const fetchCounts = async () => {
+      if (loading || !user || (!companyId && role !== 'super_admin')) return
+      setIsCountsLoading(true)
+      const [profRes, clientRes] = await Promise.all([
+        getProfessionalsCount(),
+        getClientsCount({ status: clientStatusFilter === 'all' ? undefined : clientStatusFilter }),
+      ])
+      if (profRes.count !== undefined) setProfessionalsCount(profRes.count)
+      if (clientRes.count !== undefined) setClientsCount(clientRes.count)
+      setIsCountsLoading(false)
+    }
+    fetchCounts()
+  }, [clientStatusFilter, loading, user, companyId, role])
+
+  const fetchLists = async () => {
     setIsLoading(true)
-    const [profRes, clientRes] = await Promise.all([
-      getAllProfessionals(),
-      getAllClients({
+    if (currentTab === 'professionals') {
+      const profRes = await getAllProfessionals()
+      if (profRes.data) setProfessionals(profRes.data)
+    } else if (currentTab === 'patients') {
+      const clientRes = await getAllClients({
         status: clientStatusFilter,
         serviceId: clientServiceFilter,
-      }),
-    ])
-    if (profRes.data) setProfessionals(profRes.data)
-    if (clientRes.data) setClients(clientRes.data)
+      })
+      if (clientRes.data) setClients(clientRes.data)
+    }
     setIsLoading(false)
   }
 
   useEffect(() => {
     if (!loading && user && (companyId || role === 'super_admin')) {
-      fetchData()
+      if (currentTab === 'professionals' || currentTab === 'patients') {
+        fetchLists()
+      }
     }
-  }, [clientStatusFilter, clientServiceFilter, loading, user, companyId, role])
+  }, [currentTab, clientStatusFilter, clientServiceFilter, loading, user, companyId, role])
 
   const handlePatientCreated = (client: Client) => {
-    fetchData()
+    if (currentTab === 'patients') fetchLists()
     setNewlyCreatedClient(client)
     setIsOnboardingDialogOpen(true)
   }
@@ -240,11 +261,11 @@ const AdminDashboard = () => {
                     <CardTitle>Profissionais</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {isLoading ? (
+                    {isCountsLoading ? (
                       <Skeleton className="h-10 w-24" />
                     ) : (
                       <div className="text-3xl font-bold">
-                        {professionals.length}
+                        {professionalsCount}
                       </div>
                     )}
                     <p className="text-xs text-muted-foreground">
@@ -257,10 +278,10 @@ const AdminDashboard = () => {
                     <CardTitle>Pacientes</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {isLoading ? (
+                    {isCountsLoading ? (
                       <Skeleton className="h-10 w-24" />
                     ) : (
-                      <div className="text-3xl font-bold">{clients.length}</div>
+                      <div className="text-3xl font-bold">{clientsCount}</div>
                     )}
                     <p className="text-xs text-muted-foreground">
                       Pacientes ({clientStatusFilter})
@@ -430,7 +451,9 @@ const AdminDashboard = () => {
           <ProfessionalFormDialog
             isOpen={isProfessionalFormOpen}
             onOpenChange={setIsProfessionalFormOpen}
-            onProfessionalCreated={fetchData}
+            onProfessionalCreated={() => {
+              if (currentTab === 'professionals') fetchLists()
+            }}
           />
           <ClientOnboardingDialog
             client={newlyCreatedClient}

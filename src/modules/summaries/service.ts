@@ -21,6 +21,7 @@ export interface MonthlySummary {
   // Financeiro (assinaturas)
   subscriptions_revenue_received: number
   subscriptions_paid_count: number
+  expected_subscriptions_revenue: number
 
   // Breakdowns
   by_professional: Record<
@@ -33,7 +34,7 @@ export interface MonthlySummary {
   >
   by_partnership: Record<
     string,
-    { name: string; clientCount: number; sessionCount: number }
+    { name: string; clientCount: number; sessionCount: number; revenue: number }
   >
 }
 
@@ -51,6 +52,7 @@ function emptyMonthSummary(month: string): MonthlySummary {
     total_appointments: 0,
     subscriptions_revenue_received: 0,
     subscriptions_paid_count: 0,
+    expected_subscriptions_revenue: 0,
     by_professional: {},
     by_service: {},
     by_partnership: {},
