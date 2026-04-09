@@ -18,6 +18,7 @@ import {
   Clock,
   MessageSquare,
   ChevronDown,
+  Database,
 } from 'lucide-react'
 
 import { cn } from '@/shared/lib/utils'
@@ -147,12 +148,12 @@ export function AdminNavMenu({ currentTab, onTabChange }: AdminNavMenuProps) {
         <DropdownMenuTrigger asChild>
           <Button
             variant={
-              ['services', 'timesheets', 'messages'].includes(currentTab)
+              ['services', 'timesheets', 'messages', 'maintenance'].includes(currentTab)
                 ? 'secondary'
                 : 'ghost'
             }
             className={cn(
-              ['services', 'timesheets', 'messages'].includes(currentTab) &&
+              ['services', 'timesheets', 'messages', 'maintenance'].includes(currentTab) &&
                 'bg-accent',
             )}
 
@@ -191,6 +192,16 @@ export function AdminNavMenu({ currentTab, onTabChange }: AdminNavMenuProps) {
           >
             <MessageSquare className="mr-2 h-4 w-4" />
             Confirmações
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => onTabChange('maintenance')}
+            className={cn(
+              'cursor-pointer',
+              currentTab === 'maintenance' && 'bg-muted',
+            )}
+          >
+            <Database className="mr-2 h-4 w-4" />
+            Manutenção de Dados
           </DropdownMenuItem>
 
         </DropdownMenuContent>
