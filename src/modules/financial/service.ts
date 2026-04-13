@@ -56,43 +56,49 @@ export async function getExpectedRevenue(): Promise<{ data: number | null; error
 
 export async function getActiveSubscriptions(options?: { limit?: number }): Promise<{ data: ClientSubscription[] | null; error: any }> {
   try {
-    const subsRef = collectionGroup(db, 'subscriptions')
-    let q = query(subsRef, where('status', '==', 'active'))
-    if (options?.limit) {
-      q = query(q, fbLimit(options.limit))
+    // 1. Busca todos os clientes ativos primeiro para evitar o collectionGroup bloqueado nas regras de segurança
+    const clientsRef = collection(db, 'companies', getCompanyId(), 'clients')
+    const clientsSnap = await getDocs(query(clientsRef, where('is_active', '==', true)))
+    
+    let results: any[] = []
+    
+    // 2. Fetch subscriptions para cada cliente
+    const promises = clientsSnap.docs.map(async (clientDoc) => {
+      const subsRef = collection(db, 'companies', getCompanyId(), 'clients', clientDoc.id, 'subscriptions')
+      const subsSnap = await getDocs(query(subsRef, where('status', '==', 'active')))
+      
+      const hydratedSubs = []
+      for (const docSnap of subsSnap.docs) {
+        const sub = { id: docSnap.id, ...docSnap.data() } as any
+        sub.clients = { id: clientDoc.id, name: clientDoc.data()?.name, email: clientDoc.data()?.email }
+        
+        // Hydrating foreign relations for table
+        if (sub.service_id) {
+          const s = await getDoc(doc(db, 'companies', getCompanyId(), 'services', sub.service_id))
+          if (s.exists()) sub.services = { name: s.data()?.name, price: s.data()?.price }
+        }
+        if (sub.subscription_plan_id) {
+           const p = await getDoc(doc(db, 'companies', getCompanyId(), 'subscription_plans', sub.subscription_plan_id))
+           if (p.exists()) sub.subscription_plans = { name: p.data()?.name, price: p.data()?.price }
+        }
+        hydratedSubs.push(sub)
+      }
+      return hydratedSubs
+    })
+    
+    const allSubsArrays = await Promise.all(promises)
+    for (const arr of allSubsArrays) {
+      results.push(...arr)
     }
-    const snap = await getDocs(q)
+
+    if (options?.limit) {
+      results = results.slice(0, options.limit)
+    }
     
-    console.log(`[getActiveSubscriptions] Found ${snap.docs.length} docs from collectionGroup`)
-    snap.docs.forEach(d => {
-      console.log(`  - doc.id: ${d.id} | path: ${d.ref.path} | data:`, d.data())
-    })
-    
-    const promises = snap.docs
-      .filter(docSnap => docSnap.ref.path.startsWith(`companies/${getCompanyId()}/`))
-      .map(async (docSnap) => {
-      const sub = { id: docSnap.id, ...docSnap.data() } as any
-      // Hydrating foreign relations for table
-      if (sub.client_id) {
-        const c = await getDoc(doc(db, 'companies', getCompanyId(), 'clients', sub.client_id))
-        sub.clients = { id: c.id, name: c.data()?.name, email: c.data()?.email }
-      }
-      if (sub.service_id) {
-        const s = await getDoc(doc(db, 'companies', getCompanyId(), 'services', sub.service_id))
-        sub.services = { name: s.data()?.name, price: s.data()?.price }
-      }
-      if (sub.subscription_plan_id) {
-         const p = await getDoc(doc(db, 'companies', getCompanyId(), 'subscription_plans', sub.subscription_plan_id))
-         sub.subscription_plans = { name: p.data()?.name, price: p.data()?.price }
-      }
-      return sub
-    })
-    
-    const results = await Promise.all(promises)
     console.log('[getActiveSubscriptions] Hydrated results:', results)
     return { data: results as ClientSubscription[], error: null }
   } catch (error) {
-    console.error("🔥 ERRO EM getActiveSubscriptions (possível falta de índice?): ", error)
+    console.error("🔥 ERRO EM getActiveSubscriptions: ", error)
     return { data: null, error }
   }
 }

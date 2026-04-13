@@ -31,6 +31,7 @@ interface AgendaDayViewProps {
   onTimeSlotClick: (date: Date, isSpecificSlot?: boolean) => void
   selectedProfessional: string
   isExpanded: boolean
+  refreshTrigger?: number
 }
 
 const NORMAL_HEIGHT = 64
@@ -42,6 +43,7 @@ export const AgendaDayView = ({
   onTimeSlotClick,
   selectedProfessional,
   isExpanded,
+  refreshTrigger,
 }: AgendaDayViewProps) => {
   const { loading, companyId } = useAuth()
   const [appointments, setAppointments] = useState<Appointment[]>([])
@@ -77,7 +79,7 @@ export const AgendaDayView = ({
       }
     }
     fetchData()
-  }, [selectedProfessional, currentDate, loading, companyId])
+  }, [selectedProfessional, currentDate, loading, companyId, refreshTrigger])
 
   // If Expanded: Show 00-23
   // If Collapsed: Show 06-21 (covers until 22:00)

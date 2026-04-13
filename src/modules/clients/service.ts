@@ -224,35 +224,44 @@ export async function getClientPackages(clientId: string): Promise<{ data: any[]
 
 export async function getAllActiveClientPackages(options?: { limit?: number }): Promise<{ data: any[] | null; error: any }> {
   try {
-    const pkgsRef = collectionGroup(db, 'packages')
-    let q = query(pkgsRef)
+    // 1. Obter todos os clientes da empresa
+    const clientsRef = collection(db, 'companies', getCompanyId(), 'clients')
+    const clientsSnap = await getDocs(query(clientsRef, where('is_active', '==', true)))
+    
+    let results: any[] = []
+    
+    // 2. Fetch packages for each client
+    const promises = clientsSnap.docs.map(async (clientDoc) => {
+      const pkgsRef = collection(db, 'companies', getCompanyId(), 'clients', clientDoc.id, 'packages')
+      const pkgsSnap = await getDocs(pkgsRef)
+      
+      const clientPkgs = []
+      for (const d of pkgsSnap.docs) {
+        const data = d.data()
+        // Filter: only packages with sessions remaining
+        if ((data.sessions_remaining || 0) <= 0) continue
+        
+        const cp = { id: d.id, ...data } as any
+        cp.clients = { id: clientDoc.id, ...clientDoc.data() }
+        
+        if (data.package_id) {
+          const pSnap = await getDoc(doc(db, 'companies', getCompanyId(), 'packages', data.package_id))
+          if (pSnap.exists()) cp.packages = { id: pSnap.id, ...pSnap.data() }
+        }
+        clientPkgs.push(cp)
+      }
+      return clientPkgs
+    })
+    
+    const allClientPkgsArrays = await Promise.all(promises)
+    for (const arr of allClientPkgsArrays) {
+       results.push(...arr)
+    }
+    
     if (options?.limit) {
-      q = query(pkgsRef, fbLimit(options.limit))
+      results = results.slice(0, options.limit)
     }
-    const snap = await getDocs(q)
 
-    const results = []
-    for (const d of snap.docs) {
-      // Only include packages inside our own company tree
-      if (!d.ref.path.startsWith(`companies/${getCompanyId()}/`)) continue
-      
-      const data = d.data()
-      // Filter: only packages with sessions remaining
-      if ((data.sessions_remaining || 0) <= 0) continue
-      
-      const cp = { id: d.id, ...data } as any
-      // Hidratação de Cliente
-      if (data.client_id) {
-        const cSnap = await getDoc(doc(db, 'companies', getCompanyId(), 'clients', data.client_id))
-        if (cSnap.exists()) cp.clients = { id: cSnap.id, ...cSnap.data() }
-      }
-      // Hidratação de Pacote
-      if (data.package_id) {
-        const pSnap = await getDoc(doc(db, 'companies', getCompanyId(), 'packages', data.package_id))
-        if (pSnap.exists()) cp.packages = { id: pSnap.id, ...pSnap.data() }
-      }
-      results.push(cp)
-    }
     return { data: results, error: null }
   } catch (error) {
     console.error("🔥 ERRO EM getAllActiveClientPackages: ", error)

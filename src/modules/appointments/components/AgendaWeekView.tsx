@@ -40,6 +40,7 @@ interface AgendaWeekViewProps {
   onTimeSlotClick: (date: Date, isSpecificSlot?: boolean) => void
   selectedProfessional: string
   isExpanded: boolean
+  refreshTrigger?: number
 }
 
 const NORMAL_HEIGHT = 64
@@ -51,6 +52,7 @@ export const AgendaWeekView = ({
   onTimeSlotClick,
   selectedProfessional,
   isExpanded,
+  refreshTrigger,
 }: AgendaWeekViewProps) => {
   const { loading, companyId } = useAuth()
   const [appointments, setAppointments] = useState<Appointment[]>([])
@@ -88,7 +90,7 @@ export const AgendaWeekView = ({
       }
     }
     fetchData()
-  }, [selectedProfessional, currentDate, loading, companyId])
+  }, [selectedProfessional, currentDate, loading, companyId, refreshTrigger])
 
   const hours = useMemo(() => {
     if (isExpanded) {

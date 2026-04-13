@@ -35,6 +35,7 @@ interface AgendaCalendarViewProps {
   onTimeSlotClick: (date: Date, isSpecificSlot?: boolean) => void
   selectedProfessional: string
   isExpanded: boolean
+  refreshTrigger?: number
 }
 
 export const AgendaCalendarView = ({
@@ -45,6 +46,7 @@ export const AgendaCalendarView = ({
   onTimeSlotClick,
   selectedProfessional,
   isExpanded,
+  refreshTrigger,
 }: AgendaCalendarViewProps) => {
   const { loading, companyId } = useAuth()
   const [appointments, setAppointments] = useState<Appointment[]>([])
@@ -82,7 +84,7 @@ export const AgendaCalendarView = ({
       }
     }
     fetchData()
-  }, [displayedMonth, selectedProfessional, loading, companyId])
+  }, [displayedMonth, selectedProfessional, loading, companyId, refreshTrigger])
 
   const daysInMonth = useMemo(() => {
     const start = startOfMonth(displayedMonth)

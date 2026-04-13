@@ -98,13 +98,13 @@ export const AgendaView = () => {
   const renderView = () => {
     switch (viewMode) {
       case 'month':
-        return <AgendaCalendarView key={refreshKey} {...commonProps} />
+        return <AgendaCalendarView refreshTrigger={refreshKey} {...commonProps} />
       case 'week':
-        return <AgendaWeekView key={refreshKey} {...commonProps} />
+        return <AgendaWeekView refreshTrigger={refreshKey} {...commonProps} />
       case 'day':
-        return <AgendaDayView key={refreshKey} {...commonProps} />
+        return <AgendaDayView refreshTrigger={refreshKey} {...commonProps} />
       default:
-        return <AgendaDayView key={refreshKey} {...commonProps} />
+        return <AgendaDayView refreshTrigger={refreshKey} {...commonProps} />
     }
   }
 
