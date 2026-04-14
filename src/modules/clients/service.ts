@@ -18,7 +18,7 @@ import { Client, ClientPackageWithDetails, ClientSubscription, Appointment, Note
 import { format, startOfMonth, endOfMonth, isValid } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { jsPDF } from 'jspdf'
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx'
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle } from 'docx'
 import { uploadFile } from '@/shared/lib/storage'
 import { deleteObject, ref, getDownloadURL } from 'firebase/storage'
 import { storage } from '@/shared/lib/firebase'
@@ -436,8 +436,13 @@ export async function exportClientData(clientId: string, exportType: string, for
     
     allNotes.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     
-    if (allNotes.length === 0) {
-       return { data: null, error: new Error('O paciente não possui anotações para exportar.') }
+    // 3.5 Buscando Avaliação Geral
+    const assessmentEntry = Array.isArray(patient.general_assessment)
+      ? patient.general_assessment.find((i: any) => i.type === 'assessment' || !i.type)
+      : (patient.general_assessment?.type === 'assessment' ? patient.general_assessment : null)
+
+    if (allNotes.length === 0 && !assessmentEntry) {
+       return { data: null, error: new Error('O paciente não possui anotações nem avaliação para exportar.') }
     }
 
     const reportDate = format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })
@@ -464,6 +469,34 @@ export async function exportClientData(clientId: string, exportType: string, for
       
       doc.line(15, yOffset, pageWidth - 15, yOffset)
       yOffset += 8
+
+      if (assessmentEntry) {
+         doc.setFont('helvetica', 'bold')
+         doc.text('Avaliação Geral / Ficha do Paciente', 15, yOffset)
+         yOffset += 8
+         doc.setFont('helvetica', 'normal')
+         doc.setFontSize(10)
+         
+         const data = assessmentEntry
+         const lines = []
+         if (data.mainComplaint) lines.push(`Queixa Principal: ${data.mainComplaint}`)
+         if (data.profession) lines.push(`Profissão: ${data.profession}`)
+         if (data.physicalActivity) lines.push(`Atividade Física: ${data.physicalActivity}`)
+         if (data.clinicalDiagnosis) lines.push(`Diagnóstico Clínico: ${data.clinicalDiagnosis}`)
+         if (data.historyOfPresentIllness) lines.push(`HDA: ${data.historyOfPresentIllness}`)
+         if (data.pastMedicalHistory) lines.push(`HPP: ${data.pastMedicalHistory}`)
+         if (data.medications) lines.push(`Medicamentos: ${data.medications}`)
+         if (data.physicalExam) lines.push(`Exame Físico: ${data.physicalExam}`)
+         if (data.diagnosis) lines.push(`Diagnóstico Cinético-Funcional: ${data.diagnosis}`)
+         if (data.treatmentPlan) lines.push(`Plano de Tratamento: ${data.treatmentPlan}`)
+         
+         const splitText = doc.splitTextToSize(lines.join('\n'), pageWidth - 30)
+         doc.text(splitText, 15, yOffset)
+         yOffset += (splitText.length * 5) + 10
+         doc.line(15, yOffset, pageWidth - 15, yOffset)
+         yOffset += 10
+         doc.setFontSize(12)
+      }
 
       // Percorre e preenche o PDF (respeitando quebra de páginas manuais por altura)
       for (const note of allNotes) {
@@ -527,6 +560,41 @@ export async function exportClientData(clientId: string, exportType: string, for
              spacing: { after: 300 }
           })
        )
+
+       // 4.5 Avaliação Geral no DOCX
+       if (assessmentEntry) {
+          docxSections.push(
+             new Paragraph({
+                text: "Avaliação Geral / Ficha do Paciente",
+                heading: HeadingLevel.HEADING_2,
+                spacing: { before: 400, after: 200 }
+             })
+          )
+          
+          const data = assessmentEntry
+          const assessmentLines = []
+          if (data.mainComplaint) assessmentLines.push(`Queixa Principal: ${data.mainComplaint}`)
+          if (data.profession) assessmentLines.push(`Profissão: ${data.profession}`)
+          if (data.physicalActivity) assessmentLines.push(`Atividade Física: ${data.physicalActivity}`)
+          if (data.clinicalDiagnosis) assessmentLines.push(`Diagnóstico Clínico: ${data.clinicalDiagnosis}`)
+          if (data.historyOfPresentIllness) assessmentLines.push(`HDA: ${data.historyOfPresentIllness}`)
+          if (data.pastMedicalHistory) assessmentLines.push(`HPP: ${data.pastMedicalHistory}`)
+          if (data.medications) assessmentLines.push(`Medicamentos: ${data.medications}`)
+          if (data.physicalExam) assessmentLines.push(`Exame Físico: ${data.physicalExam}`)
+          if (data.diagnosis) assessmentLines.push(`Diagnóstico Cinético-Funcional: ${data.diagnosis}`)
+          if (data.treatmentPlan) assessmentLines.push(`Plano de Tratamento: ${data.treatmentPlan}`)
+          
+          assessmentLines.forEach(line => {
+             docxSections.push(
+                new Paragraph({
+                   text: line,
+                   spacing: { after: 100 }
+                })
+             )
+          })
+          
+          docxSections.push(new Paragraph({ text: "", border: { bottom: { color: "auto", space: 1, style: BorderStyle.SINGLE, size: 6 } }, spacing: { after: 300 } }))
+       }
 
        // Percorre Notas
        for (const note of allNotes) {

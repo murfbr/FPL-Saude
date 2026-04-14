@@ -1,5 +1,5 @@
 import { db } from '@/shared/lib/firebase'
-import { collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, query, orderBy, where, limit as fbLimit, arrayUnion, writeBatch } from 'firebase/firestore'
+import { collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, query, orderBy, where, limit as fbLimit, arrayUnion, writeBatch, startAfter } from 'firebase/firestore'
 import { Appointment, NoteEntry, Client, Professional, Service } from '@/shared/types'
 
 import { getCompanyId } from '@/shared/lib/tenantStore'
@@ -669,6 +669,39 @@ export async function getAppointmentsByClientId(clientId: string): Promise<{ dat
 
     return { data: hydratedAppts, error: null }
   } catch (error) { return { data: null, error } }
+}
+
+export async function getAppointmentsByClientIdPaginated(
+  clientId: string,
+  limitCount: number = 15,
+  lastDoc: any = null
+): Promise<{ data: Appointment[] | null; lastVisible: any; hasMore: boolean; error: any }> {
+  try {
+    const appointmentsRef = collection(db, 'companies', getCompanyId(), 'appointments')
+    let qParts = [
+      where('client_id', '==', clientId),
+      orderBy('schedules.start_time', 'desc'),
+      fbLimit(limitCount)
+    ]
+
+    let q = query(appointmentsRef, ...qParts)
+
+    if (lastDoc) {
+      q = query(q, startAfter(lastDoc))
+    }
+
+    const snapshot = await getDocs(q)
+    const promises = snapshot.docs.map(hydrateAppointment)
+    const hydratedAppts = await Promise.all(promises)
+
+    const lastVisible = snapshot.docs[snapshot.docs.length - 1]
+    const hasMore = snapshot.docs.length === limitCount
+
+    return { data: hydratedAppts, lastVisible, hasMore, error: null }
+  } catch (error) {
+    console.error("Error in getAppointmentsByClientIdPaginated:", error)
+    return { data: null, lastVisible: null, hasMore: false, error }
+  }
 }
 
 export async function completeAppointment(appointmentId: string): Promise<{ error: any }> {

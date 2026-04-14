@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
-import { getClientById, getAppointmentsByClientId, getClientExams, uploadClientExam, deleteClientExam } from '@/shared/services'
+import { getClientById, getAppointmentsByClientId, getAppointmentsByClientIdPaginated, getClientExams, uploadClientExam, deleteClientExam } from '@/shared/services'
 import { Client, Appointment, NoteEntry, ClientExam } from '@/shared/types'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -65,6 +65,9 @@ const ProfessionalPatientDetail = () => {
   const { user, professionalId } = useAuth()
   const [localNotes, setLocalNotes] = useState<NoteEntry[]>([])
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [lastVisibleDoc, setLastVisibleDoc] = useState<any>(null)
+  const [hasMoreAppointments, setHasMoreAppointments] = useState(false)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
 
   const handleBack = () => {
     if (location.key === 'default') {
@@ -79,11 +82,31 @@ const ProfessionalPatientDetail = () => {
     setIsLoading(true)
     const [patientRes, apptRes] = await Promise.all([
       getClientById(id),
-      getAppointmentsByClientId(id),
+      getAppointmentsByClientIdPaginated(id, 15),
     ])
     setPatient(patientRes.data)
     setAppointments(apptRes.data || [])
+    setLastVisibleDoc(apptRes.lastVisible)
+    setHasMoreAppointments(apptRes.hasMore)
     setIsLoading(false)
+  }
+
+  const loadMoreAppointments = async () => {
+    if (!id || isLoadingMore || !hasMoreAppointments) return
+    setIsLoadingMore(true)
+    
+    const { data, lastVisible, hasMore } = await getAppointmentsByClientIdPaginated(
+      id, 
+      15, 
+      lastVisibleDoc
+    )
+
+    if (data) {
+      setAppointments(prev => [...prev, ...data])
+      setLastVisibleDoc(lastVisible)
+      setHasMoreAppointments(hasMore)
+    }
+    setIsLoadingMore(false)
   }
 
   useEffect(() => {
@@ -136,9 +159,39 @@ const ProfessionalPatientDetail = () => {
       })
     }
 
-    return allNotes.sort(
+    const sorted = allNotes.sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
     )
+
+    // Adiciona Avaliação Geral como primeira entrada
+    const assessmentEntry = Array.isArray(patient?.general_assessment)
+      ? patient.general_assessment.find((i: any) => i.type === 'assessment' || !i.type)
+      : (patient?.general_assessment?.type === 'assessment' ? patient.general_assessment : null)
+
+    if (assessmentEntry) {
+      const data = assessmentEntry
+      const lines = []
+      if (data.mainComplaint) lines.push(`Queixa Principal: ${data.mainComplaint}`)
+      if (data.profession) lines.push(`Profissão: ${data.profession}`)
+      if (data.physicalActivity) lines.push(`Atividade Física: ${data.physicalActivity}`)
+      if (data.clinicalDiagnosis) lines.push(`Diagnóstico Clínico: ${data.clinicalDiagnosis}`)
+      if (data.historyOfPresentIllness) lines.push(`HDA: ${data.historyOfPresentIllness}`)
+      if (data.pastMedicalHistory) lines.push(`HPP: ${data.pastMedicalHistory}`)
+      if (data.medications) lines.push(`Medicamentos: ${data.medications}`)
+      if (data.physicalExam) lines.push(`Exame Físico: ${data.physicalExam}`)
+      if (data.diagnosis) lines.push(`Diagnóstico Cinético-Funcional: ${data.diagnosis}`)
+      if (data.treatmentPlan) lines.push(`Plano de Tratamento: ${data.treatmentPlan}`)
+
+      if (lines.length > 0) {
+        sorted.unshift({
+          date: data.updated_at || new Date().toISOString(),
+          content: lines.join('\n'),
+          professional_name: 'Ficha de Avaliação (Geral)',
+        })
+      }
+    }
+
+    return sorted
   }, [appointments, patient?.general_assessment])
 
   const getInitials = (name: string) => {
@@ -345,6 +398,24 @@ const ProfessionalPatientDetail = () => {
                     </AccordionItem>
                   ))}
                 </Accordion>
+
+                {hasMoreAppointments && (
+                  <div className="mt-6 flex justify-center">
+                    <Button 
+                      variant="outline" 
+                      onClick={loadMoreAppointments}
+                      disabled={isLoadingMore}
+                      className="gap-2"
+                    >
+                      {isLoadingMore ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Plus className="w-4 h-4" />
+                      )}
+                      Carregar Mais
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

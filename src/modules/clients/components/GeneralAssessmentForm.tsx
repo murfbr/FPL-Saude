@@ -60,6 +60,9 @@ import { ptBR } from 'date-fns/locale'
 
 const assessmentSchema = z.object({
   mainComplaint: z.string().optional(),
+  profession: z.string().optional(),
+  physicalActivity: z.string().optional(),
+  clinicalDiagnosis: z.string().optional(),
   historyOfPresentIllness: z.string().optional(),
   pastMedicalHistory: z.string().optional(),
   medications: z.string().optional(),
@@ -116,6 +119,9 @@ export const GeneralAssessmentForm = ({
     resolver: zodResolver(assessmentSchema),
     defaultValues: {
       mainComplaint: '',
+      profession: '',
+      physicalActivity: '',
+      clinicalDiagnosis: '',
       historyOfPresentIllness: '',
       pastMedicalHistory: '',
       medications: '',
@@ -309,10 +315,10 @@ export const GeneralAssessmentForm = ({
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4">
         <div className="flex flex-col space-y-1.5">
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="w-5 h-5" /> Informações Gerais
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <FileText className="w-5 h-5 text-primary" /> Informações Gerais
           </CardTitle>
           <CardDescription>
             Ficha de avaliação fisioterapêutica e anamnese.
@@ -341,17 +347,17 @@ export const GeneralAssessmentForm = ({
       </CardHeader>
       <CardContent className="pt-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-6">
-            <TabsTrigger value="assessment">Ficha de Avaliação</TabsTrigger>
-            <TabsTrigger value="history">Histórico Importado</TabsTrigger>
-            <TabsTrigger value="exams">Laudos / Exames</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 h-auto gap-2 mb-6 bg-muted/50 p-1">
+            <TabsTrigger value="assessment" className="py-2.5">Ficha de Avaliação</TabsTrigger>
+            <TabsTrigger value="history" className="py-2.5">Histórico Importado</TabsTrigger>
+            <TabsTrigger value="exams" className="py-2.5">Laudos / Exames</TabsTrigger>
           </TabsList>
 
           <TabsContent value="assessment">
             <Form {...form}>
               <form
                 onSubmit={form.handleSubmit(onSubmit)}
-                className="space-y-6"
+                className="space-y-4"
               >
                 <FormField
                   control={form.control}
@@ -362,7 +368,7 @@ export const GeneralAssessmentForm = ({
                       <FormControl>
                         <Textarea
                           placeholder="Descreva a queixa principal do paciente..."
-                          className="resize-none min-h-[80px]"
+                          className="resize-none min-h-[60px]"
                           {...field}
                         />
                       </FormControl>
@@ -371,7 +377,42 @@ export const GeneralAssessmentForm = ({
                   )}
                 />
 
-                <div className="grid md:grid-cols-2 gap-6">
+                <div className="grid md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="profession"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Profissão</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Ex: Engenheiro, Professor..."
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="physicalActivity"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Atividade Física</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Frequência e tipo de exercício..."
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="historyOfPresentIllness"
@@ -381,7 +422,7 @@ export const GeneralAssessmentForm = ({
                         <FormControl>
                           <Textarea
                             placeholder="Histórico do problema atual..."
-                            className="resize-none min-h-[100px]"
+                            className="resize-none min-h-[80px]"
                             {...field}
                           />
                         </FormControl>
@@ -400,7 +441,7 @@ export const GeneralAssessmentForm = ({
                         <FormControl>
                           <Textarea
                             placeholder="Cirurgias, traumas, doenças prévias..."
-                            className="resize-none min-h-[100px]"
+                            className="resize-none min-h-[80px]"
                             {...field}
                           />
                         </FormControl>
@@ -437,7 +478,7 @@ export const GeneralAssessmentForm = ({
                       <FormControl>
                         <Textarea
                           placeholder="Observações do exame físico (inspeção, palpação, amplitude de movimento, força, testes especiais)..."
-                          className="resize-none min-h-[120px]"
+                          className="resize-none min-h-[100px]"
                           {...field}
                         />
                       </FormControl>
@@ -446,7 +487,24 @@ export const GeneralAssessmentForm = ({
                   )}
                 />
 
-                <div className="grid md:grid-cols-2 gap-6">
+                <div className="grid md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="clinicalDiagnosis"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Diagnóstico Clínico</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Diagnóstico médico/clínico..."
+                            className="resize-none min-h-[60px]"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                   <FormField
                     control={form.control}
                     name="diagnosis"
@@ -456,26 +514,9 @@ export const GeneralAssessmentForm = ({
                         <FormControl>
                           <Textarea
                             placeholder="Conclusão diagnóstica..."
-                            className="resize-none min-h-[80px]"
+                            className="resize-none min-h-[60px]"
                             {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="treatmentPlan"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Plano de Tratamento</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            placeholder="Objetivos e condutas..."
-                            className="resize-none min-h-[80px]"
-                            {...field}
-                          />
+                        />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -483,8 +524,26 @@ export const GeneralAssessmentForm = ({
                   />
                 </div>
 
-                <div className="flex justify-end">
-                  <Button type="submit" disabled={isSubmitting}>
+                <FormField
+                  control={form.control}
+                  name="treatmentPlan"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Plano de Tratamento</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Objetivos e condutas..."
+                          className="resize-none min-h-[60px]"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="flex justify-end pt-4">
+                  <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
                     {isSubmitting ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
@@ -511,9 +570,10 @@ export const GeneralAssessmentForm = ({
                   placeholder="Cole aqui o texto do histórico antigo do paciente para importar..."
                   className="min-h-[150px]"
                 />
-                <Button
+                 <Button
                   onClick={handleImportHistory}
                   disabled={isSubmitting || !historyText.trim()}
+                  className="w-full sm:w-auto"
                 >
                   {isSubmitting ? (
                     <Loader2 className="w-4 h-4 animate-spin mr-2" />
@@ -569,13 +629,13 @@ export const GeneralAssessmentForm = ({
           </TabsContent>
 
           <TabsContent value="exams" className="space-y-6">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
               <h3 className="font-semibold flex items-center gap-2">
                 <File className="w-4 h-4" /> Arquivos Anexados ({exams.length})
               </h3>
               <AlertDialog open={isExamDialogOpen} onOpenChange={setIsExamDialogOpen}>
                 <AlertDialogTrigger asChild>
-                  <Button size="sm" className="gap-2">
+                  <Button size="sm" className="w-full sm:w-auto gap-2">
                     <Plus className="w-4 h-4" />
                     Novo Anexo
                   </Button>

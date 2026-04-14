@@ -6,6 +6,7 @@ import {
   deleteClient,
   exportClientData,
   getAppointmentsByClientId,
+  getAppointmentsByClientIdPaginated,
   getClientExams,
   uploadClientExam,
   deleteClientExam,
@@ -101,6 +102,9 @@ const PatientDetail = () => {
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [lastVisibleDoc, setLastVisibleDoc] = useState<any>(null)
+  const [hasMoreAppointments, setHasMoreAppointments] = useState(false)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
 
   const [exams, setExams] = useState<ClientExam[]>([])
   const [isUploadingExam, setIsUploadingExam] = useState(false)
@@ -123,13 +127,33 @@ const PatientDetail = () => {
     setIsLoading(true)
     const [patientRes, apptRes, partnershipRes] = await Promise.all([
       getClientById(id),
-      getAppointmentsByClientId(id),
+      getAppointmentsByClientIdPaginated(id, 15),
       getAllPartnerships(),
     ])
     setPatient(patientRes.data)
     setAppointments(apptRes.data || [])
+    setLastVisibleDoc(apptRes.lastVisible)
+    setHasMoreAppointments(apptRes.hasMore)
     setPartnerships(partnershipRes.data || [])
     setIsLoading(false)
+  }
+
+  const loadMoreAppointments = async () => {
+    if (!id || isLoadingMore || !hasMoreAppointments) return
+    setIsLoadingMore(true)
+    
+    const { data, lastVisible, hasMore } = await getAppointmentsByClientIdPaginated(
+      id, 
+      15, 
+      lastVisibleDoc
+    )
+
+    if (data) {
+      setAppointments(prev => [...prev, ...data])
+      setLastVisibleDoc(lastVisible)
+      setHasMoreAppointments(hasMore)
+    }
+    setIsLoadingMore(false)
   }
 
   const fetchExams = async () => {
@@ -287,9 +311,39 @@ const PatientDetail = () => {
       })
     }
 
-    return allNotes.sort(
+    const sorted = allNotes.sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
     )
+
+    // Adiciona Avaliação Geral como primeira entrada
+    const assessmentEntry = Array.isArray(patient?.general_assessment)
+      ? patient.general_assessment.find((i: any) => i.type === 'assessment' || !i.type)
+      : (patient?.general_assessment?.type === 'assessment' ? patient.general_assessment : null)
+
+    if (assessmentEntry) {
+      const data = assessmentEntry
+      const lines = []
+      if (data.mainComplaint) lines.push(`Queixa Principal: ${data.mainComplaint}`)
+      if (data.profession) lines.push(`Profissão: ${data.profession}`)
+      if (data.physicalActivity) lines.push(`Atividade Física: ${data.physicalActivity}`)
+      if (data.clinicalDiagnosis) lines.push(`Diagnóstico Clínico: ${data.clinicalDiagnosis}`)
+      if (data.historyOfPresentIllness) lines.push(`HDA: ${data.historyOfPresentIllness}`)
+      if (data.pastMedicalHistory) lines.push(`HPP: ${data.pastMedicalHistory}`)
+      if (data.medications) lines.push(`Medicamentos: ${data.medications}`)
+      if (data.physicalExam) lines.push(`Exame Físico: ${data.physicalExam}`)
+      if (data.diagnosis) lines.push(`Diagnóstico Cinético-Funcional: ${data.diagnosis}`)
+      if (data.treatmentPlan) lines.push(`Plano de Tratamento: ${data.treatmentPlan}`)
+
+      if (lines.length > 0) {
+        sorted.unshift({
+          date: data.updated_at || new Date().toISOString(),
+          content: lines.join('\n'),
+          professional_name: 'Ficha de Avaliação (Geral)',
+        })
+      }
+    }
+
+    return sorted
   }, [appointments, patient?.general_assessment])
 
   const getInitials = (name: string) => {
@@ -603,6 +657,24 @@ const PatientDetail = () => {
                     </AccordionItem>
                   ))}
                 </Accordion>
+
+                {hasMoreAppointments && (
+                  <div className="mt-6 flex justify-center">
+                    <Button 
+                      variant="outline" 
+                      onClick={loadMoreAppointments}
+                      disabled={isLoadingMore}
+                      className="gap-2"
+                    >
+                      {isLoadingMore ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Plus className="w-4 h-4" />
+                      )}
+                      Carregar Mais
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
