@@ -18,7 +18,26 @@ interface State {
   error: Error | null
 }
 
+/**
+ * Detects if an error was caused by external DOM manipulation
+ * (e.g., browser translators, extensions) rather than an actual app bug.
+ */
+function isDomManipulationError(error: Error): boolean {
+  const msg = error.message || ''
+  return (
+    msg.includes('removeChild') ||
+    msg.includes('insertBefore') ||
+    msg.includes('appendChild') ||
+    msg.includes('NotFoundError') ||
+    msg.includes('not a child of this node') ||
+    msg.includes('Failed to execute') && msg.includes('on \'Node\'')
+  )
+}
+
 export class ErrorBoundary extends Component<Props, State> {
+  private recoveryAttempts = 0
+  private static MAX_RECOVERY_ATTEMPTS = 3
+
   public state: State = {
     hasError: false,
     error: null,
@@ -29,6 +48,19 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // If this is a DOM manipulation error from a browser extension/translator,
+    // try to auto-recover instead of crashing the app
+    if (isDomManipulationError(error) && this.recoveryAttempts < ErrorBoundary.MAX_RECOVERY_ATTEMPTS) {
+      this.recoveryAttempts++
+      console.warn(
+        `[ErrorBoundary] DOM manipulation error detected (attempt ${this.recoveryAttempts}/${ErrorBoundary.MAX_RECOVERY_ATTEMPTS}). Auto-recovering...`,
+        error.message,
+      )
+      // Reset the error state to re-render children
+      this.setState({ hasError: false, error: null })
+      return
+    }
+
     console.error('Uncaught error:', error, errorInfo)
   }
 
