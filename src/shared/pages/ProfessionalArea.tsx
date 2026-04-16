@@ -6,9 +6,10 @@ import { ClientsTable } from '@/modules/clients/components/ClientsTable'
 import { getClientsByProfessional } from '@/shared/services'
 import { Client } from '@/shared/types'
 import { useToast } from '@/shared/hooks/use-toast'
-import { useAuth } from '@/shared/providers/AuthProvider'
 import { Agenda } from '@/modules/appointments/components/Agenda'
 import { TimeTracker } from '@/modules/time-tracking/components/TimeTracker'
+import ClinicalGalleryAdmin from '@/modules/gallery/pages/ClinicalGalleryAdmin'
+import { useAuth } from '@/shared/providers/AuthProvider'
 
 const ProfessionalArea = () => {
   const { toast } = useToast()
@@ -87,9 +88,10 @@ const ProfessionalArea = () => {
       </div>
 
       <Tabs value={currentTab} onValueChange={handleTabChange}>
-        <TabsList className="grid w-full grid-cols-3 mb-6">
+        <TabsList className="grid w-full grid-cols-4 mb-6">
           <TabsTrigger value="schedule">Agenda</TabsTrigger>
           <TabsTrigger value="clients">Pacientes</TabsTrigger>
+          <TabsTrigger value="gallery">Galeria</TabsTrigger>
           <TabsTrigger value="time-tracking">Ponto</TabsTrigger>
         </TabsList>
 
@@ -99,6 +101,10 @@ const ProfessionalArea = () => {
 
         <TabsContent value="clients">
           <ClientsTable clients={clients} />
+        </TabsContent>
+
+        <TabsContent value="gallery">
+          <ClinicalGalleryAdmin />
         </TabsContent>
 
         <TabsContent value="time-tracking">

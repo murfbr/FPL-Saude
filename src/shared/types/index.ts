@@ -214,3 +214,5 @@ export interface BlockedDate {
   reason: string | null
   created_at: string
 }
+
+export * from './gallery'

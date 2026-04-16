@@ -85,6 +85,7 @@ import { GeneralAssessmentForm } from '@/modules/clients/components/GeneralAsses
 import { ClientPackagesList } from '@/modules/packages/components/ClientPackagesList'
 import { ClientSubscriptionsList } from '@/modules/subscriptions/components/ClientSubscriptionsList'
 import { useAuth } from '@/shared/providers/AuthProvider'
+import { ClientGallery } from '@/modules/gallery/components/ClientGallery'
 
 const PatientDetail = () => {
   const { id } = useParams<{ id: string }>()
@@ -583,6 +584,8 @@ const PatientDetail = () => {
                 </ScrollArea>
               </CardContent>
             </Card>
+
+            <ClientGallery clientId={patient.id} clientName={patient.name} />
 
             <Card>
               <CardHeader>

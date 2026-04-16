@@ -10,6 +10,7 @@ export type ModuleKey =
   | 'services'
   | 'partnerships'
   | 'maintenance'
+  | 'gallery'
 
 export interface CompanyBranding {
   logo_url: string
@@ -72,6 +73,7 @@ export const DEFAULT_MODULES: Record<ModuleKey, ModuleConfig> = {
   services:      { enabled: true,  label: 'Serviços e Pacotes' },
   partnerships:  { enabled: true,  label: 'Parcerias' },
   maintenance:   { enabled: false, label: 'Manutenção' },
+  gallery:       { enabled: true,  label: 'Galeria Clínica' },
 }
 
 export const DEFAULT_ROLES: Record<string, RolePermissions> = {

@@ -24,13 +24,24 @@ export async function getAllCompanies(): Promise<{ data: CompanyConfig[] | null;
     ) as CompanyConfig['modules']
     const data = snap.docs.map((d) => {
       const raw = d.data()
+      
+      const mergedModules = { ...defaultModules }
+      if (raw.modules) {
+        for (const [k, v] of Object.entries(raw.modules)) {
+          const key = k as keyof typeof defaultModules
+          if (mergedModules[key] && (v as any)?.hasOwnProperty('enabled')) {
+            mergedModules[key].enabled = (v as any).enabled
+          }
+        }
+      }
+
       return {
         id: d.id,
         name: raw.name ?? d.id,
         slug: raw.slug ?? d.id,
         is_active: raw.is_active ?? false,
         branding: raw.branding ?? { ...DEFAULT_BRANDING },
-        modules: raw.modules ?? defaultModules,
+        modules: mergedModules,
         roles: raw.roles ?? { ...DEFAULT_ROLES },
       } as CompanyConfig
     })
@@ -48,13 +59,23 @@ export async function getCompanyConfig(companyId: string): Promise<{ data: Compa
     const defaultModules = Object.fromEntries(
       MODULE_REGISTRY.map(({ key, label, defaultEnabled }) => [key, { enabled: defaultEnabled, label }])
     ) as CompanyConfig['modules']
+    const mergedModules = { ...defaultModules }
+    if (raw.modules) {
+      for (const [k, v] of Object.entries(raw.modules)) {
+        const key = k as keyof typeof defaultModules
+        if (mergedModules[key] && (v as any)?.hasOwnProperty('enabled')) {
+          mergedModules[key].enabled = (v as any).enabled
+        }
+      }
+    }
+
     const data: CompanyConfig = {
       id: raw.id ?? companyId,
       name: raw.name ?? companyId,
       slug: raw.slug ?? companyId,
       is_active: raw.is_active ?? false,
       branding: raw.branding ?? { ...DEFAULT_BRANDING },
-      modules: raw.modules ?? defaultModules,
+      modules: mergedModules,
       roles: raw.roles ?? { ...DEFAULT_ROLES },
     }
     return { data, error: null }

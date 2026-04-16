@@ -29,6 +29,16 @@ service firebase.storage {
           getUserData().companyId == companyId && 
           (getUserData().role == 'admin' || getUserData().role == 'professional');
       }
+
+      // Regra específica para Galeria
+      match /clients/{clientId}/gallery/{fileName} {
+        allow read: if isAuthenticated() && (
+          isSuperAdmin() || (getUserData().companyId == companyId)
+        );
+        allow write: if isAuthenticated() && 
+          getUserData().companyId == companyId && 
+          (getUserData().role == 'admin' || getUserData().role == 'professional');
+      }
     }
 
     // Regras para Fotos de Profissionais (Perfil)

@@ -17,6 +17,7 @@ import {
   CreditCard,
   Clock,
   MessageSquare,
+  Camera,
 } from 'lucide-react'
 
 import { useAuth } from '@/shared/providers/AuthProvider'
@@ -35,6 +36,7 @@ import { FinancialManagement } from '@/modules/financial/components/FinancialMan
 import { TimeSheetReport } from '@/modules/time-tracking/components/TimeSheetReport'
 import { MessageConfirmation } from '@/modules/messages/components/MessageConfirmation'
 import { DataMaintenance } from '@/modules/maintenance/components/DataMaintenance'
+import ClinicalGalleryAdmin from '@/modules/gallery/pages/ClinicalGalleryAdmin'
 import { Button } from '@/components/ui/button'
 import { Database } from 'lucide-react'
 
@@ -190,7 +192,7 @@ const AdminDashboard = () => {
     { value: 'timesheets', label: 'Ponto Eletrônico', icon: Clock },
     { value: 'messages', label: 'Confirmações', icon: MessageSquare },
     { value: 'services', label: 'Serviços e Pacotes', icon: Stethoscope },
-
+    { value: 'gallery', label: 'Galeria Clínica', icon: Camera },
     { value: 'partnerships', label: 'Parcerias', icon: Handshake },
     { value: 'maintenance', label: 'Manutenção', icon: Database },
   ]
@@ -432,6 +434,10 @@ const AdminDashboard = () => {
                 <PartnershipsManager />
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="gallery">
+            <ClinicalGalleryAdmin />
           </TabsContent>
 
           <TabsContent value="maintenance">

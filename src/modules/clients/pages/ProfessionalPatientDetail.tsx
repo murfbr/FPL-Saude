@@ -43,6 +43,7 @@ import { GeneralAssessmentForm } from '@/modules/clients/components/GeneralAsses
 import { ClientPackagesList } from '@/modules/packages/components/ClientPackagesList'
 import { useAuth } from '@/shared/providers/AuthProvider'
 import { useToast } from '@/shared/hooks/use-toast'
+import { ClientGallery } from '@/modules/gallery/components/ClientGallery'
 import {
   Select,
   SelectContent,
@@ -322,8 +323,10 @@ const ProfessionalPatientDetail = () => {
                     </p>
                   )}
                 </ScrollArea>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+
+            <ClientGallery clientId={patient.id} clientName={patient.name} />
 
             <Card>
               <CardHeader>

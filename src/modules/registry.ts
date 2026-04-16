@@ -26,4 +26,5 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
   { key: 'services',      label: 'Serviços e Pacotes', defaultEnabled: true  },
   { key: 'partnerships',  label: 'Parcerias',          defaultEnabled: true  },
   { key: 'maintenance',   label: 'Manutenção',         defaultEnabled: false },
+  { key: 'gallery',       label: 'Galeria Clínica',    defaultEnabled: true  },
 ]

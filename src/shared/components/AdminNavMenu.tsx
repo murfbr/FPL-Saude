@@ -19,6 +19,7 @@ import {
   MessageSquare,
   ChevronDown,
   Database,
+  Camera,
 } from 'lucide-react'
 
 import { cn } from '@/shared/lib/utils'
@@ -46,12 +47,12 @@ export function AdminNavMenu({ currentTab, onTabChange }: AdminNavMenuProps) {
         <DropdownMenuTrigger asChild>
           <Button
             variant={
-              ['overview', 'kpi', 'financials'].includes(currentTab)
+              ['overview', 'kpi', 'financials', 'gallery'].includes(currentTab)
                 ? 'secondary'
                 : 'ghost'
             }
             className={cn(
-              ['overview', 'kpi', 'financials'].includes(currentTab) &&
+              ['overview', 'kpi', 'financials', 'gallery'].includes(currentTab) &&
                 'bg-accent',
             )}
           >
@@ -69,6 +70,16 @@ export function AdminNavMenu({ currentTab, onTabChange }: AdminNavMenuProps) {
           >
             <BarChart className="mr-2 h-4 w-4" />
             Visão Geral
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => onTabChange('gallery')}
+            className={cn(
+              'cursor-pointer',
+              currentTab === 'gallery' && 'bg-muted',
+            )}
+          >
+            <Camera className="mr-2 h-4 w-4" />
+            Galeria Clínica
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => onTabChange('kpi')}
