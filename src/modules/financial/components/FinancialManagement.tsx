@@ -65,6 +65,7 @@ export const FinancialManagement = () => {
     (ClientSubscription & { financial_record_id?: string })[]
   >([])
   const [summary, setSummary] = useState<any>(null)
+  const [expectedSubsRevenue, setExpectedSubsRevenue] = useState(0)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [isLoading, setIsLoading] = useState(true)
   const [isProcessing, setIsProcessing] = useState<string | null>(null)
@@ -130,8 +131,15 @@ export const FinancialManagement = () => {
       })
 
       setSubscriptions(enrichedSubs)
+
+      // Calcular receita prevista de assinaturas a partir dos dados já carregados (0 reads extras)
+      const expectedTotal = subs.reduce((acc, sub) => {
+        return acc + calculateSubscriptionAmount(sub, currentDate)
+      }, 0)
+      setExpectedSubsRevenue(expectedTotal)
     } else {
       setSubscriptions([])
+      setExpectedSubsRevenue(0)
     }
 
     setIsLoading(false)
@@ -246,34 +254,34 @@ export const FinancialManagement = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {formatCurrency(summary?.expected_subscriptions_revenue || 0)}
+              {formatCurrency(expectedSubsRevenue)}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Consolidado do Mês</p>
+            <p className="text-xs text-muted-foreground mt-1">{subscriptions.length} assinatura(s) ativa(s)</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Recebido</CardTitle>
+            <CardTitle className="text-sm font-medium">Recebido (Total)</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {formatCurrency(summary?.subscriptions_revenue_received || 0)}
+              {formatCurrency(summary?.total_revenue || 0)}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Consolidado do Mês</p>
+            <p className="text-xs text-muted-foreground mt-1">Avulsas + Assinaturas + Pacotes</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Pendente</CardTitle>
+            <CardTitle className="text-sm font-medium">Pendente (Assinaturas)</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-orange-600">
               {formatCurrency(
-                Math.max(0, (summary?.expected_subscriptions_revenue || 0) - (summary?.subscriptions_revenue_received || 0))
+                Math.max(0, expectedSubsRevenue - (summary?.subscriptions_revenue_received || 0))
               )}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Consolidado do Mês</p>
+            <p className="text-xs text-muted-foreground mt-1">Receita prevista − Assinaturas pagas</p>
           </CardContent>
         </Card>
       </div>

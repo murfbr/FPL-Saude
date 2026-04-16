@@ -41,8 +41,7 @@ async function recalculateMonthlySummary(companyId: string, month: Date) {
     .where('payment_date', '<=', endStr)
     .get()
 
-  // 3. Agregar appointments
-  let totalRevenue = 0
+  // 3. Agregar appointments (contagem + breakdowns)
   let completedAppointments = 0
   let cancelledAppointments = 0
   let noShowAppointments = 0
@@ -77,7 +76,6 @@ async function recalculateMonthlySummary(companyId: string, month: Date) {
 
     if (a.status === 'completed') {
       completedAppointments++
-      totalRevenue += price
       byProfessional[profId].completed++
       byProfessional[profId].revenue += price
       byService[serviceId].count++
@@ -93,7 +91,8 @@ async function recalculateMonthlySummary(companyId: string, month: Date) {
     }
   })
 
-  // 4. Agregar financial_records (assinaturas/pacotes)
+  // 4. Agregar financial_records — receita REAL (avulsas + assinaturas + pacotes)
+  let totalRevenue = 0
   let subscriptionsRevenue = 0
   let subscriptionsPaidCount = 0
 
@@ -101,14 +100,73 @@ async function recalculateMonthlySummary(companyId: string, month: Date) {
     const f = docSnap.data()
     const amount = (f.amount as number) || 0
 
-    // Registros vinculados a assinatura
+    // Soma TODA receita registrada no mês
+    totalRevenue += amount
+
+    // Registros vinculados a assinatura (para breakdown separado)
     if (f.client_subscription_id) {
       subscriptionsRevenue += amount
       subscriptionsPaidCount++
     }
   })
 
-  // 5. Serializar Sets para arrays (Firestore não suporta Set)
+  // 5. Calcular receita prevista de assinaturas ativas
+  let expectedSubscriptionsRevenue = 0
+  const clientsSnap = await db
+    .collection('companies')
+    .doc(companyId)
+    .collection('clients')
+    .where('is_active', '==', true)
+    .get()
+
+  for (const clientDoc of clientsSnap.docs) {
+    const subsSnap = await db
+      .collection('companies')
+      .doc(companyId)
+      .collection('clients')
+      .doc(clientDoc.id)
+      .collection('subscriptions')
+      .where('status', '==', 'active')
+      .get()
+
+    for (const subDoc of subsSnap.docs) {
+      const sub = subDoc.data()
+      let subPrice = 0
+
+      // Buscar preço do plano ou serviço associado
+      if (sub.subscription_plan_id) {
+        const planSnap = await db
+          .collection('companies').doc(companyId)
+          .collection('subscription_plans').doc(sub.subscription_plan_id)
+          .get()
+        subPrice = (planSnap.data()?.price as number) || 0
+      } else if (sub.service_id) {
+        const svcSnap = await db
+          .collection('companies').doc(companyId)
+          .collection('services').doc(sub.service_id)
+          .get()
+        subPrice = (svcSnap.data()?.price as number) || 0
+      }
+
+      // Proration: se a assinatura começou neste mês, calcular proporcional
+      if (sub.start_date && subPrice > 0) {
+        const startDate = new Date(sub.start_date as string)
+        const isSameMonth =
+          startDate.getFullYear() === month.getFullYear() &&
+          startDate.getMonth() === month.getMonth()
+
+        if (isSameMonth) {
+          const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate()
+          const daysActive = daysInMonth - startDate.getDate() + 1
+          subPrice = Math.round((subPrice / daysInMonth) * daysActive * 100) / 100
+        }
+      }
+
+      expectedSubscriptionsRevenue += subPrice
+    }
+  }
+
+  // 6. Serializar Sets para arrays (Firestore não suporta Set)
   const byPartnershipSerializer: Record<string, { name: string; clientCount: number; sessionCount: number }> = {}
   for (const [id, data] of Object.entries(byPartnership)) {
     byPartnershipSerializer[id] = {
@@ -118,7 +176,7 @@ async function recalculateMonthlySummary(companyId: string, month: Date) {
     }
   }
 
-  // 6. Persistir o sumário
+  // 7. Persistir o sumário
   const summaryRef = db
     .collection('companies')
     .doc(companyId)
@@ -129,7 +187,7 @@ async function recalculateMonthlySummary(companyId: string, month: Date) {
     month: monthKey,
     updated_at: admin.firestore.FieldValue.serverTimestamp(),
 
-    // KPIs gerais
+    // KPIs gerais — total_revenue agora vem dos financial_records (receita real)
     total_revenue: totalRevenue,
     completed_appointments: completedAppointments,
     cancelled_appointments: cancelledAppointments,
@@ -139,6 +197,7 @@ async function recalculateMonthlySummary(companyId: string, month: Date) {
     // Financeiro (assinaturas)
     subscriptions_revenue_received: subscriptionsRevenue,
     subscriptions_paid_count: subscriptionsPaidCount,
+    expected_subscriptions_revenue: expectedSubscriptionsRevenue,
 
     // Breakdowns
     by_professional: byProfessional,
@@ -146,7 +205,7 @@ async function recalculateMonthlySummary(companyId: string, month: Date) {
     by_partnership: byPartnershipSerializer,
   })
 
-  console.log(`[summaries] Recalculated ${companyId}/${monthKey}: ${totalAppointments} appts, R$ ${totalRevenue}`)
+  console.log(`[summaries] Recalculated ${companyId}/${monthKey}: ${totalAppointments} appts, R$ ${totalRevenue}, expected subs R$ ${expectedSubscriptionsRevenue}`)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -207,5 +266,21 @@ export const onFinancialRecordWrite = onDocumentWritten(
     if (isNaN(month.getTime())) return
 
     await recalculateMonthlySummary(companyId, month)
+  }
+)
+
+/**
+ * Trigger: qualquer escrita em subscriptions de um cliente
+ * → Recalcula o sumário do mês corrente (assinaturas afetam o expected revenue)
+ */
+export const onSubscriptionWrite = onDocumentWritten(
+  {
+    document: 'companies/{companyId}/clients/{clientId}/subscriptions/{subscriptionId}',
+    region: REGION,
+  },
+  async (event) => {
+    const companyId = event.params.companyId
+    // Recalcular o mês corrente, pois assinaturas impactam expected revenue
+    await recalculateMonthlySummary(companyId, new Date())
   }
 )
