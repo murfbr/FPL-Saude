@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { addDays, subDays, format, startOfDay, endOfDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import {
@@ -11,7 +11,6 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { getAppointmentsForRange } from '@/shared/services'
 import { Appointment } from '@/shared/types'
 import { cn, formatInTimeZone } from '@/shared/lib/utils'
 import { ViewMode } from './AgendaView'
@@ -22,6 +21,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { useAuth } from '@/shared/providers/AuthProvider'
+import { useAppointmentsForRange } from '@/modules/appointments/queries'
 
 interface AgendaDayViewProps {
   currentDate: Date
@@ -46,40 +46,20 @@ export const AgendaDayView = ({
   refreshTrigger,
 }: AgendaDayViewProps) => {
   const { loading, companyId } = useAuth()
-  const [appointments, setAppointments] = useState<Appointment[]>([])
-  const [isLoading, setIsLoading] = useState(true)
   const [hoveredSlot, setHoveredSlot] = useState<{
     hour: number
     minutes: number
   } | null>(null)
 
-  useEffect(() => {
-    const fetchData = async () => {
-      // Se ainda estiver carregando Auth ou não houver ID (e não for super-admin), não faz nada
-      if (loading) return
-      if (!companyId) {
-        setIsLoading(false)
-        return
-      }
+  const start = useMemo(() => startOfDay(currentDate), [currentDate])
+  const end = useMemo(() => endOfDay(currentDate), [currentDate])
 
-      setIsLoading(true)
-      try {
-        const start = startOfDay(currentDate)
-        const end = endOfDay(currentDate)
-        const { data } = await getAppointmentsForRange(
-          start,
-          end,
-          selectedProfessional,
-        )
-        setAppointments(data || [])
-      } catch (e) {
-        console.error(e)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    fetchData()
-  }, [selectedProfessional, currentDate, loading, companyId, refreshTrigger])
+  const { data: appointments = [], isLoading } = useAppointmentsForRange(
+    start,
+    end,
+    selectedProfessional,
+    { enabled: !loading && !!companyId },
+  )
 
   // If Expanded: Show 00-23
   // If Collapsed: Show 06-21 (covers until 22:00)

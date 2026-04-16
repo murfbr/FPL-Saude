@@ -1,6 +1,7 @@
 /* Main App Component - Handles routing (using react-router-dom), query client and other providers */
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from '@/components/ui/toaster'
 import { Toaster as Sonner } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -9,6 +10,7 @@ import { TenantProvider } from '@/shared/providers/TenantProvider'
 import { ProtectedRoute } from '@/shared/components/ProtectedRoute'
 import { RoleGuard } from '@/shared/components/RoleGuard'
 import { ErrorBoundary } from '@/shared/components/ErrorBoundary'
+import { ReloadPrompt } from '@/shared/components/ReloadPrompt'
 import { Analytics } from '@vercel/analytics/react'
 import Layout from '@/shared/components/Layout'
 import PublicLayout from '@/shared/components/PublicLayout'
@@ -36,6 +38,16 @@ import { SuperAdminGuard } from '@/modules/super-admin/SuperAdminGuard'
 
 console.log('App.tsx: Initializing application...')
 
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+      staleTime: 30_000, // 30s padrão
+    },
+  },
+})
+
 // Helper component to clean up overlays on route change
 const OverlayCleanup = () => {
   const location = useLocation()
@@ -50,6 +62,7 @@ const OverlayCleanup = () => {
 }
 
 const App = () => (
+  <QueryClientProvider client={queryClient}>
   <ErrorBoundary>
     <BrowserRouter
       future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
@@ -196,6 +209,8 @@ const App = () => (
       </AuthProvider>
     </BrowserRouter>
   </ErrorBoundary>
+  <ReloadPrompt />
+  </QueryClientProvider>
 )
 
 export default App

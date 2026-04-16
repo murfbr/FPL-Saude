@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import {
   Card,
   CardContent,
@@ -17,12 +17,9 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import {
-  getActiveSubscriptions,
-  getSubscriptionPayments,
   paySubscription,
   deleteSubscriptionPayment,
 } from '@/shared/services'
-import { getMonthlySummary } from '@/modules/summaries/service'
 import { ClientSubscription } from '@/shared/types'
 import { useAuth } from '@/shared/providers/AuthProvider'
 import { useToast } from '@/shared/hooks/use-toast'
@@ -31,8 +28,6 @@ import {
   format,
   addMonths,
   subMonths,
-  startOfMonth,
-  endOfMonth,
 } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import {
@@ -57,97 +52,77 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PackageFinancials } from './PackageFinancials'
+import {
+  useMonthlySummary,
+  useActiveSubscriptions,
+  useSubscriptionPayments,
+  useInvalidateFinancial,
+} from '@/modules/financial/queries'
 
 export const FinancialManagement = () => {
   const { professionalId, user } = useAuth()
   const { toast } = useToast()
-  const [subscriptions, setSubscriptions] = useState<
-    (ClientSubscription & { financial_record_id?: string })[]
-  >([])
-  const [summary, setSummary] = useState<any>(null)
-  const [expectedSubsRevenue, setExpectedSubsRevenue] = useState(0)
   const [currentDate, setCurrentDate] = useState(new Date())
-  const [isLoading, setIsLoading] = useState(true)
   const [isProcessing, setIsProcessing] = useState<string | null>(null)
+  const invalidateFinancial = useInvalidateFinancial()
 
-  const fetchData = async () => {
-    setIsLoading(true)
-    const { data: summaryData } = await getMonthlySummary(currentDate)
-    setSummary(summaryData)
+  // TanStack Query: cache de summary (10min), subscriptions (5min), payments (5min)
+  const { data: summary, isLoading: summaryLoading } = useMonthlySummary(currentDate)
+  const { data: subs = [], isLoading: subsLoading } = useActiveSubscriptions({ limit: 50 })
 
-    const { data: subs, error } = await getActiveSubscriptions({ limit: 50 })
+  const subIds = useMemo(() => subs.map((s) => s.id), [subs])
+  const { data: payments = [] } = useSubscriptionPayments(subIds, currentDate)
 
-    if (error || !subs) {
-      toast({
-        title: 'Erro ao carregar dados',
-        variant: 'destructive',
-      })
-      setIsLoading(false)
-      return
-    }
+  // Enriquecer subscriptions com status de pagamento (computado, 0 reads)
+  const subscriptions = useMemo(() => {
+    if (subs.length === 0) return []
 
-    const subIds = subs.map((s) => s.id)
-    if (subIds.length > 0) {
-      const { data: payments } = await getSubscriptionPayments(
-        subIds,
-        currentDate,
-      )
-      // Map subscription ID to financial record ID
-      const paidSubMap = new Map<string, string>()
-      payments?.forEach((p) => {
-        paidSubMap.set(p.client_subscription_id, p.id)
-      })
+    const paidSubMap = new Map<string, string>()
+    payments.forEach((p: any) => {
+      paidSubMap.set(p.client_subscription_id, p.id)
+    })
 
-      const enrichedSubs = subs.map((sub) => {
-        const paymentId = paidSubMap.get(sub.id)
-        let status: 'paid' | 'overdue' | 'pending' = 'pending'
+    return subs.map((sub) => {
+      const paymentId = paidSubMap.get(sub.id)
+      let status: 'paid' | 'overdue' | 'pending' = 'pending'
 
-        if (paymentId) {
-          status = 'paid'
-        } else {
-          const today = new Date()
-          const viewMonth = currentDate.getMonth()
-          const viewYear = currentDate.getFullYear()
-          const currentMonth = today.getMonth()
-          const currentYear = today.getFullYear()
+      if (paymentId) {
+        status = 'paid'
+      } else {
+        const today = new Date()
+        const viewMonth = currentDate.getMonth()
+        const viewYear = currentDate.getFullYear()
+        const currentMonth = today.getMonth()
+        const currentYear = today.getFullYear()
 
-          if (
-            viewYear < currentYear ||
-            (viewYear === currentYear && viewMonth < currentMonth)
-          ) {
+        if (
+          viewYear < currentYear ||
+          (viewYear === currentYear && viewMonth < currentMonth)
+        ) {
+          status = 'overdue'
+        } else if (viewYear === currentYear && viewMonth === currentMonth) {
+          if (today.getDate() > 5) {
             status = 'overdue'
-          } else if (viewYear === currentYear && viewMonth === currentMonth) {
-            if (today.getDate() > 5) {
-              status = 'overdue'
-            }
           }
         }
+      }
 
-        return {
-          ...sub,
-          payment_status: status,
-          financial_record_id: paymentId,
-        }
-      })
+      return {
+        ...sub,
+        payment_status: status,
+        financial_record_id: paymentId,
+      }
+    })
+  }, [subs, payments, currentDate])
 
-      setSubscriptions(enrichedSubs)
+  // Receita prevista calculada client-side (0 reads)
+  const expectedSubsRevenue = useMemo(() => {
+    return subs.reduce((acc, sub) => {
+      return acc + calculateSubscriptionAmount(sub, currentDate)
+    }, 0)
+  }, [subs, currentDate])
 
-      // Calcular receita prevista de assinaturas a partir dos dados já carregados (0 reads extras)
-      const expectedTotal = subs.reduce((acc, sub) => {
-        return acc + calculateSubscriptionAmount(sub, currentDate)
-      }, 0)
-      setExpectedSubsRevenue(expectedTotal)
-    } else {
-      setSubscriptions([])
-      setExpectedSubsRevenue(0)
-    }
-
-    setIsLoading(false)
-  }
-
-  useEffect(() => {
-    fetchData()
-  }, [currentDate])
+  const isLoading = summaryLoading || subsLoading
 
   const handlePay = async (sub: ClientSubscription) => {
     // Use professionalId if available, otherwise fall back to the logged-in user's id
@@ -171,7 +146,7 @@ export const FinancialManagement = () => {
         title: 'Pagamento Confirmado',
         description: `Mensalidade de ${sub.clients?.name} registrada com sucesso.`,
       })
-      fetchData()
+      invalidateFinancial()
     }
     setIsProcessing(null)
   }
@@ -196,7 +171,7 @@ export const FinancialManagement = () => {
         title: 'Estorno Realizado',
         description: `Pagamento de ${sub.clients?.name} foi removido.`,
       })
-      fetchData()
+      invalidateFinancial()
     }
     setIsProcessing(null)
   }

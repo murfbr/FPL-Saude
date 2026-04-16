@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Card,
@@ -8,28 +8,18 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { getUpcomingAppointments } from '@/shared/services'
 import { Appointment } from '@/shared/types'
 import { format, formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { CalendarClock } from 'lucide-react'
+import { useUpcomingAppointments } from '@/modules/appointments/queries'
 
 export const UpcomingAppointments = () => {
-  const [appointments, setAppointments] = useState<Appointment[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const { data: appointments = [], isLoading } = useUpcomingAppointments()
 
-  useEffect(() => {
-    const fetchAppointments = async () => {
-      setIsLoading(true)
-      const { data } = await getUpcomingAppointments()
-      setAppointments(data || [])
-      setIsLoading(false)
-    }
-    fetchAppointments()
-  }, [])
-
-  const validAppointments = appointments.filter(
-    (appt) => appt.schedules?.start_time,
+  const validAppointments = useMemo(
+    () => appointments.filter((appt) => appt.schedules?.start_time),
+    [appointments],
   )
 
   return (

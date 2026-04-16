@@ -16,7 +16,6 @@ import { ptBR } from 'date-fns/locale'
 import { ChevronLeft, ChevronRight, Plus, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { getAppointmentsForRange } from '@/shared/services'
 import { Appointment } from '@/shared/types'
 import { cn, formatInTimeZone } from '@/shared/lib/utils'
 import { ViewMode } from './AgendaView'
@@ -26,6 +25,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { useAuth } from '@/shared/providers/AuthProvider'
+import { useAppointmentsForRange } from '@/modules/appointments/queries'
 
 interface AgendaCalendarViewProps {
   currentDate: Date
@@ -49,42 +49,21 @@ export const AgendaCalendarView = ({
   refreshTrigger,
 }: AgendaCalendarViewProps) => {
   const { loading, companyId } = useAuth()
-  const [appointments, setAppointments] = useState<Appointment[]>([])
-  const [isLoading, setIsLoading] = useState(true)
   const [displayedMonth, setDisplayedMonth] = useState(currentDate)
 
   useEffect(() => {
     setDisplayedMonth(currentDate)
   }, [currentDate])
 
-  useEffect(() => {
-    const fetchData = async () => {
-      // Se ainda estiver carregando Auth ou não houver ID (e não for super-admin), não faz nada
-      if (loading) return
-      if (!companyId) {
-        setIsLoading(false)
-        return
-      }
+  const start = useMemo(() => startOfMonth(displayedMonth), [displayedMonth])
+  const end = useMemo(() => endOfMonth(displayedMonth), [displayedMonth])
 
-      setIsLoading(true)
-      try {
-        const start = startOfMonth(displayedMonth)
-        const end = endOfMonth(displayedMonth)
-
-        const { data } = await getAppointmentsForRange(
-          start,
-          end,
-          selectedProfessional,
-        )
-        setAppointments(data || [])
-      } catch (e) {
-        console.error(e)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    fetchData()
-  }, [displayedMonth, selectedProfessional, loading, companyId, refreshTrigger])
+  const { data: appointments = [], isLoading } = useAppointmentsForRange(
+    start,
+    end,
+    selectedProfessional,
+    { enabled: !loading && !!companyId },
+  )
 
   const daysInMonth = useMemo(() => {
     const start = startOfMonth(displayedMonth)
