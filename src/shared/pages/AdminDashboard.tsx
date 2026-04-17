@@ -22,6 +22,7 @@ import {
 
 import { useAuth } from '@/shared/providers/AuthProvider'
 import { Professional, Client, Service } from '@/shared/types'
+import { useTenant } from '@/shared/contexts/TenantContext'
 import { getAllProfessionals, getProfessionalById, getProfessionalsCount } from '@/modules/professionals/service'
 import { getAllClients, getClientsCount } from '@/modules/clients/service'
 import { getAllServices } from '@/modules/services-catalog/service'
@@ -59,6 +60,7 @@ type ClientStatusFilter = 'all' | 'active' | 'inactive'
 
 const AdminDashboard = () => {
   const { user, professionalId, role, loading, companyId } = useAuth()
+  const { config, tenantLoading } = useTenant()
   const [searchParams, setSearchParams] = useSearchParams()
   const [professionals, setProfessionals] = useState<Professional[]>([])
   const [clients, setClients] = useState<Client[]>([])
@@ -96,6 +98,21 @@ const AdminDashboard = () => {
       cleanupGhostOverlays()
     }
   }, [])
+
+  // Module enforcement
+  useEffect(() => {
+    if (config?.modules && currentTab) {
+      if (config.modules[currentTab as keyof typeof config.modules]?.enabled === false) {
+        const firstEnabled = [
+          'overview', 'kpi', 'agenda', 'financials', 'professionals', 'patients', 
+          'timesheets', 'messages', 'services', 'gallery', 'partnerships', 'maintenance'
+        ].find(t => config.modules[t as keyof typeof config.modules]?.enabled !== false)
+        if (firstEnabled) {
+          setSearchParams({ tab: firstEnabled })
+        }
+      }
+    }
+  }, [config, currentTab, setSearchParams])
 
   useEffect(() => {
     const fetchUserName = async () => {
@@ -195,10 +212,10 @@ const AdminDashboard = () => {
     { value: 'gallery', label: 'Galeria Clínica', icon: Camera },
     { value: 'partnerships', label: 'Parcerias', icon: Handshake },
     { value: 'maintenance', label: 'Manutenção', icon: Database },
-  ]
+  ].filter(tab => config?.modules ? config.modules[tab.value as keyof typeof config.modules]?.enabled !== false : true)
 
   // Role-Based Rendering Check: Wait for profile to be fully loaded
-  if (loading || !role || (!companyId && role !== 'super_admin')) {
+  if (loading || tenantLoading || !role || (!companyId && role !== 'super_admin')) {
     return (
       <div className="container mx-auto py-8 px-4 space-y-4">
         <Skeleton className="h-12 w-1/3" />

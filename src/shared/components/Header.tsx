@@ -3,14 +3,21 @@ import { useIsMobile } from '@/shared/hooks/use-mobile'
 import { UserNav } from './header/UserNav'
 import { MobileNav } from './header/MobileNav'
 import { useAuth } from '@/shared/providers/AuthProvider'
+import { useTenant } from '@/shared/contexts/TenantContext'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { XCircle } from 'lucide-react'
 
 export const Header = () => {
   const isMobile = useIsMobile()
-  const { user, loading, role, isImpersonating, impersonateCompany } = useAuth()
+  const { user, loading: authLoading, role, isImpersonating, impersonateCompany } = useAuth()
+  const { config, tenantLoading } = useTenant()
   const location = useLocation()
+  
+  const loading = authLoading || tenantLoading
+
+  const appName = config?.branding?.app_name || 'FPL Saúde'
+  const logoUrl = config?.branding?.logo_url || '/logo.png'
 
   // Determine if we are in an admin context for branding
   // This is used to display the "Dashboard Administrativo" in the header
@@ -22,8 +29,12 @@ export const Header = () => {
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 print:hidden">
       <div className="container flex h-14 max-w-screen-2xl items-center justify-between">
         <Link to="/" className="flex items-center space-x-2">
-          <img src="/logo.png" alt="FPL Saúde Logo" className="h-8 w-auto object-contain" />
-          <span className="font-bold text-lg text-primary hidden sm:inline-block">FPL Saúde</span>
+          {logoUrl !== '/logo.png' ? (
+             <img src={logoUrl} alt={`${appName} Logo`} className="h-8 w-auto object-contain rounded" />
+          ) : (
+             <img src="/logo.png" alt="FPL Saúde Logo" className="h-8 w-auto object-contain" />
+          )}
+          <span className="font-bold text-lg text-primary hidden sm:inline-block">{appName}</span>
           {isAdminContext && (
             <>
               <span className="text-muted-foreground hidden sm:inline">|</span>

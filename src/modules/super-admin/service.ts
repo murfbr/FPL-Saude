@@ -5,11 +5,13 @@ import {
   getDoc,
   setDoc,
   updateDoc,
+  deleteDoc,
   query,
   where,
 } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { db, storage } from '@/shared/lib/firebase'
+import { db, storage, secondaryAuth } from '@/shared/lib/firebase'
+import { createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth'
 import type { CompanyConfig } from '@/shared/types/tenant'
 import { DEFAULT_BRANDING, DEFAULT_ROLES } from '@/shared/types/tenant'
 import { MODULE_REGISTRY } from '@/modules/registry'
@@ -226,44 +228,63 @@ export async function createCompanyUser(
   name: string,
   email: string,
   role: string,
-  apiKey: string,
+  password?: string,
 ): Promise<{ error: any }> {
   try {
-    // Step 1: Create Auth user via REST (does NOT affect current session)
-    const tempPassword = Math.random().toString(36).slice(-12) + 'A1!'
-    const res = await fetch(
-      `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password: tempPassword, returnSecureToken: false }),
-      },
-    )
-    if (!res.ok) {
-      const body = await res.json()
-      throw new Error(body?.error?.message ?? 'Falha ao criar usuário.')
+    // Step 1: Create Auth user via Secondary SDK (does NOT affect current session)
+    // Use provided password or generate a safe temporary one
+    const finalPassword = password || (Math.random().toString(36).slice(-10) + 'A1!')
+    
+    let uid: string
+    try {
+      const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, finalPassword)
+      uid = userCredential.user.uid
+    } catch (authError: any) {
+      if (authError.code === 'auth/email-already-in-set' || authError.code === 'auth/email-already-exists') {
+        throw new Error('Este e-mail já está sendo usado por outro usuário.')
+      }
+      throw authError
     }
-    const { localId: uid } = await res.json()
 
     // Step 2: Write Firestore user doc
-    await setDoc(doc(db, 'users', uid), {
-      name,
-      email,
-      role,
-      companyId,
-      created_at: new Date().toISOString(),
-    })
+    try {
+      await setDoc(doc(db, 'users', uid), {
+        name,
+        email,
+        role,
+        companyId,
+        created_at: new Date().toISOString(),
+      })
+    } catch (dbError) {
+      console.error('Error writing to Firestore:', dbError)
+      throw new Error('Usuário criado no Auth, mas falhou ao salvar perfil no banco de dados.')
+    }
 
     // Step 3: Send password-reset email so user sets their own password
-    await fetch(
-      `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requestType: 'PASSWORD_RESET', email }),
-      },
-    )
+    // ONLY if a manual password was NOT provided
+    if (!password) {
+      try {
+        await sendPasswordResetEmail(secondaryAuth, email)
+      } catch (emailError: any) {
+        console.error('Error sending reset email:', emailError)
+        // Custom message for critical failures
+        if (emailError.code === 'auth/unauthorized-continue-uri') {
+          throw new Error('Usuário criado, mas o domínio não está autorizado para enviar e-mails.')
+        }
+        throw new Error(`Usuário criado, mas falhou ao enviar e-mail de convite: ${emailError.message}`)
+      }
+    }
 
+    return { error: null }
+  } catch (error: any) {
+    console.error('createCompanyUser error:', error)
+    return { error: error.message || error }
+  }
+}
+
+export async function deleteCompanyUser(uid: string): Promise<{ error: any }> {
+  try {
+    await deleteDoc(doc(db, 'users', uid))
     return { error: null }
   } catch (error) {
     return { error }

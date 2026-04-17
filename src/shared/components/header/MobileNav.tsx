@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/shared/providers/AuthProvider'
+import { useTenant } from '@/shared/contexts/TenantContext'
 import {
   Sheet,
   SheetContent,
@@ -12,7 +13,10 @@ import { NotificationBell } from './NotificationBell'
 
 export const MobileNav = () => {
   const { user, signOut, role } = useAuth()
+  const { config } = useTenant()
   const navigate = useNavigate()
+  
+  const appName = config?.branding?.app_name || 'FPL Saúde'
 
   const handleSignOut = async () => {
     console.log('[AuthDebug] MobileNav: Triggering sign out...')
@@ -41,7 +45,7 @@ export const MobileNav = () => {
             <div className="flex justify-between items-center border-b pb-4">
               <Link to="/" className="flex items-center space-x-2">
                 <span className="font-bold text-lg text-primary">
-                  FPL Saúde
+                  {appName}
                 </span>
               </Link>
               <SheetClose asChild>

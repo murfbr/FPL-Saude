@@ -36,6 +36,7 @@ import {
   getUsersByCompany,
   updateUserRole,
   createCompanyUser,
+  deleteCompanyUser,
   setCompanyActive,
   type CompanyUser,
 } from '@/modules/super-admin/service'
@@ -375,6 +376,7 @@ const UsersTab = ({ company }: { company: CompanyConfig }) => {
   const [newName, setNewName] = useState('')
   const [newEmail, setNewEmail] = useState('')
   const [newRole, setNewRole] = useState('professional')
+  const [newPassword, setNewPassword] = useState('')
   const [creating, setCreating] = useState(false)
 
   useEffect(() => {
@@ -396,11 +398,21 @@ const UsersTab = ({ company }: { company: CompanyConfig }) => {
     }
   }
 
+  const handleDeleteUser = async (uid: string) => {
+    if (!confirm('Tem certeza que deseja remover este usuário?')) return
+    const { error } = await deleteCompanyUser(uid)
+    if (error) {
+      toast({ title: 'Erro ao remover usuário', variant: 'destructive' })
+    } else {
+      setUsers((prev) => prev.filter((u) => u.uid !== uid))
+      toast({ title: 'Usuário removido!' })
+    }
+  }
+
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault()
     setCreating(true)
-    const apiKey = import.meta.env.VITE_FIREBASE_API_KEY
-    const { error } = await createCompanyUser(company.id, newName, newEmail, newRole, apiKey)
+    const { error } = await createCompanyUser(company.id, newName, newEmail, newRole, newPassword)
     setCreating(false)
     if (error) {
       toast({
@@ -410,11 +422,15 @@ const UsersTab = ({ company }: { company: CompanyConfig }) => {
       })
       return
     }
-    toast({ title: 'Usuário criado! E-mail de redefinição de senha enviado.' })
+    toast({ 
+      title: 'Usuário criado!', 
+      description: newPassword ? 'Acesso liberado com a senha manual.' : 'E-mail de convite enviado.' 
+    })
     setShowAddForm(false)
     setNewName('')
     setNewEmail('')
     setNewRole('professional')
+    setNewPassword('')
     // Reload users
     const { data } = await getUsersByCompany(company.id)
     if (data) setUsers(data)
@@ -463,12 +479,21 @@ const UsersTab = ({ company }: { company: CompanyConfig }) => {
                   </SelectContent>
                 </Select>
               </div>
-              <Button type="submit" disabled={creating}>
+              <div className="space-y-1">
+                <Label>Senha (opcional)</Label>
+                <Input
+                  type="password"
+                  placeholder="Se vazio, envia e-mail"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
+              </div>
+              <Button type="submit" disabled={creating} className="sm:mt-0">
                 {creating ? 'Criando...' : 'Criar'}
               </Button>
             </form>
             <p className="text-xs text-muted-foreground mt-2">
-              O usuário receberá um e-mail para definir sua própria senha.
+              Se você definir uma senha, o usuário poderá logar imediatamente. Caso contrário, ele receberá um e-mail.
             </p>
           </CardContent>
         </Card>
@@ -484,12 +509,13 @@ const UsersTab = ({ company }: { company: CompanyConfig }) => {
               <TableHead>E-mail</TableHead>
               <TableHead>Função</TableHead>
               <TableHead>Cadastrado em</TableHead>
+              <TableHead className="w-10"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {users.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                   Nenhum usuário cadastrado nesta empresa.
                 </TableCell>
               </TableRow>
@@ -517,6 +543,16 @@ const UsersTab = ({ company }: { company: CompanyConfig }) => {
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
                     {new Date(user.created_at).toLocaleDateString('pt-BR')}
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                      onClick={() => handleDeleteUser(user.uid)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))

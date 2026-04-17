@@ -1,7 +1,9 @@
 import { createContext, useContext } from 'react'
+import type { CompanyConfig } from '@/shared/types/tenant'
 
 export interface TenantContextType {
   companyId: string | null
+  config: CompanyConfig | null
   isSuperAdmin: boolean
   tenantLoading: boolean
   tenantError: Error | null
