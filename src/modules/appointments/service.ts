@@ -278,8 +278,7 @@ export async function rescheduleFutureAppointments(
     const appointmentsRef = collection(db, 'companies', getCompanyId(), 'appointments')
     const q = query(
       appointmentsRef,
-      where('recurrence_group_id', '==', groupId),
-      where('schedules.start_time', '>=', sourceData.schedules.start_time)
+      where('recurrence_group_id', '==', groupId)
     )
     const snapshot = await getDocs(q)
     
@@ -290,6 +289,9 @@ export async function rescheduleFutureAppointments(
 
     snapshot.docs.forEach(d => {
       const data = d.data()
+      // Filter out past appointments in JS to avoid composite index requirement
+      if (data.schedules.start_time < sourceData.schedules.start_time) return;
+
       const oldStart = new Date(data.schedules.start_time)
       const newStart = new Date(oldStart.getTime() + diffMs)
       
@@ -489,8 +491,7 @@ export async function deleteFutureAppointments(appointmentId: string): Promise<{
     const appointmentsRef = collection(db, 'companies', companyId, 'appointments')
     const q = query(
       appointmentsRef,
-      where('recurrence_group_id', '==', groupId),
-      where('schedules.start_time', '>=', sourceData.schedules.start_time)
+      where('recurrence_group_id', '==', groupId)
     )
     const snapshot = await getDocs(q)
     
@@ -506,6 +507,9 @@ export async function deleteFutureAppointments(appointmentId: string): Promise<{
 
     snapshot.docs.forEach(d => {
       const appData = d.data()
+      // Filter out past appointments in JS to avoid composite index requirement
+      if (appData.schedules.start_time < sourceData.schedules.start_time) return;
+
       const isPackage = !!appData.client_package_id
       let isMonthlySubscription = appData.services?.value_type === 'monthly'
       

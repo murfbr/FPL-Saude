@@ -442,12 +442,28 @@ export async function exportClientData(clientId: string, exportType: string, for
       ? patient.general_assessment.find((i: any) => i.type === 'assessment' || !i.type)
       : (patient.general_assessment?.type === 'assessment' ? patient.general_assessment : null)
 
+    // Incluir histórico importado
+    if (patient.general_assessment && Array.isArray(patient.general_assessment)) {
+      patient.general_assessment.forEach((entry: any) => {
+        if (entry.type === 'imported_history') {
+          allNotes.push({
+            date: entry.date,
+            content: entry.content || '',
+            professional_name: 'Histórico Importado',
+          })
+        }
+      })
+    }
+    
+    // Sort novamente caso tenha inserido histórico importado
+    allNotes.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+
     if (allNotes.length === 0 && !assessmentEntry) {
        return { data: null, error: new Error('O paciente não possui anotações nem avaliação para exportar.') }
     }
 
     const reportDate = format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })
-    const sanitizedName = patient.name.replace(/[^a-zA-Z0-9_-]/g, '_')
+    const sanitizedName = (patient.name || 'Paciente').replace(/[^a-zA-Z0-9_-]/g, '_')
     const filename = `Historico_Clinico_${sanitizedName}_${format(new Date(), 'ddMMyyyy_HHmm')}.${formatType}`
 
     // 4. Gerando PDF
@@ -514,8 +530,9 @@ export async function exportClientData(clientId: string, exportType: string, for
          
          doc.setFont('helvetica', 'normal')
          
+         const safeContent = note.content ? String(note.content) : 'Sem anotação'
          // Split text para não vazar a folha A4
-         const splitText = doc.splitTextToSize(note.content, pageWidth - 30)
+         const splitText = doc.splitTextToSize(safeContent, pageWidth - 30)
          
          // Se estourar a página atual durante o texto, joga pra próxima
          if ((yOffset + (splitText.length * 6)) > 280) {
@@ -609,7 +626,7 @@ export async function exportClientData(clientId: string, exportType: string, for
                 spacing: { before: 200, after: 100 }
               }),
               new Paragraph({
-                 text: note.content,
+                 text: note.content ? String(note.content) : 'Sem anotação',
                  spacing: { after: 300 }
               })
           )
