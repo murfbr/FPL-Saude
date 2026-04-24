@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { getAllCompanies, getUsersByCompany } from '@/modules/super-admin/service'
+import { migrateAllClientNotes } from '@/shared/services'
 import type { CompanyConfig } from '@/shared/types/tenant'
 
 const SuperAdminDashboard = () => {
@@ -50,10 +51,22 @@ const SuperAdminDashboard = () => {
             <Building2 className="h-5 w-5" />
             Empresas
           </CardTitle>
-          <Button onClick={() => navigate('/super-admin/companies/new')}>
-            <PlusCircle className="h-4 w-4 mr-2" />
-            Nova Empresa
-          </Button>
+          <div className="flex gap-2">
+             <Button variant="outline" onClick={async () => {
+                let total = 0
+                for (const c of companies) {
+                   const res = await migrateAllClientNotes(c.id)
+                   if (res.success) total += res.migrated
+                }
+                alert(`Migração concluída em todas as empresas: ${total} anotações migradas.`)
+             }}>
+                Migrar Prontuários
+             </Button>
+             <Button onClick={() => navigate('/super-admin/companies/new')}>
+               <PlusCircle className="h-4 w-4 mr-2" />
+               Nova Empresa
+             </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>

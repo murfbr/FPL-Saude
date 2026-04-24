@@ -70,10 +70,15 @@ export interface Client {
 }
 
 export interface NoteEntry {
+  id?: string
+  client_id?: string
+  appointment_id?: string
   date: string
   professional_id?: string
   professional_name: string
   content: string
+  type?: 'evolution' | 'assessment' | 'imported_history'
+  updated_at?: string
 }
 
 export interface Appointment {

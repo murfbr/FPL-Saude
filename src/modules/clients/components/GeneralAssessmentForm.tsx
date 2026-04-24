@@ -22,8 +22,16 @@ import {
 import { useToast } from '@/shared/hooks/use-toast'
 import { Client } from '@/shared/types'
 import { FileText, Loader2, Save, Download, History, Plus, File, Upload, Download as DownloadIcon, Trash2 } from 'lucide-react'
-import { updateClient, exportClientData, getClientExams, uploadClientExam, deleteClientExam } from '@/shared/services'
-import { ClientExam } from '@/shared/types'
+import { 
+  updateClient,
+  exportClientData, 
+  getClientExams, 
+  uploadClientExam, 
+  deleteClientExam,
+  addClientNote,
+  getClientImportedHistory,
+} from '@/shared/services'
+import { ClientExam, NoteEntry } from '@/shared/types'
 import { useAuth } from '@/shared/providers/AuthProvider'
 import { ref, getDownloadURL } from 'firebase/storage'
 import { storage } from '@/shared/lib/firebase'
@@ -99,21 +107,26 @@ export const GeneralAssessmentForm = ({
   const [isDownloading, setIsDownloading] = useState<string | null>(null)
 
   // Data parsing
-  const { assessmentData, historyData } = useMemo(() => {
+  const assessmentData = useMemo(() => {
     const raw = client.general_assessment
     if (Array.isArray(raw)) {
-      return {
-        assessmentData:
-          raw.find((i: any) => i.type === 'assessment' || !i.type) || {},
-        historyData:
-          raw.filter((i: any) => i.type === 'imported_history') || [],
-      }
+      return raw.find((i: any) => i.type === 'assessment' || !i.type) || {}
     }
     if (raw && typeof raw === 'object') {
-      return { assessmentData: raw, historyData: [] }
+      return raw
     }
-    return { assessmentData: {}, historyData: [] }
+    return {}
   }, [client.general_assessment])
+
+  const [historyData, setHistoryData] = useState<NoteEntry[]>([])
+
+  useEffect(() => {
+    if (client.id && activeTab === 'history') {
+      getClientImportedHistory(client.id).then(({ data }) => {
+        if (data) setHistoryData(data)
+      })
+    }
+  }, [client.id, activeTab])
 
   const form = useForm<AssessmentFormValues>({
     resolver: zodResolver(assessmentSchema),
@@ -249,29 +262,16 @@ export const GeneralAssessmentForm = ({
   }
 
   const handleImportHistory = async () => {
-    if (!historyText.trim()) return
+    if (!historyText.trim() || !user) return
     setIsSubmitting(true)
 
-    const newHistoryEntry = {
-      type: 'imported_history',
+    const noteEntry: Omit<NoteEntry, 'id' | 'date'> = {
+      professional_name: user?.displayName || user?.email || 'Administrador',
       content: historyText,
-      date: new Date().toISOString(),
+      type: 'imported_history',
     }
 
-    const raw = client.general_assessment
-    let currentList: any[] = []
-
-    if (Array.isArray(raw)) {
-      currentList = [...raw]
-    } else if (raw && typeof raw === 'object') {
-      currentList = [raw]
-    }
-
-    const updatedAssessment = [...currentList, newHistoryEntry]
-
-    const { data, error } = await updateClient(client.id, {
-      general_assessment: updatedAssessment,
-    })
+    const { data, error } = await addClientNote(client.id, noteEntry)
 
     if (error) {
       toast({
@@ -282,7 +282,7 @@ export const GeneralAssessmentForm = ({
     } else if (data) {
       toast({ title: 'Histórico importado com sucesso!' })
       setHistoryText('')
-      onClientUpdated?.(data)
+      setHistoryData((prev) => [data, ...prev])
     }
     setIsSubmitting(false)
   }
@@ -599,27 +599,34 @@ export const GeneralAssessmentForm = ({
                   <div className="space-y-6">
                     {historyData
                       .sort(
-                        (a: any, b: any) =>
+                        (a, b) =>
                           new Date(b.date).getTime() -
                           new Date(a.date).getTime(),
                       )
-                      .map((item: any, idx: number) => (
-                        <div key={idx} className="border-b pb-4 last:border-0">
-                          <div className="flex justify-between mb-2">
-                            <span className="text-sm font-semibold text-primary">
-                              Importado
-                            </span>
-                            <span className="text-xs text-muted-foreground">
+                      .map((history, index) => (
+                        <div
+                          key={history.id || index}
+                          className="bg-muted/10 p-4 rounded-lg border shadow-sm relative group"
+                        >
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-xs text-muted-foreground font-medium">
+                              Adicionado em{' '}
                               {format(
-                                new Date(item.date),
-                                "dd/MM/yyyy 'às' HH:mm",
+                                new Date(history.date),
+                                "dd 'de' MMMM, yyyy",
                                 { locale: ptBR },
                               )}
                             </span>
+                            <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                              Por: {history.professional_name || 'Desconhecido'}
+                            </span>
                           </div>
-                          <p className="text-sm whitespace-pre-wrap text-muted-foreground">
-                            {item.content}
+                          <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                            {history.content}
                           </p>
+                          <span className="text-[10px] text-primary/70 italic mt-2 block">
+                            (Acesse o Prontuário Completo para editar os históricos)
+                          </span>
                         </div>
                       ))}
                   </div>

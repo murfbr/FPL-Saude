@@ -12,8 +12,10 @@ import { NoteEntry, Client } from '@/shared/types'
 import { getClientNotesPaginated, getClientById } from '@/shared/services'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { Loader2, ChevronLeft, ChevronRight, FileText } from 'lucide-react'
+import { Loader2, ChevronLeft, ChevronRight, FileText, Edit2, Check, X } from 'lucide-react'
 import { useToast } from '@/shared/hooks/use-toast'
+import { updateClientNote } from '@/shared/services'
+import { Textarea } from '@/components/ui/textarea'
 
 interface PatientHistoryModalProps {
   clientId: string | null
@@ -33,6 +35,10 @@ export const PatientHistoryModal = ({
   const [page, setPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const pageSize = 10
+
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
+  const [editingContent, setEditingContent] = useState('')
+  const [isSavingEdit, setIsSavingEdit] = useState(false)
 
   useEffect(() => {
     if (isOpen && clientId) {
@@ -100,18 +106,79 @@ export const PatientHistoryModal = ({
             ) : notes.length > 0 ? (
               <div className="space-y-4 sm:space-y-6">
                 {notes.map((note, index) => (
-                  <div key={index} className="bg-background p-4 rounded-lg border shadow-sm">
+                  <div key={note.id || index} className="bg-background p-4 rounded-lg border shadow-sm relative group">
                     <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-3 pb-2 border-b gap-1">
-                      <span className="font-semibold text-sm text-primary">
-                        {note.professional_name || 'Profissional Desconhecido'}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sm text-primary">
+                          {note.professional_name || 'Profissional Desconhecido'}
+                        </span>
+                        {note.type === 'imported_history' && (
+                           <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-medium">Histórico Importado</span>
+                        )}
+                        {note.type === 'assessment' && (
+                           <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">Ficha de Avaliação</span>
+                        )}
+                      </div>
                       <span className="text-xs sm:text-sm text-muted-foreground">
                         {format(new Date(note.date), "dd 'de' MMMM, yyyy 'às' HH:mm", { locale: ptBR })}
                       </span>
                     </div>
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground/90">
-                      {note.content}
-                    </p>
+
+                    {editingNoteId === note.id && note.id ? (
+                       <div className="space-y-3">
+                         <Textarea 
+                           value={editingContent}
+                           onChange={e => setEditingContent(e.target.value)}
+                           className="min-h-[100px] text-sm"
+                         />
+                         <div className="flex justify-end gap-2">
+                            <Button size="sm" variant="outline" onClick={() => setEditingNoteId(null)} disabled={isSavingEdit}>
+                               <X className="w-4 h-4 mr-1" /> Cancelar
+                            </Button>
+                            <Button size="sm" onClick={async () => {
+                               if(!clientId || !note.id) return
+                               setIsSavingEdit(true)
+                               const { error } = await updateClientNote(clientId, note.id, editingContent)
+                               if (error) {
+                                  toast({ title: 'Erro ao salvar edição', variant: 'destructive' })
+                               } else {
+                                  toast({ title: 'Evolução atualizada com sucesso!' })
+                                  setEditingNoteId(null)
+                                  setNotes(notes.map(n => n.id === note.id ? { ...n, content: editingContent, updated_at: new Date().toISOString() } : n))
+                               }
+                               setIsSavingEdit(false)
+                            }} disabled={isSavingEdit || !editingContent.trim()}>
+                               {isSavingEdit ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Check className="w-4 h-4 mr-1" />}
+                               Salvar
+                            </Button>
+                         </div>
+                       </div>
+                    ) : (
+                       <div className="relative">
+                          <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground/90">
+                            {note.content}
+                          </p>
+                          {note.updated_at && (
+                            <span className="text-[10px] text-muted-foreground italic mt-2 block">
+                              Editado em {format(new Date(note.updated_at), "dd/MM/yyyy HH:mm")}
+                            </span>
+                          )}
+                          {note.id && (
+                             <Button
+                               variant="ghost"
+                               size="icon"
+                               className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 -mt-2 -mr-2 bg-background/50 hover:bg-muted"
+                               onClick={() => {
+                                 setEditingNoteId(note.id!)
+                                 setEditingContent(note.content)
+                               }}
+                               title="Editar evolução"
+                             >
+                               <Edit2 className="w-4 h-4 text-muted-foreground" />
+                             </Button>
+                          )}
+                       </div>
+                    )}
                   </div>
                 ))}
               </div>

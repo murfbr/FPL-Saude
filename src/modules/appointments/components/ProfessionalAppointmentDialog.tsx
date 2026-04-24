@@ -25,12 +25,13 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useToast } from '@/shared/hooks/use-toast'
 import {
-  addAppointmentNote,
+  addClientNote,
   markAppointmentAsNoShow,
   completeAppointment,
   cancelAppointment,
   getAppointmentsByScheduleId,
   getLastClientNotes,
+  getClientNotesByAppointment,
 } from '@/shared/services'
 import { Appointment, NoteEntry } from '@/shared/types'
 import { format, isValid } from 'date-fns'
@@ -79,6 +80,7 @@ export const ProfessionalAppointmentDialog = ({
   const [professionalName, setProfessionalName] = useState('')
   const [groupAppointments, setGroupAppointments] = useState<Appointment[]>([])
   const [isLoadingGroup, setIsLoadingGroup] = useState(false)
+  const [localNotes, setLocalNotes] = useState<NoteEntry[]>([])
   const [lastNotes, setLastNotes] = useState<NoteEntry[]>([])
   const [hasMoreNotes, setHasMoreNotes] = useState(false)
   const [isLoadingLastNotes, setIsLoadingLastNotes] = useState(false)
@@ -109,12 +111,30 @@ export const ProfessionalAppointmentDialog = ({
 
       // Fetch last 5 notes
       setIsLoadingLastNotes(true)
-      getLastClientNotes(appointment.client_id, 5).then((res: any) => {
-        if (res.data) {
-          const currentNoteDates = (appointment.notes || []).map((n: any) => n.date)
-          const filtered = res.data.filter((n: any) => !currentNoteDates.includes(n.date))
+      
+      Promise.all([
+        getClientNotesByAppointment(appointment.client_id, appointment.id),
+        getLastClientNotes(appointment.client_id, 10)
+      ]).then(([localRes, lastRes]) => {
+        // Merge legacy appointment.notes to ensure nothing is lost visually before migration
+        const legacyNotes = appointment.notes || []
+        const fetchedLocal = localRes.data || []
+        
+        // Deduplicate based on date to avoid double showing during migration
+        const combinedLocal = [...legacyNotes]
+        fetchedLocal.forEach(fn => {
+          if (!combinedLocal.some(cn => cn.date === fn.date)) {
+            combinedLocal.push(fn)
+          }
+        })
+        setLocalNotes(combinedLocal)
+        
+        // History notes (excluding local ones)
+        if (lastRes.data) {
+          const currentNoteDates = combinedLocal.map(n => n.date)
+          const filtered = lastRes.data.filter(n => !currentNoteDates.includes(n.date))
           setLastNotes(filtered)
-          setHasMoreNotes(res.hasMore)
+          setHasMoreNotes(lastRes.hasMore)
         }
         setIsLoadingLastNotes(false)
       })
@@ -140,19 +160,21 @@ export const ProfessionalAppointmentDialog = ({
     if (!newNote.trim()) return
     setIsSavingNote(true)
 
-    const noteEntry: NoteEntry = {
-      date: new Date().toISOString(),
+    const noteEntry: Omit<NoteEntry, 'id' | 'date'> = {
       professional_id: professionalId || undefined,
       professional_name: professionalName || 'Profissional',
       content: newNote,
+      type: 'evolution',
+      appointment_id: appointment.id
     }
 
-    const { error } = await addAppointmentNote(appointment.id, noteEntry)
+    const { data, error } = await addClientNote(appointment.client_id, noteEntry)
     if (error) {
       toast({ title: 'Erro ao adicionar nota', variant: 'destructive' })
     } else {
       toast({ title: 'Nota adicionada com sucesso!' })
       setNewNote('')
+      if (data) setLocalNotes((prev) => [...prev, data])
       onUpdate()
     }
     setIsSavingNote(false)
@@ -176,14 +198,15 @@ export const ProfessionalAppointmentDialog = ({
     setIsCompleting(true)
 
     if (hasNewNote) {
-      const noteEntry: NoteEntry = {
-        date: new Date().toISOString(),
+      const noteEntry: Omit<NoteEntry, 'id' | 'date'> = {
         professional_id: professionalId || undefined,
         professional_name: professionalName || 'Profissional',
         content: newNote,
+        type: 'evolution',
+        appointment_id: appointment.id
       }
-      const { error: noteError } = await addAppointmentNote(
-        appointment.id,
+      const { error: noteError } = await addClientNote(
+        appointment.client_id,
         noteEntry,
       )
       if (noteError) {
@@ -394,9 +417,9 @@ export const ProfessionalAppointmentDialog = ({
                 )}
 
                 {/* Current Session Notes */}
-                {appointment.notes && appointment.notes.length > 0 ? (
+                {localNotes && localNotes.length > 0 ? (
                   <div className="space-y-4">
-                    {appointment.notes.map((note, index) => (
+                    {localNotes.map((note, index) => (
                       <div
                         key={`current-${index}`}
                         className="bg-background p-3 rounded-lg border shadow-sm"

@@ -41,12 +41,13 @@ import {
 } from 'lucide-react'
 import { useToast } from '@/shared/hooks/use-toast'
 import {
-  addAppointmentNote,
+  addClientNote,
   deleteAppointment,
   deleteFutureAppointments,
   updateAppointmentStatus,
   updateAppointment,
   getLastClientNotes,
+  getClientNotesByAppointment,
 } from '@/shared/services'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
@@ -160,18 +161,34 @@ export const AppointmentDetailDialog = ({
       const clientId = (appointment as any).client_id
       if (clientId) {
         setIsLoadingLastNotes(true)
-        getLastClientNotes(clientId, 5)
-          .then((res: any) => {
-            if (res.data) {
-              // Filter out notes that are already in the current appointment
-              const currentNoteDates = (appointment.notes || []).map((n: any) => n.date)
-              const filtered = res.data.filter((n: any) => !currentNoteDates.includes(n.date))
-              setLastNotes(filtered)
-              setHasMoreNotes(res.hasMore)
+        
+        // Parallel fetch for local and historical notes
+        Promise.all([
+          getClientNotesByAppointment(clientId, appointment.id),
+          getLastClientNotes(clientId, 10)
+        ]).then(([localRes, lastRes]) => {
+          // Merge legacy appointment.notes to ensure nothing is lost visually before migration
+          const legacyNotes = appointment.notes || []
+          const fetchedLocal = localRes.data || []
+          
+          // Deduplicate based on date to avoid double showing during migration
+          const combinedLocal = [...legacyNotes]
+          fetchedLocal.forEach(fn => {
+            if (!combinedLocal.some(cn => cn.date === fn.date)) {
+              combinedLocal.push(fn)
             }
           })
-          .catch(() => {})
-          .finally(() => setIsLoadingLastNotes(false))
+          setLocalNotes(combinedLocal)
+          
+          // History notes (excluding local ones)
+          if (lastRes.data) {
+            const currentNoteDates = combinedLocal.map(n => n.date)
+            const filtered = lastRes.data.filter(n => !currentNoteDates.includes(n.date))
+            setLastNotes(filtered)
+            setHasMoreNotes(lastRes.hasMore)
+          }
+        }).catch(() => {})
+        .finally(() => setIsLoadingLastNotes(false))
       }
 
       // Fetch package details if this appointment uses a package
@@ -310,14 +327,15 @@ export const AppointmentDetailDialog = ({
     if (!newNote.trim()) return
     setIsSavingNote(true)
 
-    const noteEntry: NoteEntry = {
-      date: new Date().toISOString(),
+    const noteEntry: Omit<NoteEntry, 'id' | 'date'> = {
       professional_id: professionalId || undefined,
-      professional_name: user?.email || 'Administrador',
+      professional_name: user?.displayName || user?.email || 'Administrador',
       content: newNote,
+      type: 'evolution',
+      appointment_id: appointment.id
     }
 
-    const { error } = await addAppointmentNote(appointment.id, noteEntry)
+    const { data, error } = await addClientNote(appointment.client_id, noteEntry)
     if (error) {
       toast({
         title: 'Erro ao adicionar nota',
@@ -327,7 +345,9 @@ export const AppointmentDetailDialog = ({
     } else {
       toast({ title: 'Nota adicionada com sucesso!' })
       setNewNote('')
-      setLocalNotes((prev) => [...prev, noteEntry])
+      if (data) {
+        setLocalNotes((prev) => [...prev, data])
+      }
       onAppointmentUpdated()
     }
     setIsSavingNote(false)

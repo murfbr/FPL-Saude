@@ -720,89 +720,9 @@ export async function cancelAppointment(appointmentId: string): Promise<{ error:
   return updateAppointmentStatus(appointmentId, 'cancelled')
 }
 
-export async function addAppointmentNote(appointmentId: string, note: NoteEntry): Promise<{ error: any }> {
-  try {
-    const docRef = doc(db, 'companies', getCompanyId(), 'appointments', appointmentId)
-    // Usamos setDoc com merge: true para garantir que o array seja inicializado caso o agendamento antigo não o tenha.
-    // Criamos um objeto sanitizado removendo chaves com valor 'undefined' pois o Firestore as rejeita
-    const cleanNote = Object.fromEntries(Object.entries(note).filter(([_, v]) => v !== undefined))
-    
-    await setDoc(docRef, { 
-      notes: arrayUnion(cleanNote) 
-    }, { merge: true })
-    return { error: null }
-  } catch (e) { 
-    console.error("Erro ao salvar anotação do paciente:", e)
-    return { error: e } 
-  }
-}
-
 export async function getAppointmentsByScheduleId(scheduleId: string): Promise<{ data: Appointment[] | null; error: any }> {
   return { data: [], error: null }
 }
 
-export async function getLastClientNotes(clientId: string, limit: number = 5): Promise<{ data: NoteEntry[] | null; hasMore: boolean; totalCount: number; error: any }> {
-  try {
-    const appointmentsRef = collection(db, 'companies', getCompanyId(), 'appointments')
-    const q = query(
-      appointmentsRef,
-      where('client_id', '==', clientId),
-      orderBy('schedules.start_time', 'desc')
-    )
-    const snapshot = await getDocs(q)
-    
-    let allNotes: NoteEntry[] = []
-    snapshot.forEach(doc => {
-      const data = doc.data()
-      if (data.notes && Array.isArray(data.notes)) {
-        allNotes.push(...data.notes)
-      }
-    })
-    
-    allNotes.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    
-    const totalCount = allNotes.length
-    const hasMore = totalCount > limit
-    const slicedNotes = allNotes.slice(0, limit)
-    
-    return { data: slicedNotes, hasMore, totalCount, error: null }
-  } catch (error) {
-    console.error("Error fetching last client notes:", error)
-    return { data: null, hasMore: false, totalCount: 0, error }
-  }
-}
 
-export async function getClientNotesPaginated(
-  clientId: string,
-  page: number = 1,
-  pageSize: number = 10
-): Promise<{ data: NoteEntry[] | null; totalCount: number; error: any }> {
-  try {
-    const appointmentsRef = collection(db, 'companies', getCompanyId(), 'appointments')
-    const q = query(
-      appointmentsRef,
-      where('client_id', '==', clientId)
-    )
-    const snapshot = await getDocs(q)
-    
-    let allNotes: NoteEntry[] = []
-    snapshot.forEach(doc => {
-      const data = doc.data()
-      if (data.notes && Array.isArray(data.notes)) {
-        allNotes.push(...data.notes)
-      }
-    })
-    
-    allNotes.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    
-    const totalCount = allNotes.length
-    const startIndex = (page - 1) * pageSize
-    const slicedNotes = allNotes.slice(startIndex, startIndex + pageSize)
-    
-    return { data: slicedNotes, totalCount, error: null }
-  } catch (error) {
-    console.error("Error fetching paginated client notes:", error)
-    return { data: null, totalCount: 0, error }
-  }
-}
 
