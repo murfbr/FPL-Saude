@@ -126,6 +126,9 @@ export interface ClientSubscription {
   start_date: string
   end_date: string | null
   status: SubscriptionStatus
+  amount?: number
+  cancelled_at?: string | null
+  discount_amount?: number
   created_at: string
   updated_at: string
   services?: Service

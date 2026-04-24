@@ -338,7 +338,8 @@ export async function updateClientSubscription(subId: string, updates: any): Pro
 export async function cancelClientSubscription(clientId: string, subId: string): Promise<{ error: any }> {
   try {
     const docRef = doc(db, 'companies', getCompanyId(), 'clients', clientId, 'subscriptions', subId)
-    await updateDoc(docRef, { status: 'cancelled', cancelled_at: new Date().toISOString() })
+    const nowISO = new Date().toISOString()
+    await updateDoc(docRef, { status: 'cancelled', cancelled_at: nowISO, end_date: nowISO })
     return { error: null }
   } catch (error) { return { error } }
 }

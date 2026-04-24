@@ -39,11 +39,18 @@ export const useMonthlySummary = (month: Date) => {
  * Hook para assinaturas ativas.
  * Cache de 5 minutos — lista de subscriptions raramente muda intra-sessão.
  */
-export const useActiveSubscriptions = (options?: { limit?: number }) => {
+export const useActiveSubscriptions = (options?: { limit?: number; targetDate?: Date }) => {
   const { companyId } = useAuth()
 
   return useQuery({
-    queryKey: [FINANCIAL_KEY, 'subscriptions', companyId, options?.limit],
+    queryKey: [
+      FINANCIAL_KEY,
+      'subscriptions',
+      companyId,
+      options?.limit,
+      options?.targetDate?.getFullYear(),
+      options?.targetDate?.getMonth()
+    ],
     queryFn: async () => {
       const { data, error } = await getActiveSubscriptions(options)
       if (error) throw error

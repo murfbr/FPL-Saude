@@ -68,7 +68,7 @@ export const FinancialManagement = () => {
 
   // TanStack Query: cache de summary (10min), subscriptions (5min), payments (5min)
   const { data: summary, isLoading: summaryLoading } = useMonthlySummary(currentDate)
-  const { data: subs = [], isLoading: subsLoading } = useActiveSubscriptions({ limit: 50 })
+  const { data: subs = [], isLoading: subsLoading } = useActiveSubscriptions({ limit: 50, targetDate: currentDate })
 
   const subIds = useMemo(() => subs.map((s) => s.id), [subs])
   const { data: payments = [] } = useSubscriptionPayments(subIds, currentDate)
@@ -187,7 +187,7 @@ export const FinancialManagement = () => {
 
   // Mirrors proration logic from paySubscription service
   const calculateSubscriptionAmount = (sub: ClientSubscription, forMonth: Date): number => {
-    const fullPrice = sub.subscription_plans?.price || sub.services?.price || 0
+    const fullPrice = sub.amount || sub.subscription_plans?.price || sub.services?.price || 0
     if (!sub.start_date) return fullPrice
 
     const startDate = new Date(sub.start_date)
@@ -304,7 +304,7 @@ export const FinancialManagement = () => {
                         </TableCell>
                         <TableCell>
                           {formatCurrency(
-                            sub.subscription_plans?.price ||
+                            sub.amount || sub.subscription_plans?.price ||
                               sub.services?.price,
                           )}
                         </TableCell>

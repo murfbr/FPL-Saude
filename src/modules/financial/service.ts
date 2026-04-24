@@ -54,22 +54,46 @@ export async function getExpectedRevenue(): Promise<{ data: number | null; error
   } catch (error) { return { data: null, error } }
 }
 
-export async function getActiveSubscriptions(options?: { limit?: number }): Promise<{ data: ClientSubscription[] | null; error: any }> {
+export async function getActiveSubscriptions(options?: { limit?: number; targetDate?: Date }): Promise<{ data: ClientSubscription[] | null; error: any }> {
   try {
-    // 1. Busca todos os clientes ativos primeiro para evitar o collectionGroup bloqueado nas regras de segurança
+    // 1. Busca clientes para evitar o collectionGroup bloqueado nas regras de segurança
     const clientsRef = collection(db, 'companies', getCompanyId(), 'clients')
-    const clientsSnap = await getDocs(query(clientsRef, where('is_active', '==', true)))
+    // Buscamos todos para garantir que clientes arquivados ainda apareçam nos meses passados
+    const clientsSnap = await getDocs(query(clientsRef))
     
     let results: any[] = []
     
     // 2. Fetch subscriptions para cada cliente
     const promises = clientsSnap.docs.map(async (clientDoc) => {
       const subsRef = collection(db, 'companies', getCompanyId(), 'clients', clientDoc.id, 'subscriptions')
-      const subsSnap = await getDocs(query(subsRef, where('status', '==', 'active')))
+      
+      let subsQuery = query(subsRef)
+      if (!options?.targetDate) {
+        subsQuery = query(subsRef, where('status', '==', 'active'))
+      }
+      const subsSnap = await getDocs(subsQuery)
       
       const hydratedSubs = []
+      
+      let mStartStr = ''
+      let mEndStr = ''
+      if (options?.targetDate) {
+         mStartStr = startOfMonth(options.targetDate).toISOString()
+         mEndStr = endOfMonth(options.targetDate).toISOString()
+      }
+
       for (const docSnap of subsSnap.docs) {
         const sub = { id: docSnap.id, ...docSnap.data() } as any
+        
+        // Filtro de vigência da assinatura se targetDate estiver definido
+        if (options?.targetDate) {
+          const tStart = sub.start_date
+          const tEnd = sub.end_date || sub.cancelled_at
+          
+          if (tStart && tStart > mEndStr) continue // Começou depois deste mês
+          if (tEnd && tEnd < mStartStr) continue // Terminou antes deste mês
+        }
+
         sub.clients = { id: clientDoc.id, name: clientDoc.data()?.name, email: clientDoc.data()?.email }
         
         // Hydrating foreign relations for table
@@ -95,7 +119,6 @@ export async function getActiveSubscriptions(options?: { limit?: number }): Prom
       results = results.slice(0, options.limit)
     }
     
-    console.log('[getActiveSubscriptions] Hydrated results:', results)
     return { data: results as ClientSubscription[], error: null }
   } catch (error) {
     console.error("🔥 ERRO EM getActiveSubscriptions: ", error)

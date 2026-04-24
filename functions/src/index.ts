@@ -563,8 +563,7 @@ async function fullRecalculation(companyId: string, month: Date) {
     .collection('companies')
     .doc(companyId)
     .collection('clients')
-    .where('is_active', '==', true)
-    .get()
+    .get() // removido where is_active=true para manter contabilidade passada correta
 
   for (const clientDoc of clientsSnap.docs) {
     const subsSnap = await db
@@ -573,29 +572,39 @@ async function fullRecalculation(companyId: string, month: Date) {
       .collection('clients')
       .doc(clientDoc.id)
       .collection('subscriptions')
-      .where('status', '==', 'active')
-      .get()
+      .get() // removido status=active para testar vigência
 
     for (const subDoc of subsSnap.docs) {
       const sub = subDoc.data()
-      let subPrice = 0
+      
+      // Validação de vigência da assinatura para o mês analisado
+      const tStart = sub.start_date
+      const tEnd = sub.end_date || sub.cancelled_at
 
-      if (sub.subscription_plan_id) {
-        const planSnap = await db
-          .collection('companies')
-          .doc(companyId)
-          .collection('subscription_plans')
-          .doc(sub.subscription_plan_id as string)
-          .get()
-        subPrice = (planSnap.data()?.price as number) || 0
-      } else if (sub.service_id) {
-        const svcSnap = await db
-          .collection('companies')
-          .doc(companyId)
-          .collection('services')
-          .doc(sub.service_id as string)
-          .get()
-        subPrice = (svcSnap.data()?.price as number) || 0
+      if (tStart && tStart > endStr) continue
+      if (tEnd && tEnd < startStr) continue
+      
+      let subPrice = sub.amount || 0
+
+      // Fallback para assinaturas antigas sem snapshot
+      if (!subPrice) {
+        if (sub.subscription_plan_id) {
+          const planSnap = await db
+            .collection('companies')
+            .doc(companyId)
+            .collection('subscription_plans')
+            .doc(sub.subscription_plan_id as string)
+            .get()
+          subPrice = (planSnap.data()?.price as number) || 0
+        } else if (sub.service_id) {
+          const svcSnap = await db
+            .collection('companies')
+            .doc(companyId)
+            .collection('services')
+            .doc(sub.service_id as string)
+            .get()
+          subPrice = (svcSnap.data()?.price as number) || 0
+        }
       }
 
       if (sub.start_date && subPrice > 0) {

@@ -151,6 +151,7 @@ export const ClientSubscriptionDialog = ({
       start_date: new Date(values.startDate).toISOString(),
       end_date: null,
       status: 'active',
+      amount: finalPrice,
       discount_amount: discountValue
     })
 
