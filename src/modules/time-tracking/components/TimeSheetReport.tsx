@@ -30,6 +30,7 @@ import { ptBR } from 'date-fns/locale'
 import { Printer, Search } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AdminTimeEntry } from './AdminTimeEntry'
+import { useTenant } from '@/shared/contexts/TenantContext'
 
 export const TimeSheetReport = () => {
   const [professionals, setProfessionals] = useState<Professional[]>([])
@@ -42,6 +43,8 @@ export const TimeSheetReport = () => {
   )
   const [records, setRecords] = useState<TimeRecord[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const { config } = useTenant()
+  const appName = config?.branding?.app_name || 'Sistema'
 
   useEffect(() => {
     getAllProfessionals().then(({ data }) => {
@@ -274,7 +277,7 @@ export const TimeSheetReport = () => {
                       <p className="text-sm text-black">Funcionário</p>
                     </div>
                     <div className="text-center border-t border-black pt-2">
-                      <p className="font-bold text-black">FPL Saúde</p>
+                      <p className="font-bold text-black">{appName}</p>
                       <p className="text-sm text-black">Empregador</p>
                     </div>
                   </div>

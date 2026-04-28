@@ -143,9 +143,9 @@ export async function createClient(
       }
     }
 
-    const newClient = { 
-      id: newDocRef.id, 
-      ...clientData, 
+    const newClient = {
+      id: newDocRef.id,
+      ...clientData,
       is_active: true,
       birth_month_day,
     }
@@ -163,7 +163,7 @@ export async function updateClient(
 ): Promise<{ data: Client | null; error: any }> {
   try {
     const docRef = doc(db, 'companies', getCompanyId(), 'clients', clientId)
-    
+
     // Auto-update birth_month_day if birth_date is changed
     if (updates.birth_date) {
       const parts = updates.birth_date.split('-')
@@ -227,23 +227,23 @@ export async function getAllActiveClientPackages(options?: { limit?: number }): 
     // 1. Obter todos os clientes da empresa
     const clientsRef = collection(db, 'companies', getCompanyId(), 'clients')
     const clientsSnap = await getDocs(query(clientsRef, where('is_active', '==', true)))
-    
+
     let results: any[] = []
-    
+
     // 2. Fetch packages for each client
     const promises = clientsSnap.docs.map(async (clientDoc) => {
       const pkgsRef = collection(db, 'companies', getCompanyId(), 'clients', clientDoc.id, 'packages')
       const pkgsSnap = await getDocs(pkgsRef)
-      
+
       const clientPkgs = []
       for (const d of pkgsSnap.docs) {
         const data = d.data()
         // Filter: only packages with sessions remaining
         if ((data.sessions_remaining || 0) <= 0) continue
-        
+
         const cp = { id: d.id, ...data } as any
         cp.clients = { id: clientDoc.id, ...clientDoc.data() }
-        
+
         if (data.package_id) {
           const pSnap = await getDoc(doc(db, 'companies', getCompanyId(), 'packages', data.package_id))
           if (pSnap.exists()) cp.packages = { id: pSnap.id, ...pSnap.data() }
@@ -252,12 +252,12 @@ export async function getAllActiveClientPackages(options?: { limit?: number }): 
       }
       return clientPkgs
     })
-    
+
     const allClientPkgsArrays = await Promise.all(promises)
     for (const arr of allClientPkgsArrays) {
-       results.push(...arr)
+      results.push(...arr)
     }
-    
+
     if (options?.limit) {
       results = results.slice(0, options.limit)
     }
@@ -373,12 +373,12 @@ export async function uploadClientExam(
     const timestamp = new Date().getTime()
     const filePath = `companies/${companyId}/clients/${clientId}/exams/${timestamp}_${file.name}`
     const bucket = import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'fpl-saude.firebasestorage.app'
-    
+
     const { data: uploadSnap, error: uploadError } = await uploadFile(bucket, filePath, file)
     if (uploadError) throw uploadError
 
     const fileUrl = await getDownloadURL(uploadSnap.ref)
-    
+
     const examsRef = collection(db, 'companies', companyId, 'clients', clientId, 'exams')
     const newDoc = doc(examsRef)
     const newExam: ClientExam = {
@@ -425,28 +425,28 @@ export async function exportClientData(clientId: string, exportType: string, for
     const notesRef = collection(db, 'companies', getCompanyId(), 'clients', clientId, 'notes')
     const qNotes = query(notesRef, orderBy('date', 'desc'))
     const notesSnap = await getDocs(qNotes)
-    
+
     let allNotes: NoteEntry[] = []
     notesSnap.forEach(doc => {
       allNotes.push(doc.data() as NoteEntry)
     })
-    
+
     // Fallback temporário para não perder nada ainda não migrado em appointments
     const apptsRef = collection(db, 'companies', getCompanyId(), 'appointments')
     const qAppts = query(apptsRef, where('client_id', '==', clientId))
     const apptsSnap = await getDocs(qAppts)
-    
+
     apptsSnap.forEach(doc => {
       const data = doc.data()
       if (data.notes && Array.isArray(data.notes)) {
-         data.notes.forEach(legacyNote => {
-            if (!allNotes.some(n => n.date === legacyNote.date)) {
-               allNotes.push(legacyNote)
-            }
-         })
+        data.notes.forEach(legacyNote => {
+          if (!allNotes.some(n => n.date === legacyNote.date)) {
+            allNotes.push(legacyNote)
+          }
+        })
       }
     })
-    
+
     // 3.5 Buscando Avaliação Geral
     const assessmentEntry = Array.isArray(patient.general_assessment)
       ? patient.general_assessment.find((i: any) => i.type === 'assessment' || !i.type)
@@ -456,23 +456,23 @@ export async function exportClientData(clientId: string, exportType: string, for
     if (patient.general_assessment && Array.isArray(patient.general_assessment)) {
       patient.general_assessment.forEach((entry: any) => {
         if (entry.type === 'imported_history') {
-           if (!allNotes.some(n => n.date === entry.date && n.content === entry.content)) {
-              allNotes.push({
-                date: entry.date,
-                content: entry.content || '',
-                professional_name: 'Histórico Importado',
-                type: 'imported_history'
-              })
-           }
+          if (!allNotes.some(n => n.date === entry.date && n.content === entry.content)) {
+            allNotes.push({
+              date: entry.date,
+              content: entry.content || '',
+              professional_name: 'Histórico Importado',
+              type: 'imported_history'
+            })
+          }
         }
       })
     }
-    
+
     // Sort novamente
     allNotes.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
     if (allNotes.length === 0 && !assessmentEntry) {
-       return { data: null, error: new Error('O paciente não possui anotações nem avaliação para exportar.') }
+      return { data: null, error: new Error('O paciente não possui anotações nem avaliação para exportar.') }
     }
 
     const reportDate = format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })
@@ -484,178 +484,178 @@ export async function exportClientData(clientId: string, exportType: string, for
       const doc = new jsPDF()
       const pageWidth = doc.internal.pageSize.getWidth()
       let yOffset = 20
-      
+
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(16)
       doc.text('Histórico de Sessões - Prontuário Clínico', pageWidth / 2, yOffset, { align: 'center' })
       yOffset += 10
-      
+
       doc.setFontSize(12)
       doc.text(`Paciente: ${patient.name}`, 15, yOffset)
       yOffset += 6
       doc.setFont('helvetica', 'normal')
       doc.text(`Gerado em: ${reportDate}`, 15, yOffset)
       yOffset += 12
-      
+
       doc.line(15, yOffset, pageWidth - 15, yOffset)
       yOffset += 8
 
       if (assessmentEntry) {
-         doc.setFont('helvetica', 'bold')
-         doc.text('Avaliação Geral / Ficha do Paciente', 15, yOffset)
-         yOffset += 8
-         doc.setFont('helvetica', 'normal')
-         doc.setFontSize(10)
-         
-         const data = assessmentEntry
-         const lines = []
-         if (data.mainComplaint) lines.push(`Queixa Principal: ${data.mainComplaint}`)
-         if (data.profession) lines.push(`Profissão: ${data.profession}`)
-         if (data.physicalActivity) lines.push(`Atividade Física: ${data.physicalActivity}`)
-         if (data.clinicalDiagnosis) lines.push(`Diagnóstico Clínico: ${data.clinicalDiagnosis}`)
-         if (data.historyOfPresentIllness) lines.push(`HDA: ${data.historyOfPresentIllness}`)
-         if (data.pastMedicalHistory) lines.push(`HPP: ${data.pastMedicalHistory}`)
-         if (data.medications) lines.push(`Medicamentos: ${data.medications}`)
-         if (data.physicalExam) lines.push(`Exame Físico: ${data.physicalExam}`)
-         if (data.diagnosis) lines.push(`Diagnóstico Cinético-Funcional: ${data.diagnosis}`)
-         if (data.treatmentPlan) lines.push(`Plano de Tratamento: ${data.treatmentPlan}`)
-         
-         const splitText = doc.splitTextToSize(lines.join('\n'), pageWidth - 30)
-         doc.text(splitText, 15, yOffset)
-         yOffset += (splitText.length * 5) + 10
-         doc.line(15, yOffset, pageWidth - 15, yOffset)
-         yOffset += 10
-         doc.setFontSize(12)
+        doc.setFont('helvetica', 'bold')
+        doc.text('Avaliação Geral / Ficha do Paciente', 15, yOffset)
+        yOffset += 8
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(10)
+
+        const data = assessmentEntry
+        const lines = []
+        if (data.mainComplaint) lines.push(`Queixa Principal: ${data.mainComplaint}`)
+        if (data.profession) lines.push(`Profissão: ${data.profession}`)
+        if (data.physicalActivity) lines.push(`Atividade Física: ${data.physicalActivity}`)
+        if (data.clinicalDiagnosis) lines.push(`Diagnóstico Clínico: ${data.clinicalDiagnosis}`)
+        if (data.historyOfPresentIllness) lines.push(`HDA: ${data.historyOfPresentIllness}`)
+        if (data.pastMedicalHistory) lines.push(`HPP: ${data.pastMedicalHistory}`)
+        if (data.medications) lines.push(`Medicamentos: ${data.medications}`)
+        if (data.physicalExam) lines.push(`Exame Físico: ${data.physicalExam}`)
+        if (data.diagnosis) lines.push(`Diagnóstico Cinético-Funcional: ${data.diagnosis}`)
+        if (data.treatmentPlan) lines.push(`Plano de Tratamento: ${data.treatmentPlan}`)
+
+        const splitText = doc.splitTextToSize(lines.join('\n'), pageWidth - 30)
+        doc.text(splitText, 15, yOffset)
+        yOffset += (splitText.length * 5) + 10
+        doc.line(15, yOffset, pageWidth - 15, yOffset)
+        yOffset += 10
+        doc.setFontSize(12)
       }
 
       // Percorre e preenche o PDF (respeitando quebra de páginas manuais por altura)
       for (const note of allNotes) {
-         if (yOffset > 270) {
-            doc.addPage()
-            yOffset = 20
-         }
-         
-         const dateString = format(new Date(note.date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
-         
-         doc.setFont('helvetica', 'bold')
-         doc.text(`Data: ${dateString} | Profissional: ${note.professional_name || 'Desconhecido'}`, 15, yOffset)
-         yOffset += 6
-         
-         doc.setFont('helvetica', 'normal')
-         
-         const safeContent = note.content ? String(note.content) : 'Sem anotação'
-         // Split text para não vazar a folha A4
-         const splitText = doc.splitTextToSize(safeContent, pageWidth - 30)
-         
-         // Se estourar a página atual durante o texto, joga pra próxima
-         if ((yOffset + (splitText.length * 6)) > 280) {
-             doc.addPage()
-             yOffset = 20
-         }
-         
-         doc.text(splitText, 15, yOffset)
-         yOffset += (splitText.length * 5) + 8
-         
-         doc.line(15, yOffset, pageWidth - 15, yOffset) // separador
-         yOffset += 8
+        if (yOffset > 270) {
+          doc.addPage()
+          yOffset = 20
+        }
+
+        const dateString = format(new Date(note.date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+
+        doc.setFont('helvetica', 'bold')
+        doc.text(`Data: ${dateString} | Profissional: ${note.professional_name || 'Desconhecido'}`, 15, yOffset)
+        yOffset += 6
+
+        doc.setFont('helvetica', 'normal')
+
+        const safeContent = note.content ? String(note.content) : 'Sem anotação'
+        // Split text para não vazar a folha A4
+        const splitText = doc.splitTextToSize(safeContent, pageWidth - 30)
+
+        // Se estourar a página atual durante o texto, joga pra próxima
+        if ((yOffset + (splitText.length * 6)) > 280) {
+          doc.addPage()
+          yOffset = 20
+        }
+
+        doc.text(splitText, 15, yOffset)
+        yOffset += (splitText.length * 5) + 8
+
+        doc.line(15, yOffset, pageWidth - 15, yOffset) // separador
+        yOffset += 8
       }
-      
+
       const pdfBase64 = doc.output('datauristring').split(',')[1]
       return { data: { content: pdfBase64, filename }, error: null }
-    } 
-    
+    }
+
     // 5. Gerando DOCX
     else if (formatType === 'docx') {
-       const docxSections = []
-       
-       // Header Page
-       docxSections.push(
+      const docxSections = []
+
+      // Header Page
+      docxSections.push(
+        new Paragraph({
+          text: "Histórico de Sessões - Prontuário Clínico",
+          heading: HeadingLevel.HEADING_1,
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 300 }
+        }),
+        new Paragraph({
+          children: [
+            new TextRun({ text: `Paciente: `, bold: true }),
+            new TextRun({ text: patient.name })
+          ],
+          spacing: { after: 100 }
+        }),
+        new Paragraph({
+          children: [
+            new TextRun({ text: `Gerado em: `, bold: true }),
+            new TextRun({ text: reportDate })
+          ],
+          spacing: { after: 300 }
+        })
+      )
+
+      // 4.5 Avaliação Geral no DOCX
+      if (assessmentEntry) {
+        docxSections.push(
           new Paragraph({
-             text: "Histórico de Sessões - Prontuário Clínico",
-             heading: HeadingLevel.HEADING_1,
-             alignment: AlignmentType.CENTER,
-             spacing: { after: 300 }
+            text: "Avaliação Geral / Ficha do Paciente",
+            heading: HeadingLevel.HEADING_2,
+            spacing: { before: 400, after: 200 }
+          })
+        )
+
+        const data = assessmentEntry
+        const assessmentLines = []
+        if (data.mainComplaint) assessmentLines.push(`Queixa Principal: ${data.mainComplaint}`)
+        if (data.profession) assessmentLines.push(`Profissão: ${data.profession}`)
+        if (data.physicalActivity) assessmentLines.push(`Atividade Física: ${data.physicalActivity}`)
+        if (data.clinicalDiagnosis) assessmentLines.push(`Diagnóstico Clínico: ${data.clinicalDiagnosis}`)
+        if (data.historyOfPresentIllness) assessmentLines.push(`HDA: ${data.historyOfPresentIllness}`)
+        if (data.pastMedicalHistory) assessmentLines.push(`HPP: ${data.pastMedicalHistory}`)
+        if (data.medications) assessmentLines.push(`Medicamentos: ${data.medications}`)
+        if (data.physicalExam) assessmentLines.push(`Exame Físico: ${data.physicalExam}`)
+        if (data.diagnosis) assessmentLines.push(`Diagnóstico Cinético-Funcional: ${data.diagnosis}`)
+        if (data.treatmentPlan) assessmentLines.push(`Plano de Tratamento: ${data.treatmentPlan}`)
+
+        assessmentLines.forEach(line => {
+          docxSections.push(
+            new Paragraph({
+              text: line,
+              spacing: { after: 100 }
+            })
+          )
+        })
+
+        docxSections.push(new Paragraph({ text: "", border: { bottom: { color: "auto", space: 1, style: BorderStyle.SINGLE, size: 6 } }, spacing: { after: 300 } }))
+      }
+
+      // Percorre Notas
+      for (const note of allNotes) {
+        const dateString = format(new Date(note.date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+
+        docxSections.push(
+          new Paragraph({
+            children: [
+              new TextRun({ text: `Data: ${dateString} | Profissional: ${note.professional_name || 'Desconhecido'}`, bold: true, size: 24 }) // Size é half-points (24 = 12pt)
+            ],
+            spacing: { before: 200, after: 100 }
           }),
           new Paragraph({
-             children: [
-                new TextRun({ text: `Paciente: `, bold: true }),
-                new TextRun({ text: patient.name })
-             ],
-             spacing: { after: 100 }
-          }),
-          new Paragraph({
-             children: [
-                new TextRun({ text: `Gerado em: `, bold: true }),
-                new TextRun({ text: reportDate })
-             ],
-             spacing: { after: 300 }
+            text: note.content ? String(note.content) : 'Sem anotação',
+            spacing: { after: 300 }
           })
-       )
+        )
+      }
 
-       // 4.5 Avaliação Geral no DOCX
-       if (assessmentEntry) {
-          docxSections.push(
-             new Paragraph({
-                text: "Avaliação Geral / Ficha do Paciente",
-                heading: HeadingLevel.HEADING_2,
-                spacing: { before: 400, after: 200 }
-             })
-          )
-          
-          const data = assessmentEntry
-          const assessmentLines = []
-          if (data.mainComplaint) assessmentLines.push(`Queixa Principal: ${data.mainComplaint}`)
-          if (data.profession) assessmentLines.push(`Profissão: ${data.profession}`)
-          if (data.physicalActivity) assessmentLines.push(`Atividade Física: ${data.physicalActivity}`)
-          if (data.clinicalDiagnosis) assessmentLines.push(`Diagnóstico Clínico: ${data.clinicalDiagnosis}`)
-          if (data.historyOfPresentIllness) assessmentLines.push(`HDA: ${data.historyOfPresentIllness}`)
-          if (data.pastMedicalHistory) assessmentLines.push(`HPP: ${data.pastMedicalHistory}`)
-          if (data.medications) assessmentLines.push(`Medicamentos: ${data.medications}`)
-          if (data.physicalExam) assessmentLines.push(`Exame Físico: ${data.physicalExam}`)
-          if (data.diagnosis) assessmentLines.push(`Diagnóstico Cinético-Funcional: ${data.diagnosis}`)
-          if (data.treatmentPlan) assessmentLines.push(`Plano de Tratamento: ${data.treatmentPlan}`)
-          
-          assessmentLines.forEach(line => {
-             docxSections.push(
-                new Paragraph({
-                   text: line,
-                   spacing: { after: 100 }
-                })
-             )
-          })
-          
-          docxSections.push(new Paragraph({ text: "", border: { bottom: { color: "auto", space: 1, style: BorderStyle.SINGLE, size: 6 } }, spacing: { after: 300 } }))
-       }
+      const docxDocument = new Document({
+        creator: "Sistema",
+        title: "Histórico Clínico",
+        sections: [{
+          properties: {},
+          children: docxSections
+        }]
+      })
 
-       // Percorre Notas
-       for (const note of allNotes) {
-          const dateString = format(new Date(note.date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
-          
-          docxSections.push(
-              new Paragraph({
-                children: [
-                   new TextRun({ text: `Data: ${dateString} | Profissional: ${note.professional_name || 'Desconhecido'}`, bold: true, size: 24 }) // Size é half-points (24 = 12pt)
-                ],
-                spacing: { before: 200, after: 100 }
-              }),
-              new Paragraph({
-                 text: note.content ? String(note.content) : 'Sem anotação',
-                 spacing: { after: 300 }
-              })
-          )
-       }
-
-       const docxDocument = new Document({
-          creator: "FPL Saúde",
-          title: "Histórico Clínico",
-          sections: [{
-              properties: {},
-              children: docxSections
-          }]
-       })
-       
-       const base64Content = await Packer.toBase64String(docxDocument)
-       return { data: { content: base64Content, filename }, error: null }
+      const base64Content = await Packer.toBase64String(docxDocument)
+      return { data: { content: base64Content, filename }, error: null }
     }
 
     return { data: null, error: new Error('Formato de arquivo não suportado.') }
@@ -669,7 +669,7 @@ export async function getClientsWithBirthdayThisWeek(startDate: Date, endDate: D
     const startStr = format(startDate, 'MM-dd')
     const endStr = format(endDate, 'MM-dd')
     const clientsRef = collection(db, 'companies', getCompanyId(), 'clients')
-    
+
     let results: Client[] = []
 
     if (startStr <= endStr) {
@@ -702,9 +702,9 @@ export async function getClientsWithBirthdayThisWeek(startDate: Date, endDate: D
     }
 
     return { data: results, error: null }
-  } catch (error) { 
+  } catch (error) {
     console.error("Erro em getClientsWithBirthdayThisWeek:", error)
-    return { data: null, error } 
+    return { data: null, error }
   }
 }
 
@@ -755,12 +755,12 @@ export async function getClientNotesByAppointment(clientId: string, appointmentI
     const notesRef = collection(db, 'companies', getCompanyId(), 'clients', clientId, 'notes')
     const q = query(notesRef, where('appointment_id', '==', appointmentId), orderBy('date', 'asc'))
     const snapshot = await getDocs(q)
-    
+
     const allNotes: NoteEntry[] = []
     snapshot.forEach(doc => {
       allNotes.push(doc.data() as NoteEntry)
     })
-    
+
     return { data: allNotes, error: null }
   } catch (error) {
     console.error("Error fetching notes by appointment:", error)
@@ -773,12 +773,12 @@ export async function getClientImportedHistory(clientId: string): Promise<{ data
     const notesRef = collection(db, 'companies', getCompanyId(), 'clients', clientId, 'notes')
     const q = query(notesRef, where('type', '==', 'imported_history'), orderBy('date', 'desc'))
     const snapshot = await getDocs(q)
-    
+
     const allNotes: NoteEntry[] = []
     snapshot.forEach(doc => {
       allNotes.push(doc.data() as NoteEntry)
     })
-    
+
     return { data: allNotes, error: null }
   } catch (error) {
     console.error("Error fetching imported history:", error)
@@ -793,62 +793,62 @@ export async function migrateAllClientNotes(companyIdToUse: string): Promise<{ s
     // 1. Migrate notes from appointments
     const apptsRef = collection(db, 'companies', companyIdToUse, 'appointments')
     const apptsSnap = await getDocs(apptsRef)
-    
+
     for (const apptDoc of apptsSnap.docs) {
-       const apptData = apptDoc.data()
-       if (apptData.client_id && apptData.notes && Array.isArray(apptData.notes) && apptData.notes.length > 0) {
-          for (const note of apptData.notes) {
-             const notesRef = collection(db, 'companies', companyIdToUse, 'clients', apptData.client_id, 'notes')
-             
-             // Check if already migrated
-             const q = query(notesRef, where('date', '==', note.date))
-             const exists = await getDocs(q)
-             if (exists.empty) {
-                const newDoc = doc(notesRef)
-                await setDoc(newDoc, {
-                   id: newDoc.id,
-                   client_id: apptData.client_id,
-                   appointment_id: apptDoc.id,
-                   type: 'evolution',
-                   ...note
-                })
-                count++
-             }
+      const apptData = apptDoc.data()
+      if (apptData.client_id && apptData.notes && Array.isArray(apptData.notes) && apptData.notes.length > 0) {
+        for (const note of apptData.notes) {
+          const notesRef = collection(db, 'companies', companyIdToUse, 'clients', apptData.client_id, 'notes')
+
+          // Check if already migrated
+          const q = query(notesRef, where('date', '==', note.date))
+          const exists = await getDocs(q)
+          if (exists.empty) {
+            const newDoc = doc(notesRef)
+            await setDoc(newDoc, {
+              id: newDoc.id,
+              client_id: apptData.client_id,
+              appointment_id: apptDoc.id,
+              type: 'evolution',
+              ...note
+            })
+            count++
           }
-       }
+        }
+      }
     }
 
     // 2. Migrate imported history from clients
     const clientsRef = collection(db, 'companies', companyIdToUse, 'clients')
     const clientsSnap = await getDocs(clientsRef)
-    
+
     for (const clientDoc of clientsSnap.docs) {
-       const clientData = clientDoc.data()
-       const generalAssessment = clientData.general_assessment
-       
-       if (generalAssessment && Array.isArray(generalAssessment)) {
-          for (const entry of generalAssessment) {
-             if (entry.type === 'imported_history') {
-                const notesRef = collection(db, 'companies', companyIdToUse, 'clients', clientDoc.id, 'notes')
-                
-                // Check if already migrated
-                const q = query(notesRef, where('date', '==', entry.date))
-                const exists = await getDocs(q)
-                if (exists.empty) {
-                   const newDoc = doc(notesRef)
-                   await setDoc(newDoc, {
-                      id: newDoc.id,
-                      client_id: clientDoc.id,
-                      type: 'imported_history',
-                      ...entry
-                   })
-                   count++
-                }
-             }
+      const clientData = clientDoc.data()
+      const generalAssessment = clientData.general_assessment
+
+      if (generalAssessment && Array.isArray(generalAssessment)) {
+        for (const entry of generalAssessment) {
+          if (entry.type === 'imported_history') {
+            const notesRef = collection(db, 'companies', companyIdToUse, 'clients', clientDoc.id, 'notes')
+
+            // Check if already migrated
+            const q = query(notesRef, where('date', '==', entry.date))
+            const exists = await getDocs(q)
+            if (exists.empty) {
+              const newDoc = doc(notesRef)
+              await setDoc(newDoc, {
+                id: newDoc.id,
+                client_id: clientDoc.id,
+                type: 'imported_history',
+                ...entry
+              })
+              count++
+            }
           }
-       }
+        }
+      }
     }
-    
+
     return { success: true, migrated: count, error: null }
   } catch (error) {
     console.error("Migration error:", error)
@@ -865,16 +865,16 @@ export async function getClientNotesPaginated(
     const notesRef = collection(db, 'companies', getCompanyId(), 'clients', clientId, 'notes')
     const q = query(notesRef, orderBy('date', 'desc'))
     const snapshot = await getDocs(q)
-    
+
     const allNotes: NoteEntry[] = []
     snapshot.forEach(doc => {
       allNotes.push(doc.data() as NoteEntry)
     })
-    
+
     const totalCount = allNotes.length
     const startIndex = (page - 1) * pageSize
     const slicedNotes = allNotes.slice(startIndex, startIndex + pageSize)
-    
+
     return { data: slicedNotes, totalCount, error: null }
   } catch (error) {
     console.error("Error fetching paginated client notes:", error)
@@ -887,16 +887,16 @@ export async function getLastClientNotes(clientId: string, limit: number = 5): P
     const notesRef = collection(db, 'companies', getCompanyId(), 'clients', clientId, 'notes')
     const q = query(notesRef, orderBy('date', 'desc'))
     const snapshot = await getDocs(q)
-    
+
     const allNotes: NoteEntry[] = []
     snapshot.forEach(doc => {
       allNotes.push(doc.data() as NoteEntry)
     })
-    
+
     const totalCount = allNotes.length
     const hasMore = totalCount > limit
     const slicedNotes = allNotes.slice(0, limit)
-    
+
     return { data: slicedNotes, hasMore, totalCount, error: null }
   } catch (error) {
     console.error("Error fetching last client notes:", error)

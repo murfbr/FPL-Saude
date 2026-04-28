@@ -266,6 +266,7 @@ export const GeneralAssessmentForm = ({
     setIsSubmitting(true)
 
     const noteEntry: Omit<NoteEntry, 'id' | 'date'> = {
+      professional_id: professionalId || user?.id || undefined,
       professional_name: user?.displayName || user?.email || 'Administrador',
       content: historyText,
       type: 'imported_history',

@@ -5,8 +5,7 @@ import { db } from '@/shared/lib/firebase'
 import { collection, getDocs, doc, getDoc, writeBatch } from 'firebase/firestore'
 import { useToast } from '@/shared/hooks/use-toast'
 import { Loader2, RefreshCw, AlertTriangle } from 'lucide-react'
-
-const COMPANY_ID = 'fpl-saude'
+import { getCompanyId } from '@/shared/lib/tenantStore'
 
 export const DataMaintenance = () => {
   const { toast } = useToast()
@@ -17,7 +16,7 @@ export const DataMaintenance = () => {
     setIsRunning(true)
     setProgress('Iniciando migração...')
     try {
-      const apptsRef = collection(db, 'companies', COMPANY_ID, 'appointments')
+      const apptsRef = collection(db, 'companies', getCompanyId(), 'appointments')
       const snapshot = await getDocs(apptsRef)
       
       setProgress(`Encontrados ${snapshot.size} agendamentos. Processando...`)
@@ -36,9 +35,9 @@ export const DataMaintenance = () => {
         }
 
         const [clientSnap, profSnap, serviceSnap] = await Promise.all([
-          getDoc(doc(db, 'companies', COMPANY_ID, 'clients', data.client_id)),
-          getDoc(doc(db, 'companies', COMPANY_ID, 'professionals', data.professional_id)),
-          getDoc(doc(db, 'companies', COMPANY_ID, 'services', data.service_id))
+          getDoc(doc(db, 'companies', getCompanyId(), 'clients', data.client_id)),
+          getDoc(doc(db, 'companies', getCompanyId(), 'professionals', data.professional_id)),
+          getDoc(doc(db, 'companies', getCompanyId(), 'services', data.service_id))
         ])
 
         const updates: any = {
@@ -108,7 +107,7 @@ export const DataMaintenance = () => {
     setIsRunning(true)
     setProgress('Iniciando indexação de aniversariantes...')
     try {
-      const clientsRef = collection(db, 'companies', COMPANY_ID, 'clients')
+      const clientsRef = collection(db, 'companies', getCompanyId(), 'clients')
       const snapshot = await getDocs(clientsRef)
       
       setProgress(`Encontrados ${snapshot.size} clientes. Processando...`)

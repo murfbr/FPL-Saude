@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/dialog'
 import { CalendarOff } from 'lucide-react'
 import { useAuth } from '@/shared/providers/AuthProvider'
+import { useInvalidateAppointments } from '@/modules/appointments/queries'
 
 export type ViewMode = 'month' | 'week' | 'day'
 
@@ -40,6 +41,7 @@ export const AgendaView = () => {
   const [refreshKey, setRefreshKey] = useState(0)
   const [isExpanded, setIsExpanded] = useState(false)
   const [isBlockedDatesOpen, setIsBlockedDatesOpen] = useState(false)
+  const invalidateAppointments = useInvalidateAppointments()
 
   // Lifted State
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -69,6 +71,7 @@ export const AgendaView = () => {
 
   const handleDataRefresh = () => {
     setRefreshKey((prevKey) => prevKey + 1)
+    invalidateAppointments()
   }
 
   const handleTimeSlotClick = (date: Date, isSpecificSlot: boolean = true) => {

@@ -18,7 +18,7 @@ import {
   updatePassword as firebaseUpdatePassword
 } from 'firebase/auth'
 import { doc, getDoc, collection, query, where, getDocs, setDoc } from 'firebase/firestore'
-import { setCompanyId } from '@/shared/lib/tenantStore'
+import { setCompanyId, getCompanyId } from '@/shared/lib/tenantStore'
 
 export type UserRole = 'client' | 'professional' | 'admin' | string
 
@@ -208,17 +208,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [companyId])
 
   // signUp writes to root users/{uid} with companyId.
-  // companyId defaults to 'fpl-saude' until Phase 3 super-admin panel
+  // companyId defaults to the current resolved company.
   // manages company assignment automatically.
-  const signUp = async (email: string, password: string, targetCompanyId = 'fpl-saude') => {
+  const signUp = async (email: string, password: string, targetCompanyId?: string) => {
     try {
+      const finalCompanyId = targetCompanyId || companyId || getCompanyId()
       const cred = await createUserWithEmailAndPassword(firebaseAuth, email, password)
       const docRef = doc(firebaseDb, 'users', cred.user.uid)
       await setDoc(docRef, {
         name: email.split('@')[0],
         email,
         role: 'client',
-        companyId: targetCompanyId,
+        companyId: finalCompanyId,
         created_at: new Date().toISOString(),
       })
       return { error: null }

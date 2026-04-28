@@ -16,7 +16,7 @@ export const Header = () => {
   
   const loading = authLoading || tenantLoading
 
-  const appName = config?.branding?.app_name || 'FPL Saúde'
+  const appName = config?.branding?.app_name || 'Sistema'
   const logoUrl = config?.branding?.logo_url || '/logo.png'
 
   // Determine if we are in an admin context for branding
@@ -32,7 +32,7 @@ export const Header = () => {
           {logoUrl !== '/logo.png' ? (
              <img src={logoUrl} alt={`${appName} Logo`} className="h-8 w-auto object-contain rounded" />
           ) : (
-             <img src="/logo.png" alt="FPL Saúde Logo" className="h-8 w-auto object-contain" />
+             <img src="/logo.png" alt={`${appName} Logo`} className="h-8 w-auto object-contain" />
           )}
           <span className="font-bold text-lg text-primary hidden sm:inline-block">{appName}</span>
           {isAdminContext && (

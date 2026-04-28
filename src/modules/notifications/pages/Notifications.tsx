@@ -23,6 +23,7 @@ import { cn } from '@/shared/lib/utils'
 import { useToast } from '@/shared/hooks/use-toast'
 import { db } from '@/shared/lib/firebase'
 import { collection, query, onSnapshot, addDoc } from 'firebase/firestore'
+import { getCompanyId } from '@/shared/lib/tenantStore'
 
 const NotificationsPage = () => {
   const { professionalId, user } = useAuth()
@@ -39,7 +40,7 @@ const NotificationsPage = () => {
     // Auto-inject mock if completely empty
     if (data && data.length === 0) {
       try {
-        const ref = collection(db, 'companies', 'fpl-saude', 'professionals', professionalId, 'notifications')
+        const ref = collection(db, 'companies', getCompanyId(), 'professionals', professionalId, 'notifications')
         await addDoc(ref, {
           title: 'Notificações Ativas!',
           content: 'Sua caixa de entrada de notificações do novo banco Firestore está operando corretamente. A migração foi concluida com sucesso.',
@@ -66,7 +67,7 @@ const NotificationsPage = () => {
   useEffect(() => {
     if (!user || !professionalId) return
 
-    const ref = collection(db, 'companies', 'fpl-saude', 'professionals', professionalId, 'notifications')
+    const ref = collection(db, 'companies', getCompanyId(), 'professionals', professionalId, 'notifications')
     const q = query(ref)
 
     const unsubscribe = onSnapshot(q, (snapshot) => {

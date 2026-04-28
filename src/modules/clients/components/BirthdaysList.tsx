@@ -13,6 +13,7 @@ import { startOfWeek, endOfWeek, format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { Cake, MessageSquare, ExternalLink } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { useTenant } from '@/shared/contexts/TenantContext'
 import { Button } from '@/components/ui/button'
 import {
   Tooltip,
@@ -24,6 +25,8 @@ import {
 export const BirthdaysList = () => {
   const [birthdays, setBirthdays] = useState<Client[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const { config } = useTenant()
+  const appName = config?.branding?.app_name || 'Nossa Clínica'
 
   useEffect(() => {
     const fetchBirthdays = async () => {
@@ -41,7 +44,7 @@ export const BirthdaysList = () => {
 
   const generateWhatsAppLink = (client: Client) => {
     const clientName = client.name || 'Cliente'
-    const message = `Olá *${clientName}*, a Clínica FPL Saúde passa por aqui para te desejar um Feliz Aniversário! Muita saúde, alegria e realizações em sua vida! 🎉🎂`
+    const message = `Olá *${clientName}*, a ${appName} passa por aqui para te desejar um Feliz Aniversário! Muita saúde, alegria e realizações em sua vida! 🎉🎂`
 
     // Normalize phone number:
     // 1. Remove all non-digits

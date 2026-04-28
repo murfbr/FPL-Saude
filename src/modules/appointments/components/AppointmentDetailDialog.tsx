@@ -194,7 +194,7 @@ export const AppointmentDetailDialog = ({
       // Fetch package details if this appointment uses a package
       if (clientPackageId) {
         const clientId = (appointment as any).client_id
-        const companyId = getCompanyId() || 'fpl-saude'
+        const companyId = getCompanyId()
         getDoc(doc(db, 'companies', companyId, 'clients', clientId, 'packages', clientPackageId))
           .then((snap) => {
             if (snap.exists()) {
@@ -241,7 +241,7 @@ export const AppointmentDetailDialog = ({
       // Fetch recurring days
       if (appointment.is_recurring && (appointment as any).recurrence_group_id) {
         setIsLoadingRecurrenceDays(true)
-        const companyId = getCompanyId() || 'fpl-saude'
+        const companyId = getCompanyId()
         const q = query(
           collection(db, 'companies', companyId, 'appointments'),
           where('recurrence_group_id', '==', (appointment as any).recurrence_group_id),
@@ -328,7 +328,7 @@ export const AppointmentDetailDialog = ({
     setIsSavingNote(true)
 
     const noteEntry: Omit<NoteEntry, 'id' | 'date'> = {
-      professional_id: professionalId || undefined,
+      professional_id: professionalId || user?.id || undefined,
       professional_name: user?.displayName || user?.email || 'Administrador',
       content: newNote,
       type: 'evolution',

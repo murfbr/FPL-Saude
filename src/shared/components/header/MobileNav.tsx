@@ -16,7 +16,7 @@ export const MobileNav = () => {
   const { config } = useTenant()
   const navigate = useNavigate()
   
-  const appName = config?.branding?.app_name || 'FPL Saúde'
+  const appName = config?.branding?.app_name || 'Sistema'
 
   const handleSignOut = async () => {
     console.log('[AuthDebug] MobileNav: Triggering sign out...')

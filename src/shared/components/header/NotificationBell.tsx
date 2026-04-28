@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/popover'
 import { formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { getCompanyId } from '@/shared/lib/tenantStore'
 
 export const NotificationBell = () => {
   const { professionalId, user } = useAuth()
@@ -43,7 +44,7 @@ export const NotificationBell = () => {
 
     if (!professionalId) return
 
-    const ref = collection(db, 'companies', 'fpl-saude', 'professionals', professionalId, 'notifications')
+    const ref = collection(db, 'companies', getCompanyId(), 'professionals', professionalId, 'notifications')
     const q = query(ref)
 
     const unsubscribe = onSnapshot(q, () => {

@@ -71,7 +71,7 @@ export const ProfessionalAppointmentDialog = ({
   onUpdate,
 }: ProfessionalAppointmentDialogProps) => {
   const { toast } = useToast()
-  const { professionalId } = useAuth()
+  const { professionalId, user } = useAuth()
   const [newNote, setNewNote] = useState('')
   const [isSavingNote, setIsSavingNote] = useState(false)
   const [isCompleting, setIsCompleting] = useState(false)
@@ -161,8 +161,8 @@ export const ProfessionalAppointmentDialog = ({
     setIsSavingNote(true)
 
     const noteEntry: Omit<NoteEntry, 'id' | 'date'> = {
-      professional_id: professionalId || undefined,
-      professional_name: professionalName || 'Profissional',
+      professional_id: professionalId || user?.id || undefined,
+      professional_name: professionalName || user?.displayName || user?.email || 'Profissional',
       content: newNote,
       type: 'evolution',
       appointment_id: appointment.id
@@ -199,8 +199,8 @@ export const ProfessionalAppointmentDialog = ({
 
     if (hasNewNote) {
       const noteEntry: Omit<NoteEntry, 'id' | 'date'> = {
-        professional_id: professionalId || undefined,
-        professional_name: professionalName || 'Profissional',
+        professional_id: professionalId || user?.id || undefined,
+        professional_name: professionalName || user?.displayName || user?.email || 'Profissional',
         content: newNote,
         type: 'evolution',
         appointment_id: appointment.id

@@ -53,7 +53,7 @@ export interface UserDoc {
 
 export const DEFAULT_BRANDING: CompanyBranding = {
   logo_url: '',
-  app_name: 'FPL Saúde',
+  app_name: 'Sistema',
   primary_hex: '#314E39',
   secondary_hex: '#6C976A',
   accent_hex: '#C49761',

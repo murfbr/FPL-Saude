@@ -171,7 +171,8 @@ export async function uploadCompanyLogo(
 ): Promise<{ url: string | null; error: any }> {
   try {
     const ext = file.name.split('.').pop()
-    const storageRef = ref(storage, `companies/${companyId}/logo.${ext}`)
+    const timestamp = Date.now()
+    const storageRef = ref(storage, `companies/${companyId}/logo_${timestamp}.${ext}`)
     await uploadBytes(storageRef, file)
     const url = await getDownloadURL(storageRef)
     return { url, error: null }
