@@ -69,9 +69,11 @@ export const AgendaView = () => {
     setIsDetailOpen(true)
   }
 
-  const handleDataRefresh = () => {
-    setRefreshKey((prevKey) => prevKey + 1)
-    invalidateAppointments()
+  const handleDataRefresh = (shouldInvalidate: boolean = true) => {
+    if (shouldInvalidate) {
+      setRefreshKey((prevKey) => prevKey + 1)
+      invalidateAppointments()
+    }
   }
 
   const handleTimeSlotClick = (date: Date, isSpecificSlot: boolean = true) => {

@@ -24,7 +24,17 @@ export const UserNav = () => {
     navigate('/login')
   }
 
-  const getInitials = (email: string) => {
+  const getInitials = (name: string | null | undefined, email: string | null | undefined) => {
+    if (name && name.trim().length > 0) {
+      const parts = name.trim().split(/\s+/)
+      if (parts.length > 1) {
+        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+      } else if (parts.length === 1 && parts[0].length >= 2) {
+        return parts[0].substring(0, 2).toUpperCase()
+      } else if (parts.length === 1) {
+        return parts[0][0].toUpperCase()
+      }
+    }
     return email?.[0]?.toUpperCase() ?? 'U'
   }
 
@@ -51,10 +61,10 @@ export const UserNav = () => {
           <Button variant="ghost" className="relative h-8 w-8 rounded-full">
             <Avatar className="h-8 w-8">
               <AvatarImage
-                src={`https://img.usecurling.com/ppl/thumbnail?seed=${user.id}`}
-                alt={user.email ?? 'User'}
+                src={user.photoURL ?? undefined}
+                alt={user.displayName || user.email || 'User'}
               />
-              <AvatarFallback>{getInitials(user.email ?? '')}</AvatarFallback>
+              <AvatarFallback>{getInitials(user.displayName, user.email)}</AvatarFallback>
             </Avatar>
           </Button>
         </DropdownMenuTrigger>

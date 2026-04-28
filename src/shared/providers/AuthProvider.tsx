@@ -26,6 +26,7 @@ export interface AppUser {
   id: string
   email?: string
   displayName?: string | null
+  photoURL?: string | null
 }
 
 export interface AppSession {
@@ -174,7 +175,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const unsubscribe = onAuthStateChanged(firebaseAuth, async (fbUser) => {
       if (!isMounted.current) return
       if (fbUser) {
-        const appUser: AppUser = { id: fbUser.uid, email: fbUser.email || undefined, displayName: fbUser.displayName }
+        const appUser: AppUser = { id: fbUser.uid, email: fbUser.email || undefined, displayName: fbUser.displayName, photoURL: fbUser.photoURL }
         setSession({ access_token: await fbUser.getIdToken() })
         setUser(appUser)
 

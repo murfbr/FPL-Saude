@@ -49,6 +49,7 @@ import {
   getLastClientNotes,
   getClientNotesByAppointment,
 } from '@/shared/services'
+import { useUpdateAppointmentCache } from '@/modules/appointments/queries'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   AlertDialog,
@@ -83,7 +84,7 @@ interface AppointmentDetailDialogProps {
   appointment: Appointment | null
   isOpen: boolean
   onOpenChange: (isOpen: boolean) => void
-  onAppointmentUpdated: () => void
+  onAppointmentUpdated: (shouldInvalidate?: boolean) => void
 }
 
 const DetailItem = ({
@@ -120,6 +121,7 @@ export const AppointmentDetailDialog = ({
   onAppointmentUpdated,
 }: AppointmentDetailDialogProps) => {
   const { toast } = useToast()
+  const updateAppointmentCache = useUpdateAppointmentCache()
   const { user, professionalId, role } = useAuth()
   const [isDeleting, setIsDeleting] = useState(false)
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
@@ -292,7 +294,10 @@ export const AppointmentDetailDialog = ({
       })
     } else {
       toast({ title: 'Agendamento(s) excluído(s) com sucesso!' })
-      onAppointmentUpdated()
+      if (deleteMode === 'only-this') {
+        updateAppointmentCache(appointment.id, () => null)
+      }
+      onAppointmentUpdated(deleteMode === 'this-and-future')
       onOpenChange(false)
     }
     setIsDeleting(false)
@@ -312,14 +317,15 @@ export const AppointmentDetailDialog = ({
       })
     } else {
       toast({ title: 'Status atualizado com sucesso.' })
-      onAppointmentUpdated()
+      updateAppointmentCache(appointment.id, (old) => ({ ...old, status: newStatus }))
+      onAppointmentUpdated(false)
       setRefreshTrigger(prev => prev + 1)
     }
     setIsUpdatingStatus(false)
   }
 
-  const handleRescheduleSuccess = () => {
-    onAppointmentUpdated()
+  const handleRescheduleSuccess = (shouldInvalidate?: boolean) => {
+    onAppointmentUpdated(shouldInvalidate)
     onOpenChange(false)
   }
 
@@ -347,8 +353,12 @@ export const AppointmentDetailDialog = ({
       setNewNote('')
       if (data) {
         setLocalNotes((prev) => [...prev, data])
+        updateAppointmentCache(appointment.id, (old) => ({
+          ...old,
+          notes: [...(old.notes || []), data]
+        }))
       }
-      onAppointmentUpdated()
+      onAppointmentUpdated(false)
     }
     setIsSavingNote(false)
   }
@@ -378,7 +388,8 @@ export const AppointmentDetailDialog = ({
     } else {
       toast({ title: 'Desconto atualizado com sucesso!' })
       setIsEditingDiscount(false)
-      onAppointmentUpdated()
+      updateAppointmentCache(appointment.id, (old) => ({ ...old, discount_amount: val }))
+      onAppointmentUpdated(false)
     }
     setIsSavingDiscount(false)
   }

@@ -11,6 +11,7 @@ import {
   getAppointmentsForRange,
   getUpcomingAppointments,
 } from '@/modules/appointments/service'
+import { Appointment } from '@/shared/types'
 import { useAuth } from '@/shared/providers/AuthProvider'
 
 /** Chave padrão para queries de appointments */
@@ -69,6 +70,37 @@ export const useUpcomingAppointments = () => {
     staleTime: 2 * 60_000, // 2 minutos
     enabled: !!companyId,
   })
+}
+
+/**
+ * Hook auxiliar para atualizar um único agendamento no cache.
+ * Evita fazer um refetch de todos os agendamentos do dia/semana/mês.
+ */
+export const useUpdateAppointmentCache = () => {
+  const queryClient = useQueryClient()
+
+  return (appointmentId: string, updater: (oldAppt: Appointment) => Appointment | null) => {
+    // Atualiza o agendamento em TODAS as queries de appointments ativas
+    queryClient.setQueriesData({ queryKey: [APPOINTMENTS_KEY] }, (oldData: Appointment[] | undefined) => {
+      if (!oldData) return oldData
+      
+      const index = oldData.findIndex(a => a.id === appointmentId)
+      if (index === -1) return oldData
+
+      const oldAppt = oldData[index]
+      const newAppt = updater(oldAppt)
+
+      if (newAppt === null) {
+        // Remover do cache
+        return oldData.filter(a => a.id !== appointmentId)
+      }
+
+      // Atualizar no cache
+      const newData = [...oldData]
+      newData[index] = newAppt
+      return newData
+    })
+  }
 }
 
 /**

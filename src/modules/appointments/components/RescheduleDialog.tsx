@@ -32,6 +32,7 @@ import { getAvailableDatesForRange } from '@/modules/availability/service'
 import { rescheduleAppointment, rescheduleFutureAppointments } from '@/shared/services'
 import { getProfessionalsByService } from '@/shared/services'
 import { AvailableSlots } from '@/modules/availability/components/AvailableSlots'
+import { useUpdateAppointmentCache } from '@/modules/appointments/queries'
 import { getFriendlyErrorMessage } from '@/shared/lib/error-mapping'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
@@ -44,7 +45,7 @@ interface RescheduleDialogProps {
   client: Client
   service: Service
   professionalId: string
-  onRescheduleSuccess: () => void
+  onRescheduleSuccess: (shouldInvalidate?: boolean) => void
   is_recurring?: boolean
   currentStartTime?: string
 }
@@ -61,6 +62,7 @@ export const RescheduleDialog = ({
   currentStartTime,
 }: RescheduleDialogProps) => {
   const { toast } = useToast()
+  const updateAppointmentCache = useUpdateAppointmentCache()
 
   // Selection State
   const [date, setDate] = useState<Date | undefined>(undefined)
@@ -200,7 +202,25 @@ export const RescheduleDialog = ({
       })
     } else {
       toast({ title: 'Agendamento remarcado com sucesso!' })
-      onRescheduleSuccess()
+      
+      if (rescheduleMode === 'only-this') {
+        updateAppointmentCache(oldAppointmentId, (oldAppt) => {
+          const newAppt = { ...oldAppt }
+          newAppt.professional_id = selectedProfessionalId
+          const prof = professionals.find((p) => p.id === selectedProfessionalId)
+          if (prof) {
+            newAppt.professionals = { id: prof.id, name: prof.name }
+          }
+          newAppt.schedules = {
+            ...newAppt.schedules,
+            start_time: selectedSlotTime,
+            end_time: new Date(new Date(selectedSlotTime).getTime() + (service.duration_minutes || 60) * 60000).toISOString()
+          }
+          return newAppt
+        })
+      }
+
+      onRescheduleSuccess(rescheduleMode === 'this-and-future')
       onOpenChange(false)
     }
     setIsSubmitting(false)
