@@ -13,6 +13,7 @@ import {
   where,
   getCountFromServer,
   limit as fbLimit,
+  writeBatch,
 } from 'firebase/firestore'
 import { Client, ClientPackageWithDetails, ClientSubscription, Appointment, NoteEntry, ClientExam } from '@/shared/types'
 import { format, startOfMonth, endOfMonth, isValid } from 'date-fns'
@@ -173,6 +174,42 @@ export async function updateClient(
     }
 
     await updateDoc(docRef, updates)
+
+    // Sincronizar dados denormalizados nos agendamentos
+    if (updates.name !== undefined || updates.phone !== undefined || updates.email !== undefined) {
+      const appointmentsRef = collection(db, 'companies', getCompanyId(), 'appointments')
+      const q = query(appointmentsRef, where('client_id', '==', clientId))
+      const apptsSnap = await getDocs(q)
+      
+      if (!apptsSnap.empty) {
+        const batches = []
+        let currentBatch = writeBatch(db)
+        let operationCount = 0
+
+        apptsSnap.forEach(apptDoc => {
+          const apptData = apptDoc.data()
+          const newClientsObj = {
+            ...apptData.clients,
+            ...(updates.name !== undefined && { name: updates.name }),
+            ...(updates.phone !== undefined && { phone: updates.phone }),
+            ...(updates.email !== undefined && { email: updates.email })
+          }
+          currentBatch.update(apptDoc.ref, { clients: newClientsObj })
+          operationCount++
+
+          if (operationCount === 500) {
+            batches.push(currentBatch.commit())
+            currentBatch = writeBatch(db)
+            operationCount = 0
+          }
+        })
+
+        if (operationCount > 0) {
+          batches.push(currentBatch.commit())
+        }
+        await Promise.all(batches)
+      }
+    }
 
     const snapshot = await getDoc(docRef)
     return { data: { id: snapshot.id, ...snapshot.data() } as Client, error: null }
