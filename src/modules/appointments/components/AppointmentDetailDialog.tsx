@@ -13,7 +13,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Appointment, NoteEntry } from '@/shared/types'
+import { Appointment, NoteEntry, isClinicEvent } from '@/shared/types'
 import { format, isValid, addMinutes } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import {
@@ -38,6 +38,9 @@ import {
   Repeat,
   History,
   StickyNote,
+  PartyPopper,
+  Building2,
+  AlignLeft,
 } from 'lucide-react'
 import { useToast } from '@/shared/hooks/use-toast'
 import {
@@ -155,6 +158,9 @@ export const AppointmentDetailDialog = ({
       setLocalNotes(appointment.notes || [])
       setPackageDetails(null)
       setSubscriptionDetails(null)
+
+      // Para eventos, não há cliente vinculado — pular buscas de notas e pacotes
+      if (isClinicEvent(appointment)) return
 
       const clientPackageId = (appointment as any).client_package_id
       const serviceValueType = (appointment.services as any).value_type
@@ -394,18 +400,21 @@ export const AppointmentDetailDialog = ({
     setIsSavingDiscount(false)
   }
 
-  const startTime = appointment.schedules.start_time
-  const duration = appointment.services.duration_minutes || 30
+  const startTime = appointment.schedules!.start_time!
+  const isEvent = isClinicEvent(appointment)
+  const duration = isEvent
+    ? (appointment.event_duration_minutes || 60)
+    : (appointment.services?.duration_minutes || 30)
   const calculatedEndTime = addMinutes(new Date(startTime), duration)
 
   const clientPackageId = (appointment as any).client_package_id
-  const serviceValueType = (appointment.services as any).value_type
+  const serviceValueType = (appointment.services as any)?.value_type ?? null
 
   const isPackage = !!clientPackageId
   const isMonthlySubscription = serviceValueType === 'monthly' || !!subscriptionDetails
   const isZeroCost = isPackage || isMonthlySubscription
 
-  const servicePrice = appointment.services.price || 0
+  const servicePrice = appointment.services?.price || 0
   const currentDiscount = parseFloat(discountValue) || 0
   const finalPrice = isZeroCost
     ? 0
@@ -420,13 +429,101 @@ export const AppointmentDetailDialog = ({
       <Dialog open={isOpen} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Detalhes do Agendamento</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              {isEvent && <PartyPopper className="h-5 w-5 text-purple-500" />}
+              {isEvent ? 'Detalhes do Evento' : 'Detalhes do Agendamento'}
+            </DialogTitle>
             <DialogDescription>
-              Informações completas sobre a sessão.
+              {isEvent ? appointment.event_title : 'Informações completas sobre a sessão.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-6 py-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {isEvent ? (
+              /* ===== PAINEL DE EVENTO ===== */
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <DetailItem icon={PartyPopper} label="Evento" value={appointment.event_title || '—'} />
+                  <DetailItem
+                    icon={Building2}
+                    label="Empresa / Contratante"
+                    value={appointment.event_contractor || <span className="text-muted-foreground italic text-sm">Não informado</span>}
+                  />
+                  <DetailItem
+                    icon={Briefcase}
+                    label="Profissional Responsável"
+                    value={appointment.professionals?.name || '—'}
+                  />
+                  <DetailItem
+                    icon={Calendar}
+                    label="Data"
+                    value={format(new Date(startTime), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                  />
+                  <DetailItem
+                    icon={Clock}
+                    label="Horário"
+                    value={`${formatInTimeZone(startTime, 'HH:mm')} — ${formatInTimeZone(calculatedEndTime, 'HH:mm')} (${duration} min)`}
+                  />
+                  <DetailItem
+                    icon={FileText}
+                    label="Status"
+                    value={
+                      isAdmin ? (
+                        <Select
+                          value={displayStatus}
+                          onValueChange={handleStatusChange}
+                          disabled={isUpdatingStatus}
+                        >
+                          <SelectTrigger className="h-8 w-[140px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {statusOptions.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Badge variant="outline" className="capitalize">
+                          {statusOptions.find((o) => o.value === displayStatus)?.label || displayStatus}
+                        </Badge>
+                      )
+                    }
+                  />
+                </div>
+
+                {/* Descrição do evento */}
+                {appointment.event_description && (
+                  <div className="p-3 bg-muted/30 rounded-md border">
+                    <div className="flex items-center gap-2 mb-2">
+                      <AlignLeft className="h-4 w-4 text-primary" />
+                      <p className="text-sm font-medium">Descrição / Detalhes</p>
+                    </div>
+                    <p className="text-sm whitespace-pre-wrap text-muted-foreground">{appointment.event_description}</p>
+                  </div>
+                )}
+
+                {/* Financeiro do evento */}
+                <div className="flex items-start gap-3 p-3 rounded-md border bg-purple-50/60 border-purple-200">
+                  <DollarSign className="h-5 w-5 text-purple-600 mt-1" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Valor do Evento</p>
+                    <p className="font-bold text-lg text-purple-700">
+                      R$ {(appointment.event_price || 0).toFixed(2)}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {displayStatus === 'completed'
+                        ? 'Registrado financeiramente após conclusão'
+                        : 'Será registrado ao marcar como Concluído'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* ===== PAINEL DE AGENDAMENTO NORMAL ===== */
+              <div className="space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <DetailItem
                 icon={User}
                 label="Cliente"
@@ -784,6 +881,8 @@ export const AppointmentDetailDialog = ({
                 </Button>
               </div>
             </div>
+              </div>
+            )}
           </div>
 
           <DialogFooter className="flex-col sm:flex-row gap-2">
@@ -853,7 +952,7 @@ export const AppointmentDetailDialog = ({
               </AlertDialog>
             )}
 
-            {canEdit && (
+            {canEdit && !isEvent && (
               <Button
                 variant="secondary"
                 className="w-full sm:w-auto"
@@ -867,17 +966,19 @@ export const AppointmentDetailDialog = ({
         </DialogContent>
       </Dialog>
 
-      <RescheduleDialog
-        isOpen={isRescheduleOpen}
-        onOpenChange={setIsRescheduleOpen}
-        oldAppointmentId={appointment.id}
-        client={appointment.clients as any}
-        service={appointment.services as any}
-        professionalId={appointment.professional_id}
-        onRescheduleSuccess={handleRescheduleSuccess}
-        is_recurring={appointment.is_recurring}
-        currentStartTime={appointment.schedules?.start_time}
-      />
+      {!isEvent && (
+        <RescheduleDialog
+          isOpen={isRescheduleOpen}
+          onOpenChange={setIsRescheduleOpen}
+          oldAppointmentId={appointment.id}
+          client={appointment.clients as any}
+          service={appointment.services as any}
+          professionalId={appointment.professional_id}
+          onRescheduleSuccess={handleRescheduleSuccess}
+          is_recurring={appointment.is_recurring}
+          currentStartTime={appointment.schedules?.start_time}
+        />
+      )}
       
       <PatientHistoryModal
         clientId={(appointment as any).client_id}

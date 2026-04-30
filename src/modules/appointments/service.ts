@@ -89,6 +89,7 @@ export async function bookAppointment(
       created_at: new Date().toISOString(),
       client_package_id: clientPackageId || null,
       discount_amount: discountAmount,
+      entry_type: 'appointment',
       
       // Dados Desnormalizados
       clients: { 
@@ -119,6 +120,59 @@ export async function bookAppointment(
     }
 
     await setDoc(newDocRef, appInfo)
+    return { data: { appointment_id: newDocRef.id }, error: null }
+  } catch (error) {
+    return { data: null, error }
+  }
+}
+
+/**
+ * Cria um evento flexível na agenda.
+ * Eventos não têm vínculo com cliente ou serviço do catálogo.
+ * O valor e a duração são informados livremente pelo usuário.
+ */
+export async function bookClinicEvent(params: {
+  professionalId: string
+  title: string
+  contractor?: string
+  description?: string
+  price: number
+  durationMinutes: number
+  startTime: string
+}): Promise<{ data: { appointment_id: string } | null; error: any }> {
+  try {
+    const { professionalId, title, contractor, description, price, durationMinutes, startTime } = params
+    const appointmentsRef = collection(db, 'companies', getCompanyId(), 'appointments')
+    const newDocRef = doc(appointmentsRef)
+
+    const profSnap = await getDoc(doc(db, 'companies', getCompanyId(), 'professionals', professionalId))
+    const profData = profSnap.data()
+
+    const endTime = new Date(new Date(startTime).getTime() + durationMinutes * 60000).toISOString()
+
+    const eventInfo = {
+      id: newDocRef.id,
+      entry_type: 'event',
+      professional_id: professionalId,
+      professionals: { id: professionalId, name: profData?.name },
+      client_id: null,
+      clients: null,
+      service_id: null,
+      services: null,
+      event_title: title,
+      event_contractor: contractor || null,
+      event_description: description || null,
+      event_price: price,
+      event_duration_minutes: durationMinutes,
+      status: 'scheduled',
+      created_at: new Date().toISOString(),
+      schedules: {
+        start_time: startTime,
+        end_time: endTime,
+      },
+    }
+
+    await setDoc(newDocRef, eventInfo)
     return { data: { appointment_id: newDocRef.id }, error: null }
   } catch (error) {
     return { data: null, error }
@@ -332,6 +386,41 @@ export async function updateAppointmentStatus(appointmentId: string, status: str
        return { error: null }
     }
 
+    // Verificar se é evento flexível — lógica financeira separada
+    const isEvent = appData.entry_type === 'event'
+
+    if (isEvent) {
+      // Eventos: gerar/remover financial_record baseado em event_price
+      if (status === 'completed' && oldStatus !== 'completed') {
+        const eventPrice = appData.event_price || 0
+        if (eventPrice > 0) {
+          const finRef = collection(db, 'companies', companyId, 'financial_records')
+          const q = query(finRef, where('appointment_id', '==', appointmentId))
+          const existingSnap = await getDocs(q)
+          if (existingSnap.empty) {
+            const newDoc = doc(finRef)
+            await setDoc(newDoc, {
+              id: newDoc.id,
+              client_id: null,
+              professional_id: appData.professional_id,
+              appointment_id: appointmentId,
+              amount: eventPrice,
+              payment_date: new Date().toISOString(),
+              description: `Evento — ${appData.event_title || 'Sem título'}`,
+              payment_method: 'manual',
+            })
+          }
+        }
+      } else if (oldStatus === 'completed' && status !== 'completed') {
+        const finRef = collection(db, 'companies', companyId, 'financial_records')
+        const q = query(finRef, where('appointment_id', '==', appointmentId))
+        const existingSnap = await getDocs(q)
+        await Promise.all(existingSnap.docs.map(d => deleteDoc(d.ref)))
+      }
+      await updateDoc(docRef, { status })
+      return { error: null }
+    }
+
     const isPackage = !!appData.client_package_id
     let isMonthlySubscription = appData.services?.value_type === 'monthly'
 
@@ -434,37 +523,49 @@ export async function deleteAppointment(appointmentId: string): Promise<{ error:
     const appSnap = await getDoc(docRef)
     if (appSnap.exists()) {
        const appData = appSnap.data()
-       const isPackage = !!appData.client_package_id
-       let isMonthlySubscription = appData.services?.value_type === 'monthly'
+       const isEvent = appData.entry_type === 'event'
 
-       if (!isPackage && !isMonthlySubscription) {
-         const subsRef = collection(db, 'companies', companyId, 'clients', appData.client_id, 'subscriptions')
-         const subsSnap = await getDocs(subsRef)
-         const serviceId = appData.service_id || appData.services?.id
-         if (subsSnap.docs.some(d => d.data().service_id === serviceId)) {
-           isMonthlySubscription = true
+       // Eventos: apenas remover financial_record se existir, depois deletar
+       if (isEvent) {
+         if (appData.status === 'completed') {
+           const finRef = collection(db, 'companies', companyId, 'financial_records')
+           const q = query(finRef, where('appointment_id', '==', appointmentId))
+           const existingSnap = await getDocs(q)
+           await Promise.all(existingSnap.docs.map(d => deleteDoc(d.ref)))
          }
-       }
+       } else {
+         // Agendamentos normais: lógica de pacote / assinatura / financeiro
+         const isPackage = !!appData.client_package_id
+         let isMonthlySubscription = appData.services?.value_type === 'monthly'
 
-       const isAvulsa = !isPackage && !isMonthlySubscription
-       const wasConsumingStatus = appData.status === 'completed' || appData.status === 'no_show'
-       
-       if (isPackage && wasConsumingStatus) {
-         const packageRef = doc(db, 'companies', companyId, 'clients', appData.client_id, 'packages', appData.client_package_id)
-         const pkgSnap = await getDoc(packageRef)
-         if (pkgSnap.exists()) {
-           const pkgData = pkgSnap.data()
-           const newRemaining = (pkgData.sessions_remaining || 0) + 1
-           await updateDoc(packageRef, { sessions_remaining: newRemaining })
+         if (!isPackage && !isMonthlySubscription && appData.client_id) {
+           const subsRef = collection(db, 'companies', companyId, 'clients', appData.client_id, 'subscriptions')
+           const subsSnap = await getDocs(subsRef)
+           const serviceId = appData.service_id || appData.services?.id
+           if (subsSnap.docs.some(d => d.data().service_id === serviceId)) {
+             isMonthlySubscription = true
+           }
          }
-       }
-       
-       if (isAvulsa && appData.status === 'completed') {
-         const finRef = collection(db, 'companies', companyId, 'financial_records')
-         const q = query(finRef, where('appointment_id', '==', appointmentId))
-         const existingSnap = await getDocs(q)
-         const deletePromises = existingSnap.docs.map(d => deleteDoc(d.ref))
-         await Promise.all(deletePromises)
+
+         const isAvulsa = !isPackage && !isMonthlySubscription
+         const wasConsumingStatus = appData.status === 'completed' || appData.status === 'no_show'
+
+         if (isPackage && wasConsumingStatus && appData.client_id) {
+           const packageRef = doc(db, 'companies', companyId, 'clients', appData.client_id, 'packages', appData.client_package_id)
+           const pkgSnap = await getDoc(packageRef)
+           if (pkgSnap.exists()) {
+             const pkgData = pkgSnap.data()
+             const newRemaining = (pkgData.sessions_remaining || 0) + 1
+             await updateDoc(packageRef, { sessions_remaining: newRemaining })
+           }
+         }
+
+         if (isAvulsa && appData.status === 'completed') {
+           const finRef = collection(db, 'companies', companyId, 'financial_records')
+           const q = query(finRef, where('appointment_id', '==', appointmentId))
+           const existingSnap = await getDocs(q)
+           await Promise.all(existingSnap.docs.map(d => deleteDoc(d.ref)))
+         }
        }
     }
     

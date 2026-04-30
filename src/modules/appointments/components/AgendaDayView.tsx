@@ -8,10 +8,12 @@ import {
   AlertCircle,
   Maximize2,
   Minimize2,
+  PartyPopper,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Appointment } from '@/shared/types'
+import { isClinicEvent } from '@/shared/types'
 import { cn, formatInTimeZone } from '@/shared/lib/utils'
 import { ViewMode } from './AgendaView'
 import { computeEventLayout } from '@/shared/lib/event-layout'
@@ -213,10 +215,22 @@ export const AgendaDayView = ({
                 const { top, height, left, width } = appt.layout
                 const adjustedWidth =
                   width === 100 ? 'calc(100% - 12px)' : `${width}%`
+                const isEvent = isClinicEvent(appt)
                 const hasMissingNotes =
+                  !isEvent &&
                   appt.status === 'completed' &&
                   appt.services?.requires_observation !== false &&
                   (!appt.notes || appt.notes.length === 0)
+
+                // Linha principal: nome do cliente ou título do evento
+                const primaryLabel = isEvent
+                  ? (appt.event_title || 'Evento')
+                  : (appt.clients?.name || '')
+
+                // Linha secundária: nome do serviço ou contratante do evento
+                const secondaryLabel = isEvent
+                  ? (appt.event_contractor || '—')
+                  : (appt.services?.name || '')
 
                 return (
                   <div
@@ -234,27 +248,32 @@ export const AgendaDayView = ({
                     <div
                       className={cn(
                         'h-full w-full rounded-md p-2 text-sm cursor-pointer shadow-sm overflow-hidden border transition-all hover:brightness-95 hover:z-20 relative',
-                        appt.status === 'completed'
-                          ? 'bg-green-100 text-green-900 border-green-200'
-                          : appt.status === 'cancelled'
-                            ? 'bg-red-100 text-red-900 border-red-200'
-                            : appt.status === 'no_show'
-                              ? 'bg-orange-100 text-orange-900 border-orange-200'
-                              : 'bg-primary/10 text-primary border-primary/20',
+                        isEvent
+                          ? 'bg-purple-100 text-purple-900 border-purple-300'
+                          : appt.status === 'completed'
+                            ? 'bg-green-100 text-green-900 border-green-200'
+                            : appt.status === 'cancelled'
+                              ? 'bg-red-100 text-red-900 border-red-200'
+                              : appt.status === 'no_show'
+                                ? 'bg-orange-100 text-orange-900 border-orange-200'
+                                : 'bg-primary/10 text-primary border-primary/20',
                       )}
                       onClick={(e) => {
                         e.stopPropagation()
                         onAppointmentClick(appt)
                       }}
                     >
-                        <div className="absolute top-1 right-1">
+                        <div className="absolute top-1 right-1 flex items-center gap-1">
+                          {isEvent && (
+                            <PartyPopper className="h-3.5 w-3.5 text-purple-500" />
+                          )}
                           {hasMissingNotes && (
                             <AlertCircle className="h-4 w-4 text-red-600" />
                           )}
                         </div>
                       <div className="flex flex-col h-full">
                         <div className="flex justify-between items-start font-bold pr-4">
-                          <span className="truncate">{appt.clients.name}</span>
+                          <span className="truncate">{primaryLabel}</span>
                           <span className="font-mono text-xs opacity-75 shrink-0 ml-1">
                             {formatInTimeZone(
                               appt.schedules.start_time,
@@ -263,7 +282,7 @@ export const AgendaDayView = ({
                           </span>
                         </div>
                         <div className="text-xs opacity-90 truncate mt-0.5">
-                          {appt.services.name}
+                          {secondaryLabel}
                         </div>
                       </div>
                     </div>

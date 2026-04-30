@@ -98,7 +98,18 @@ export interface Appointment {
   professionals?: Partial<Professional>
   services?: Partial<Service>
   schedules?: Partial<Schedule>
+  // Discriminador de tipo: ausente ou 'appointment' = agendamento normal, 'event' = evento flexível
+  entry_type?: 'appointment' | 'event'
+  // Campos exclusivos de eventos (presentes apenas quando entry_type === 'event')
+  event_title?: string
+  event_contractor?: string
+  event_description?: string
+  event_price?: number
+  event_duration_minutes?: number
 }
+
+/** Helper de tipagem: retorna true se o agendamento for um evento flexível */
+export const isClinicEvent = (a: Appointment): boolean => a.entry_type === 'event'
 
 export interface Package {
   id: string

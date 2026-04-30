@@ -17,10 +17,12 @@ import {
   AlertCircle,
   Maximize2,
   Minimize2,
+  PartyPopper,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Appointment } from '@/shared/types'
+import { isClinicEvent } from '@/shared/types'
 import { cn, formatInTimeZone } from '@/shared/lib/utils'
 import { ViewMode } from './AgendaView'
 import { computeEventLayout } from '@/shared/lib/event-layout'
@@ -282,10 +284,22 @@ export const AgendaWeekView = ({
                       const { top, height, left, width } = appt.layout
                       const adjustedWidth =
                         width === 100 ? 'calc(100% - 10px)' : `${width}%`
+                      const isEvent = isClinicEvent(appt)
                       const hasMissingNotes =
+                        !isEvent &&
                         appt.status === 'completed' &&
                         appt.services?.requires_observation !== false &&
                         (!appt.notes || appt.notes.length === 0)
+
+                      // Linha principal: nome do cliente ou título do evento
+                      const primaryLabel = isEvent
+                        ? (appt.event_title || 'Evento')
+                        : (appt.clients?.name || '')
+
+                      // Linha secundária: nome do serviço ou contratante do evento
+                      const secondaryLabel = isEvent
+                        ? (appt.event_contractor || '—')
+                        : (appt.services?.name || '')
 
                       return (
                         <div
@@ -303,30 +317,35 @@ export const AgendaWeekView = ({
                           <div
                             className={cn(
                               'h-full w-full rounded p-1 text-xs cursor-pointer shadow-sm overflow-hidden border transition-transform hover:scale-[1.02] hover:z-20 relative',
-                              appt.status === 'completed'
-                                ? 'bg-green-100 text-green-800 border-green-200'
-                                : appt.status === 'cancelled'
-                                  ? 'bg-red-100 text-red-800 border-red-200'
-                                  : appt.status === 'no_show'
-                                    ? 'bg-orange-100 text-orange-800 border-orange-200'
-                                    : 'bg-primary/10 text-primary border-primary/20',
+                              isEvent
+                                ? 'bg-purple-100 text-purple-900 border-purple-300'
+                                : appt.status === 'completed'
+                                  ? 'bg-green-100 text-green-800 border-green-200'
+                                  : appt.status === 'cancelled'
+                                    ? 'bg-red-100 text-red-800 border-red-200'
+                                    : appt.status === 'no_show'
+                                      ? 'bg-orange-100 text-orange-800 border-orange-200'
+                                      : 'bg-primary/10 text-primary border-primary/20',
                             )}
                             onClick={(e) => {
                               e.stopPropagation()
                               onAppointmentClick(appt)
                             }}
-                            title={`${appt.clients.name} - ${appt.services.name}`}
+                            title={isEvent ? appt.event_title : `${appt.clients?.name} - ${appt.services?.name}`}
                           >
-                            <div className="absolute top-0.5 right-0.5 z-30">
+                            <div className="absolute top-0.5 right-0.5 z-30 flex items-center gap-0.5">
+                              {isEvent && (
+                                <PartyPopper className="h-3 w-3 text-purple-500" />
+                              )}
                               {hasMissingNotes && (
                                 <AlertCircle className="h-3 w-3 text-red-600" />
                               )}
                             </div>
                             <div className="font-semibold truncate leading-none mb-0.5">
-                              {appt.clients.name}
+                              {primaryLabel}
                             </div>
                             <div className="truncate text-[10px] font-medium leading-none mb-0.5">
-                              {appt.services.name}
+                              {secondaryLabel}
                             </div>
                             <div className="truncate text-[10px] opacity-80 leading-none">
                               {formatInTimeZone(

@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { Calendar, RefreshCw, Columns, Rows, Maximize2, Minimize2 } from 'lucide-react'
+import { Calendar, RefreshCw, Columns, Rows, Maximize2, Minimize2, PartyPopper, Plus } from 'lucide-react'
 import { AgendaCalendarView } from './AgendaCalendarView'
 import { AgendaWeekView } from './AgendaWeekView'
 import { AgendaDayView } from './AgendaDayView'
 import { Button } from '@/components/ui/button'
 import { AppointmentFormDialog } from './AppointmentFormDialog'
+import { EventFormDialog } from './EventFormDialog'
 import { Appointment, Professional } from '@/shared/types'
 import { AppointmentDetailDialog } from './AppointmentDetailDialog'
 import { useIsMobile } from '@/shared/hooks/use-mobile'
@@ -35,6 +36,7 @@ export const AgendaView = () => {
   const { loading, companyId } = useAuth()
   const [viewMode, setViewMode] = useState<ViewMode>('day')
   const [isFormOpen, setIsFormOpen] = useState(false)
+  const [isEventFormOpen, setIsEventFormOpen] = useState(false)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const [selectedAppointment, setSelectedAppointment] =
     useState<Appointment | null>(null)
@@ -216,6 +218,16 @@ export const AgendaView = () => {
               {isExpanded ? 'Recolher' : 'Expandir'}
             </span>
           </Button>
+
+          <Button
+            size={isMobile ? "sm" : "default"}
+            onClick={() => setIsEventFormOpen(true)}
+            className="bg-purple-600 hover:bg-purple-700 text-white whitespace-nowrap"
+          >
+            <PartyPopper className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Novo Evento</span>
+          </Button>
+
           {isMobile && (
             <Button
               variant="outline"
@@ -238,6 +250,15 @@ export const AgendaView = () => {
         onAppointmentCreated={handleDataRefresh}
         initialDate={quickCreateDate}
         isSpecificTimeSlot={isSpecificTimeSlot}
+        preselectedProfessionalId={
+          selectedProfessional !== 'all' ? selectedProfessional : undefined
+        }
+      />
+      <EventFormDialog
+        isOpen={isEventFormOpen}
+        onOpenChange={setIsEventFormOpen}
+        onEventCreated={handleDataRefresh}
+        initialDate={quickCreateDate}
         preselectedProfessionalId={
           selectedProfessional !== 'all' ? selectedProfessional : undefined
         }
