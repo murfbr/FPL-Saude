@@ -603,6 +603,11 @@ const FeaturesTab = ({
       label: 'Permitir que profissionais vejam a lista completa de pacientes',
       description: 'Se desmarcado, cada profissional só verá na lista os pacientes que já atendeu.',
     },
+    {
+      key: 'professionals_can_manage_packages',
+      label: 'Permitir que profissionais gerenciem pacotes e assinaturas',
+      description: 'Se desmarcado, o botão de associar pacotes ficará oculto no perfil do paciente para profissionais.',
+    },
   ]
 
   return (

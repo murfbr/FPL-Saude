@@ -31,6 +31,7 @@ import { useToast } from '@/shared/hooks/use-toast'
 
 interface ClientPackagesListProps {
   clientId: string
+  readOnly?: boolean
 }
 
 // Extending type locally since we can't update types file
@@ -38,7 +39,7 @@ type ExtendedClientPackage = ClientPackageWithDetails & {
   status?: 'active' | 'cancelled' | 'completed'
 }
 
-export const ClientPackagesList = ({ clientId }: ClientPackagesListProps) => {
+export const ClientPackagesList = ({ clientId, readOnly = false }: ClientPackagesListProps) => {
   const { toast } = useToast()
   const [packages, setPackages] = useState<ExtendedClientPackage[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -87,10 +88,12 @@ export const ClientPackagesList = ({ clientId }: ClientPackagesListProps) => {
               Acompanhamento dos pacotes de serviços contratados.
             </CardDescription>
           </div>
-          <Button size="sm" onClick={() => setIsDialogOpen(true)}>
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Adicionar
-          </Button>
+          {!readOnly && (
+            <Button size="sm" onClick={() => setIsDialogOpen(true)}>
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Adicionar
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="space-y-6 pt-6">
           {packages.length === 0 ? (
@@ -153,7 +156,7 @@ export const ClientPackagesList = ({ clientId }: ClientPackagesListProps) => {
 
                   <Progress value={progress} className="h-2" />
 
-                  {isActive && (
+                  {isActive && !readOnly && (
                     <div className="flex justify-end pt-2">
                       <AlertDialog>
                         <AlertDialogTrigger asChild>

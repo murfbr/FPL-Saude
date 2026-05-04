@@ -44,6 +44,7 @@ import { formatCPF } from '@/shared/lib/utils'
 import { GeneralAssessmentForm } from '@/modules/clients/components/GeneralAssessmentForm'
 import { ClientPackagesList } from '@/modules/packages/components/ClientPackagesList'
 import { useAuth } from '@/shared/providers/AuthProvider'
+import { useTenant } from '@/shared/contexts/TenantContext'
 import { useToast } from '@/shared/hooks/use-toast'
 import { ClientGallery } from '@/modules/gallery/components/ClientGallery'
 import {
@@ -66,6 +67,7 @@ const ProfessionalPatientDetail = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const { toast } = useToast()
   const { user, professionalId } = useAuth()
+  const { config } = useTenant()
   const [localNotes, setLocalNotes] = useState<NoteEntry[]>([])
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [lastVisibleDoc, setLastVisibleDoc] = useState<any>(null)
@@ -231,7 +233,10 @@ const ProfessionalPatientDetail = () => {
               </CardContent>
             </Card>
 
-            <ClientPackagesList clientId={patient.id} />
+            <ClientPackagesList 
+              clientId={patient.id} 
+              readOnly={!config?.features?.professionals_can_manage_packages}
+            />
           </div>
           <div className="md:col-span-2 space-y-6">
             <GeneralAssessmentForm 

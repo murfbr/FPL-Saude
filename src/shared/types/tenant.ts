@@ -35,6 +35,7 @@ export interface RolePermissions {
 export interface CompanyFeatures {
   professionals_view_all_schedules: boolean
   professionals_view_all_clients: boolean
+  professionals_can_manage_packages: boolean
 }
 
 export interface CompanyConfig {
@@ -70,6 +71,7 @@ export const DEFAULT_BRANDING: CompanyBranding = {
 export const DEFAULT_FEATURES: CompanyFeatures = {
   professionals_view_all_schedules: false,
   professionals_view_all_clients: false,
+  professionals_can_manage_packages: false,
 }
 
 export const DEFAULT_MODULES: Record<ModuleKey, ModuleConfig> = {

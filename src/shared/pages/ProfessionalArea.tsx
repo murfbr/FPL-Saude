@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Input } from '@/components/ui/input'
+import { Search } from 'lucide-react'
+import { cleanCPF } from '@/shared/lib/utils'
 import { ClientsTable } from '@/modules/clients/components/ClientsTable'
 import { getClientsByProfessional, getAllClients } from '@/shared/services'
 import { Client } from '@/shared/types'
@@ -19,6 +22,7 @@ const ProfessionalArea = () => {
   const { config } = useTenant()
   const [searchParams, setSearchParams] = useSearchParams()
   const [clients, setClients] = useState<Client[]>([])
+  const [searchTerm, setSearchTerm] = useState('')
   const [isLoading, setIsLoading] = useState(true)
 
   const currentTab = searchParams.get('tab') || 'schedule'
@@ -86,6 +90,22 @@ const ProfessionalArea = () => {
     )
   }
 
+  const lowerTerm = searchTerm.toLowerCase()
+  const cleanTerm = cleanCPF(searchTerm)
+
+  const filteredClients = clients.filter((client) => {
+    const matchesName = client.name.toLowerCase().includes(lowerTerm)
+    const matchesCPF =
+      cleanTerm.length > 0 && client.email.includes(cleanTerm)
+    // Usamos o field email que às vezes guarda o CPF limpo no modelo legado
+    return matchesName || matchesCPF
+  })
+
+  const hasAgenda = config?.modules?.agenda?.enabled !== false
+  const hasPatients = config?.modules?.patients?.enabled !== false
+  const hasGallery = config?.modules?.gallery?.enabled === true
+  const hasTimesheets = config?.modules?.timesheets?.enabled === true
+
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="mb-8">
@@ -96,36 +116,54 @@ const ProfessionalArea = () => {
       </div>
 
       <Tabs value={currentTab} onValueChange={handleTabChange}>
-        <TabsList className="grid w-full grid-cols-5 mb-6">
-          <TabsTrigger value="schedule">Agenda</TabsTrigger>
-          <TabsTrigger value="availability">Disponibilidade</TabsTrigger>
-          <TabsTrigger value="clients">Pacientes</TabsTrigger>
-          <TabsTrigger value="gallery">Galeria</TabsTrigger>
-          <TabsTrigger value="time-tracking">Ponto</TabsTrigger>
+        <TabsList className="flex flex-wrap w-full mb-6 gap-1 h-auto">
+          {hasAgenda && <TabsTrigger value="schedule" className="flex-1 min-w-[120px]">Agenda</TabsTrigger>}
+          {hasAgenda && <TabsTrigger value="availability" className="flex-1 min-w-[120px]">Disponibilidade</TabsTrigger>}
+          {hasPatients && <TabsTrigger value="clients" className="flex-1 min-w-[120px]">Pacientes</TabsTrigger>}
+          {hasGallery && <TabsTrigger value="gallery" className="flex-1 min-w-[120px]">Galeria</TabsTrigger>}
+          {hasTimesheets && <TabsTrigger value="time-tracking" className="flex-1 min-w-[120px]">Ponto</TabsTrigger>}
         </TabsList>
 
-        <TabsContent value="schedule">
-          <AgendaView 
-            mode="professional" 
-            preselectedProfessionalId={config?.features?.professionals_view_all_schedules ? 'all' : professionalId} 
-          />
-        </TabsContent>
+        {hasAgenda && (
+          <>
+            <TabsContent value="schedule">
+              <AgendaView 
+                mode="professional" 
+                preselectedProfessionalId={config?.features?.professionals_view_all_schedules ? 'all' : professionalId} 
+              />
+            </TabsContent>
+            <TabsContent value="availability">
+              <ReadOnlyAvailabilitySettings professionalId={professionalId} />
+            </TabsContent>
+          </>
+        )}
 
-        <TabsContent value="availability">
-          <ReadOnlyAvailabilitySettings professionalId={professionalId} />
-        </TabsContent>
+        {hasPatients && (
+          <TabsContent value="clients" className="space-y-4 mt-0">
+            <div className="relative">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nome ou CPF..."
+                className="pl-8 w-full max-w-sm"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <ClientsTable clients={filteredClients} />
+          </TabsContent>
+        )}
 
-        <TabsContent value="clients">
-          <ClientsTable clients={clients} />
-        </TabsContent>
+        {hasGallery && (
+          <TabsContent value="gallery">
+            <ClinicalGalleryAdmin />
+          </TabsContent>
+        )}
 
-        <TabsContent value="gallery">
-          <ClinicalGalleryAdmin />
-        </TabsContent>
-
-        <TabsContent value="time-tracking">
-          <TimeTracker professionalId={professionalId} />
-        </TabsContent>
+        {hasTimesheets && (
+          <TabsContent value="time-tracking">
+            <TimeTracker professionalId={professionalId} />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   )

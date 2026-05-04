@@ -57,7 +57,7 @@ export const ClientsTable = ({ clients }: ClientsTableProps) => {
         <TableHeader>
           <TableRow>
             <TableHead>Nome</TableHead>
-            <TableHead>Email</TableHead>
+            <TableHead>Email / CPF</TableHead>
             <TableHead>Telefone</TableHead>
           </TableRow>
         </TableHeader>
