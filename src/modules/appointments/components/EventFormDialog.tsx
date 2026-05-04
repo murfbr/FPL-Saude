@@ -101,7 +101,7 @@ export const EventFormDialog = ({
   useEffect(() => {
     if (isOpen && !loading && companyId) {
       setIsLoadingProfessionals(true)
-      getAllProfessionals()
+      getAllProfessionals({ activeOnly: true })
         .then(({ data }) => setProfessionals(data || []))
         .finally(() => setIsLoadingProfessionals(false))
     }

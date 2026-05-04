@@ -70,7 +70,7 @@ export const AgendaView = ({
 
   useEffect(() => {
     if (!loading && companyId) {
-      getAllProfessionals().then(({ data }) => {
+      getAllProfessionals({ activeOnly: true }).then(({ data }) => {
         setProfessionals(data || [])
       })
     }
@@ -178,7 +178,7 @@ export const AgendaView = ({
   return (
     <div className="flex flex-col h-full bg-background rounded-lg border shadow-sm">
       {/* Consolidated Single Row Header */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4 border-b">
+      <div className="flex flex-col md:flex-row md:flex-wrap items-start md:items-center justify-between gap-4 p-4 border-b">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full md:w-auto">
           <h2 className="text-lg font-semibold whitespace-nowrap">Agenda</h2>
 
@@ -231,14 +231,16 @@ export const AgendaView = ({
             </span>
           </Button>
 
-          <Button
-            size={isMobile ? "sm" : "default"}
-            onClick={() => setIsEventFormOpen(true)}
-            className="bg-purple-600 hover:bg-purple-700 text-white whitespace-nowrap"
-          >
-            <PartyPopper className="h-4 w-4 sm:mr-2" />
-            <span className="hidden sm:inline">Novo Evento</span>
-          </Button>
+          {mode === 'admin' && (
+            <Button
+              size={isMobile ? "sm" : "default"}
+              onClick={() => setIsEventFormOpen(true)}
+              className="bg-purple-600 hover:bg-purple-700 text-white whitespace-nowrap"
+            >
+              <PartyPopper className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Novo Evento</span>
+            </Button>
+          )}
 
           {isMobile && mode === 'admin' && (
             <Button

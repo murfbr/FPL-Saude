@@ -15,7 +15,6 @@ export async function getProfessionalsByService(
     // Optimized Query: We rely on Firestore 'array-contains' for explosive speed instead of pulling everything.
     const q = query(
       profsRef, 
-      where('is_active', '==', true),
       where('service_ids', 'array-contains', serviceId)
     )
     
@@ -23,7 +22,12 @@ export async function getProfessionalsByService(
     const professionals: Professional[] = []
     
     snapshot.forEach(doc => {
-      professionals.push({ id: doc.id, ...doc.data() } as Professional)
+      const data = doc.data()
+      // Filtro resiliente: considera ativo se não for explicitamente falso
+      const isActive = data.is_active !== false && data.is_active !== 'false' && data.is_active !== 0
+      if (isActive) {
+        professionals.push({ id: doc.id, ...data } as Professional)
+      }
     })
 
     console.log(`[DEBUG] getProfessionalsByService(${serviceId}): Found ${professionals.length} professionals`, professionals.map(p => p.name))
@@ -61,7 +65,8 @@ export async function getAllProfessionals(options?: {
     snapshot.forEach(doc => {
       const data = doc.data()
       if (options?.activeOnly) {
-        const isActive = data.is_active === true || data.is_active === 'true' || data.is_active === 1
+        // Filtro resiliente: considera ativo se não for explicitamente falso (null/undefined = ativo por padrão)
+        const isActive = data.is_active !== false && data.is_active !== 'false' && data.is_active !== 0
         if (!isActive) return
       }
       professionals.push({ id: doc.id, ...data } as Professional)
