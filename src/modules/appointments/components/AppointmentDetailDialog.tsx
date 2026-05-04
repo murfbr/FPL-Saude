@@ -300,9 +300,9 @@ export const AppointmentDetailDialog = ({
       })
     } else {
       toast({ title: 'Agendamento(s) excluído(s) com sucesso!' })
-      if (deleteMode === 'only-this') {
-        updateAppointmentCache(appointment.id, () => null)
-      }
+      // Sempre remover do cache local imediatamente para a UI ficar rápida
+      updateAppointmentCache(appointment.id, () => null)
+      
       onAppointmentUpdated(deleteMode === 'this-and-future')
       onOpenChange(false)
     }

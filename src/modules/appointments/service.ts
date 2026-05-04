@@ -598,18 +598,30 @@ export async function deleteFutureAppointments(appointmentId: string): Promise<{
     
     const batch = writeBatch(db)
 
-    const subsRef = collection(db, 'companies', companyId, 'clients', sourceData.client_id, 'subscriptions')
-    const subsSnap = await getDocs(subsRef)
-    const clientSubs = subsSnap.docs.map(d => d.data())
-    
+    let clientSubs: any[] = []
+    if (sourceData.client_id) {
+      const subsRef = collection(db, 'companies', companyId, 'clients', sourceData.client_id, 'subscriptions')
+      const subsSnap = await getDocs(subsRef)
+      clientSubs = subsSnap.docs.map(d => d.data())
+    }
     
     const packageRefunds = new Map<string, number>()
     const finAppointmentsToDelete: string[] = []
 
+    const sourceStartTimeStr = sourceData.schedules?.start_time
+    const sourceStartTimeMs = sourceStartTimeStr ? new Date(sourceStartTimeStr).getTime() : 0
+
     snapshot.docs.forEach(d => {
       const appData = d.data()
+      const appStartTimeStr = appData.schedules?.start_time
+      
+      // Safety check: ensure schedules exist and can be parsed
+      if (!appStartTimeStr) return;
+      
+      const appStartTimeMs = new Date(appStartTimeStr).getTime()
+      
       // Filter out past appointments in JS to avoid composite index requirement
-      if (appData.schedules.start_time < sourceData.schedules.start_time) return;
+      if (appStartTimeMs < sourceStartTimeMs) return;
 
       const isPackage = !!appData.client_package_id
       let isMonthlySubscription = appData.services?.value_type === 'monthly'
@@ -625,9 +637,11 @@ export async function deleteFutureAppointments(appointmentId: string): Promise<{
       const wasConsumingStatus = appData.status === 'completed' || appData.status === 'no_show'
       
       if (isPackage && wasConsumingStatus) {
-        const pkgPath = `companies/${companyId}/clients/${appData.client_id}/packages/${appData.client_package_id}`
-        const currentRefunds = packageRefunds.get(pkgPath) || 0
-        packageRefunds.set(pkgPath, currentRefunds + 1)
+        if (appData.client_id && appData.client_package_id) {
+          const pkgPath = `companies/${companyId}/clients/${appData.client_id}/packages/${appData.client_package_id}`
+          const currentRefunds = packageRefunds.get(pkgPath) || 0
+          packageRefunds.set(pkgPath, currentRefunds + 1)
+        }
       }
       
       if (isAvulsa && appData.status === 'completed') {
@@ -651,12 +665,15 @@ export async function deleteFutureAppointments(appointmentId: string): Promise<{
     // Deletar registros financeiros associados
     if (finAppointmentsToDelete.length > 0) {
       const finRef = collection(db, 'companies', companyId, 'financial_records')
-      // Pode processar em baterias de 30 para evitar erro de query "IN"
-      const finQuery = query(finRef, where('appointment_id', 'in', finAppointmentsToDelete.slice(0, 30)))
-      const finSnap = await getDocs(finQuery)
-      finSnap.docs.forEach((docSnap) => {
-        batch.delete(docSnap.ref)
-      })
+      // Processar em baterias de 30 para evitar erro de query "IN"
+      for (let i = 0; i < finAppointmentsToDelete.length; i += 30) {
+        const chunk = finAppointmentsToDelete.slice(i, i + 30)
+        const finQuery = query(finRef, where('appointment_id', 'in', chunk))
+        const finSnap = await getDocs(finQuery)
+        finSnap.docs.forEach((docSnap) => {
+          batch.delete(docSnap.ref)
+        })
+      }
     }
 
     await batch.commit()
