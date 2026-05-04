@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ClientGallery } from '@/modules/gallery/components/ClientGallery'
 import { getAllGalleryRecords } from '@/modules/gallery/service'
 import { ClientSelector } from '@/modules/clients/components/ClientSelector'
+import { getAllClients } from '@/modules/clients/service'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 interface GalleryPatient {
@@ -74,13 +75,12 @@ export default function ClinicalGalleryAdmin() {
     setFilteredPatients(galleryPatients.filter(c => c.name.toLowerCase().includes(lower)))
   }, [searchTerm, galleryPatients])
 
-  // Lazy load all clients for the selector ONLY when opening the modal
+  // Fetch all clients for the selector when opening the modal
   useEffect(() => {
     if (isSelectingClient && allClients.length === 0) {
       const fetchClients = async () => {
         setIsClientsLoading(true)
         try {
-          const { getAllClients } = await import('@/modules/clients/service')
           const { data } = await getAllClients({ status: 'active' })
           if (data) setAllClients(data)
         } catch (e) {

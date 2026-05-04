@@ -34,6 +34,7 @@ interface AgendaDayViewProps {
   selectedProfessional: string
   isExpanded: boolean
   refreshTrigger?: number
+  canEdit?: boolean
 }
 
 const NORMAL_HEIGHT = 64
@@ -46,6 +47,7 @@ export const AgendaDayView = ({
   selectedProfessional,
   isExpanded,
   refreshTrigger,
+  canEdit = true,
 }: AgendaDayViewProps) => {
   const { loading, companyId } = useAuth()
   const [hoveredSlot, setHoveredSlot] = useState<{
@@ -180,11 +182,11 @@ export const AgendaDayView = ({
 
             {/* Day Column */}
             <div
-              className="flex-1 relative bg-background cursor-pointer"
-              onMouseMove={handleMouseMove}
-              onMouseLeave={handleMouseLeave}
+              className={cn("flex-1 relative bg-background", canEdit && "cursor-pointer")}
+              onMouseMove={(e) => canEdit && handleMouseMove(e)}
+              onMouseLeave={() => canEdit && handleMouseLeave()}
               onClick={() => {
-                if (hoveredSlot !== null) {
+                if (canEdit && hoveredSlot !== null) {
                   const targetTime = new Date(currentDate)
                   targetTime.setHours(
                     hoveredSlot.hour,

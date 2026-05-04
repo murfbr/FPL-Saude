@@ -43,6 +43,7 @@ interface AgendaWeekViewProps {
   selectedProfessional: string
   isExpanded: boolean
   refreshTrigger?: number
+  canEdit?: boolean
 }
 
 const NORMAL_HEIGHT = 64
@@ -55,6 +56,7 @@ export const AgendaWeekView = ({
   selectedProfessional,
   isExpanded,
   refreshTrigger,
+  canEdit = true,
 }: AgendaWeekViewProps) => {
   const { loading, companyId } = useAuth()
   const [hoveredSlot, setHoveredSlot] = useState<{
@@ -252,11 +254,14 @@ export const AgendaWeekView = ({
                 return (
                   <div
                     key={day.toString()}
-                    className="flex-1 min-w-[140px] border-r last:border-0 relative bg-background cursor-pointer group snap-start"
-                    onMouseMove={(e) => handleMouseMove(e, day)}
-                    onMouseLeave={handleMouseLeave}
+                    className={cn(
+                      "flex-1 min-w-[140px] border-r last:border-0 relative bg-background group snap-start",
+                      canEdit && "cursor-pointer"
+                    )}
+                    onMouseMove={(e) => canEdit && handleMouseMove(e, day)}
+                    onMouseLeave={() => canEdit && handleMouseLeave()}
                     onClick={() => {
-                      if (hoveredSlot?.day === dayKey) {
+                      if (canEdit && hoveredSlot?.day === dayKey) {
                         const targetTime = new Date(day)
                         targetTime.setHours(
                           hoveredSlot.hour,

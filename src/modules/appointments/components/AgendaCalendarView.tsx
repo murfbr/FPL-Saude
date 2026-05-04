@@ -36,6 +36,7 @@ interface AgendaCalendarViewProps {
   selectedProfessional: string
   isExpanded: boolean
   refreshTrigger?: number
+  canEdit?: boolean
 }
 
 export const AgendaCalendarView = ({
@@ -47,6 +48,7 @@ export const AgendaCalendarView = ({
   selectedProfessional,
   isExpanded,
   refreshTrigger,
+  canEdit = true,
 }: AgendaCalendarViewProps) => {
   const { loading, companyId } = useAuth()
   const [displayedMonth, setDisplayedMonth] = useState(currentDate)
@@ -176,15 +178,17 @@ export const AgendaCalendarView = ({
                       {format(day, 'd')}
                     </time>
 
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={(e) => handlePlusClick(e, day)}
-                      title="Novo agendamento"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
+                    {canEdit && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => handlePlusClick(e, day)}
+                        title="Novo agendamento"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
 
                   <div className="mt-1 space-y-1 hidden sm:block">

@@ -53,6 +53,8 @@ export const AgendaView = ({
   const invalidateAppointments = useInvalidateAppointments()
   const { config } = useTenant()
 
+  const canEdit = mode === 'admin' || config?.modules?.agenda?.access_level === 'edit'
+
   // Lifted State
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedProfessional, setSelectedProfessional] = useState(
@@ -89,6 +91,7 @@ export const AgendaView = ({
   }
 
   const handleTimeSlotClick = (date: Date, isSpecificSlot: boolean = true) => {
+    if (!canEdit) return
     setQuickCreateDate(date)
     setIsSpecificTimeSlot(isSpecificSlot)
     setIsFormOpen(true)
@@ -110,6 +113,7 @@ export const AgendaView = ({
     onTimeSlotClick: handleTimeSlotClick,
     selectedProfessional,
     isExpanded,
+    canEdit,
   }
 
   const renderView = () => {
