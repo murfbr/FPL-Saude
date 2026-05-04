@@ -12,8 +12,8 @@ import {
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage, secondaryAuth } from '@/shared/lib/firebase'
 import { createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth'
-import type { CompanyConfig } from '@/shared/types/tenant'
-import { DEFAULT_BRANDING, DEFAULT_ROLES } from '@/shared/types/tenant'
+import type { CompanyConfig, CompanyFeatures } from '@/shared/types/tenant'
+import { DEFAULT_BRANDING, DEFAULT_ROLES, DEFAULT_FEATURES } from '@/shared/types/tenant'
 import { MODULE_REGISTRY } from '@/modules/registry'
 
 // ─── Company CRUD ────────────────────────────────────────────────────────────
@@ -45,6 +45,7 @@ export async function getAllCompanies(): Promise<{ data: CompanyConfig[] | null;
         branding: raw.branding ?? { ...DEFAULT_BRANDING },
         modules: mergedModules,
         roles: raw.roles ?? { ...DEFAULT_ROLES },
+        features: { ...DEFAULT_FEATURES, ...(raw.features || {}) },
       } as CompanyConfig
     })
     return { data, error: null }
@@ -79,6 +80,7 @@ export async function getCompanyConfig(companyId: string): Promise<{ data: Compa
       branding: raw.branding ?? { ...DEFAULT_BRANDING },
       modules: mergedModules,
       roles: raw.roles ?? { ...DEFAULT_ROLES },
+      features: { ...DEFAULT_FEATURES, ...(raw.features || {}) },
     }
     return { data, error: null }
   } catch (error) {
@@ -106,6 +108,7 @@ export async function createCompany(
       branding: { ...DEFAULT_BRANDING, app_name: name },
       modules,
       roles: { ...DEFAULT_ROLES },
+      features: { ...DEFAULT_FEATURES },
     }
 
     await setDoc(doc(db, 'companies', slug), company)
@@ -145,6 +148,18 @@ export async function updateCompanyRoles(
 ): Promise<{ error: any }> {
   try {
     await updateDoc(doc(db, 'companies', companyId), { roles })
+    return { error: null }
+  } catch (error) {
+    return { error }
+  }
+}
+
+export async function updateCompanyFeatures(
+  companyId: string,
+  features: CompanyFeatures,
+): Promise<{ error: any }> {
+  try {
+    await updateDoc(doc(db, 'companies', companyId), { features })
     return { error: null }
   } catch (error) {
     return { error }

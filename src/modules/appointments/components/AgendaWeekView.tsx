@@ -216,19 +216,19 @@ export const AgendaWeekView = ({
                       isToday(day) && 'bg-primary/5',
                     )}
                   >
-                  <p className="text-xs uppercase text-muted-foreground">
-                    {format(day, 'EEE', { locale: ptBR })}
-                  </p>
-                  <p
-                    className={cn(
-                      'text-lg font-bold w-8 h-8 mx-auto flex items-center justify-center rounded-full',
-                      isToday(day) && 'bg-primary text-primary-foreground',
-                    )}
-                  >
-                    {format(day, 'd')}
-                  </p>
-                </div>
-              ))}
+                    <p className="text-xs uppercase text-muted-foreground">
+                      {format(day, 'EEE', { locale: ptBR })}
+                    </p>
+                    <p
+                      className={cn(
+                        'text-lg font-bold w-8 h-8 mx-auto flex items-center justify-center rounded-full',
+                        isToday(day) && 'bg-primary text-primary-foreground',
+                      )}
+                    >
+                      {format(day, 'd')}
+                    </p>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -289,6 +289,7 @@ export const AgendaWeekView = ({
                         !isEvent &&
                         appt.status === 'completed' &&
                         appt.services?.requires_observation !== false &&
+                        !(appt as any).has_clinical_notes &&
                         (!appt.notes || appt.notes.length === 0)
 
                       // Linha principal: nome do cliente ou título do evento

@@ -181,7 +181,8 @@ export const ProfessionalAppointmentDialog = ({
   }
 
   const handleComplete = async () => {
-    const hasExistingNotes = appointment.notes && appointment.notes.length > 0
+    // Verifica notas na subcoleção (localNotes) E no campo legado do agendamento
+    const hasExistingNotes = localNotes.length > 0 || (appointment.notes && appointment.notes.length > 0)
     const hasNewNote = newNote.trim().length > 0
     const requiresObservation = appointment.services?.requires_observation !== false
 

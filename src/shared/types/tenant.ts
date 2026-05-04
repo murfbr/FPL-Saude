@@ -32,6 +32,11 @@ export interface RolePermissions {
   can_edit: string[]
 }
 
+export interface CompanyFeatures {
+  professionals_view_all_schedules: boolean
+  professionals_view_all_clients: boolean
+}
+
 export interface CompanyConfig {
   id: string
   name: string
@@ -40,6 +45,7 @@ export interface CompanyConfig {
   branding: CompanyBranding
   modules: Record<ModuleKey, ModuleConfig>
   roles: Record<string, RolePermissions>
+  features?: Partial<CompanyFeatures>
 }
 
 export interface UserDoc {
@@ -59,6 +65,11 @@ export const DEFAULT_BRANDING: CompanyBranding = {
   accent_hex: '#C49761',
   background_hex: '#FDFDFB',
   foreground_hex: '#1e2e20',
+}
+
+export const DEFAULT_FEATURES: CompanyFeatures = {
+  professionals_view_all_schedules: false,
+  professionals_view_all_clients: false,
 }
 
 export const DEFAULT_MODULES: Record<ModuleKey, ModuleConfig> = {

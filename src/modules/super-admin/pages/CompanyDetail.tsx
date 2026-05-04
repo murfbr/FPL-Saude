@@ -32,6 +32,7 @@ import {
   updateCompanyModules,
   updateCompanyBranding,
   updateCompanyRoles,
+  updateCompanyFeatures,
   uploadCompanyLogo,
   getUsersByCompany,
   updateUserRole,
@@ -564,6 +565,68 @@ const UsersTab = ({ company }: { company: CompanyConfig }) => {
   )
 }
 
+// ─── Features Tab ────────────────────────────────────────────────────────────
+
+const FeaturesTab = ({
+  company,
+  onUpdate,
+}: {
+  company: CompanyConfig
+  onUpdate: (c: CompanyConfig) => void
+}) => {
+  const { toast } = useToast()
+  const [saving, setSaving] = useState<string | null>(null)
+
+  const handleToggle = async (key: keyof CompanyConfig['features'], enabled: boolean) => {
+    setSaving(key)
+    const updatedFeatures = {
+      ...(company.features || {}),
+      [key]: enabled,
+    }
+    const { error } = await updateCompanyFeatures(company.id, updatedFeatures as any)
+    setSaving(null)
+    if (error) {
+      toast({ title: 'Erro ao salvar', variant: 'destructive' })
+    } else {
+      onUpdate({ ...company, features: updatedFeatures as any })
+    }
+  }
+
+  const featuresList = [
+    {
+      key: 'professionals_view_all_schedules',
+      label: 'Permitir que profissionais vejam a agenda de outros profissionais',
+      description: 'Se desmarcado, cada profissional só poderá ver e agendar nos próprios horários.',
+    },
+    {
+      key: 'professionals_view_all_clients',
+      label: 'Permitir que profissionais vejam a lista completa de pacientes',
+      description: 'Se desmarcado, cada profissional só verá na lista os pacientes que já atendeu.',
+    },
+  ]
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      {featuresList.map(({ key, label, description }) => {
+        const isEnabled = company.features?.[key as keyof typeof company.features] ?? false
+        return (
+          <div key={key} className="flex items-start justify-between py-2 border-b last:border-0 gap-4">
+            <div className="flex-1 space-y-1">
+              <span className="text-sm font-medium">{label}</span>
+              <p className="text-xs text-muted-foreground">{description}</p>
+            </div>
+            <Switch
+              checked={isEnabled}
+              disabled={saving === key}
+              onCheckedChange={(v) => handleToggle(key as keyof CompanyConfig['features'], v)}
+            />
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── CompanyDetail (main) ─────────────────────────────────────────────────────
 
 const CompanyDetail = () => {
@@ -645,13 +708,13 @@ const CompanyDetail = () => {
         <CardContent className="p-0">
           <Tabs defaultValue="modules" className="w-full">
             <TabsList className="w-full justify-start rounded-none border-b bg-transparent h-auto p-0">
-              {['modules', 'branding', 'roles', 'users'].map((tab) => (
+              {['modules', 'features', 'branding', 'roles', 'users'].map((tab) => (
                 <TabsTrigger
                   key={tab}
                   value={tab}
                   className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-3"
                 >
-                  {{ modules: 'Módulos', branding: 'Branding', roles: 'Funções', users: 'Usuários' }[tab]}
+                  {{ modules: 'Módulos', features: 'Recursos', branding: 'Branding', roles: 'Funções', users: 'Usuários' }[tab]}
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -659,6 +722,9 @@ const CompanyDetail = () => {
             <div className="p-6">
               <TabsContent value="modules">
                 <ModulesTab company={company} onUpdate={setCompany} />
+              </TabsContent>
+              <TabsContent value="features">
+                <FeaturesTab company={company} onUpdate={setCompany} />
               </TabsContent>
               <TabsContent value="branding">
                 <BrandingTab company={company} onUpdate={setCompany} />

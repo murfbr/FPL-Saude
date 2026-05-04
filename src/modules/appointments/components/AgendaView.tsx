@@ -29,10 +29,17 @@ import {
 import { CalendarOff } from 'lucide-react'
 import { useAuth } from '@/shared/providers/AuthProvider'
 import { useInvalidateAppointments } from '@/modules/appointments/queries'
+import { useTenant } from '@/shared/contexts/TenantContext'
 
 export type ViewMode = 'month' | 'week' | 'day'
 
-export const AgendaView = () => {
+export const AgendaView = ({
+  mode = 'admin',
+  preselectedProfessionalId,
+}: {
+  mode?: 'admin' | 'professional'
+  preselectedProfessionalId?: string
+} = {}) => {
   const { loading, companyId } = useAuth()
   const [viewMode, setViewMode] = useState<ViewMode>('day')
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -44,10 +51,13 @@ export const AgendaView = () => {
   const [isExpanded, setIsExpanded] = useState(false)
   const [isBlockedDatesOpen, setIsBlockedDatesOpen] = useState(false)
   const invalidateAppointments = useInvalidateAppointments()
+  const { config } = useTenant()
 
   // Lifted State
   const [currentDate, setCurrentDate] = useState(new Date())
-  const [selectedProfessional, setSelectedProfessional] = useState('all')
+  const [selectedProfessional, setSelectedProfessional] = useState(
+    preselectedProfessionalId || 'all'
+  )
   const [professionals, setProfessionals] = useState<Professional[]>([])
 
   // Quick Create State
@@ -172,24 +182,26 @@ export const AgendaView = () => {
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full md:w-auto">
           <h2 className="text-lg font-semibold whitespace-nowrap">Agenda</h2>
 
-          <Select
-            value={selectedProfessional}
-            onValueChange={setSelectedProfessional}
-          >
-            <SelectTrigger className="w-full md:w-[240px]">
-              <SelectValue placeholder="Selecione o profissional" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os Profissionais</SelectItem>
-              {professionals.map((prof) => (
-                <SelectItem key={prof.id} value={prof.id}>
-                  {prof.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {(mode === 'admin' || config?.features?.professionals_view_all_schedules) && (
+            <Select
+              value={selectedProfessional}
+              onValueChange={setSelectedProfessional}
+            >
+              <SelectTrigger className="w-full md:w-[240px]">
+                <SelectValue placeholder="Selecione o profissional" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os Profissionais</SelectItem>
+                {professionals.map((prof) => (
+                  <SelectItem key={prof.id} value={prof.id}>
+                    {prof.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
 
-          {!isMobile && (
+          {!isMobile && mode === 'admin' && (
             <Button
               variant="outline"
               size="sm"
@@ -228,7 +240,7 @@ export const AgendaView = () => {
             <span className="hidden sm:inline">Novo Evento</span>
           </Button>
 
-          {isMobile && (
+          {isMobile && mode === 'admin' && (
             <Button
               variant="outline"
               size="sm"

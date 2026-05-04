@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
-import { getClientById, getAppointmentsByClientId, getAppointmentsByClientIdPaginated, getClientExams, uploadClientExam, deleteClientExam } from '@/shared/services'
+import { getClientById, getAppointmentsByClientId, getAppointmentsByClientIdPaginated, getClientExams, uploadClientExam, deleteClientExam, getClientNotesWithFallback } from '@/shared/services'
 import { Client, Appointment, NoteEntry, ClientExam } from '@/shared/types'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -31,6 +31,8 @@ import {
   Repeat,
   History,
   ExternalLink,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 import { format, isValid } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -70,12 +72,31 @@ const ProfessionalPatientDetail = () => {
   const [hasMoreAppointments, setHasMoreAppointments] = useState(false)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
 
+  // Prontuário — notas com fallback robusto (subcoleção + legado)
+  const [clientNotes, setClientNotes] = useState<NoteEntry[]>([])
+  const [isLoadingNotes, setIsLoadingNotes] = useState(false)
+  const [notesPage, setNotesPage] = useState(1)
+  const [notesTotalCount, setNotesTotalCount] = useState(0)
+  const PAGE_SIZE_NOTES = 10
+
   const handleBack = () => {
     if (location.key === 'default') {
       navigate('/profissional?tab=clients')
     } else {
       navigate(-1)
     }
+  }
+
+  const loadClientNotes = async (page: number) => {
+    if (!id) return
+    setIsLoadingNotes(true)
+    const { data, totalCount } = await getClientNotesWithFallback(id, page, PAGE_SIZE_NOTES)
+    if (data) {
+      setClientNotes(data)
+      setNotesPage(page)
+      setNotesTotalCount(totalCount)
+    }
+    setIsLoadingNotes(false)
   }
 
   const fetchData = async () => {
@@ -112,6 +133,7 @@ const ProfessionalPatientDetail = () => {
 
   useEffect(() => {
     fetchData()
+    loadClientNotes(1)
   }, [id])
 
   const handleEditNotes = (appointment: Appointment) => {
@@ -135,65 +157,7 @@ const ProfessionalPatientDetail = () => {
     )
   }, [appointments, statusFilter])
 
-  const consolidatedNotes = useMemo(() => {
-    const allNotes: (NoteEntry & { appointmentId?: string })[] = []
-    
-    // Notas de agendamentos
-    appointments.forEach((appt) => {
-      if (appt.notes) {
-        appt.notes.forEach((note) => {
-          allNotes.push({ ...note, appointmentId: appt.id })
-        })
-      }
-    })
-
-    // Histórico importado da ficha de avaliação
-    if (patient?.general_assessment && Array.isArray(patient.general_assessment)) {
-      patient.general_assessment.forEach((entry: any) => {
-        if (entry.type === 'imported_history') {
-          allNotes.push({
-            date: entry.date,
-            content: entry.content,
-            professional_name: 'Histórico Importado',
-          })
-        }
-      })
-    }
-
-    const sorted = allNotes.sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-    )
-
-    // Adiciona Avaliação Geral como primeira entrada
-    const assessmentEntry = Array.isArray(patient?.general_assessment)
-      ? patient.general_assessment.find((i: any) => i.type === 'assessment' || !i.type)
-      : (patient?.general_assessment?.type === 'assessment' ? patient.general_assessment : null)
-
-    if (assessmentEntry) {
-      const data = assessmentEntry
-      const lines = []
-      if (data.mainComplaint) lines.push(`Queixa Principal: ${data.mainComplaint}`)
-      if (data.profession) lines.push(`Profissão: ${data.profession}`)
-      if (data.physicalActivity) lines.push(`Atividade Física: ${data.physicalActivity}`)
-      if (data.clinicalDiagnosis) lines.push(`Diagnóstico Clínico: ${data.clinicalDiagnosis}`)
-      if (data.historyOfPresentIllness) lines.push(`HDA: ${data.historyOfPresentIllness}`)
-      if (data.pastMedicalHistory) lines.push(`HPP: ${data.pastMedicalHistory}`)
-      if (data.medications) lines.push(`Medicamentos: ${data.medications}`)
-      if (data.physicalExam) lines.push(`Exame Físico: ${data.physicalExam}`)
-      if (data.diagnosis) lines.push(`Diagnóstico Cinético-Funcional: ${data.diagnosis}`)
-      if (data.treatmentPlan) lines.push(`Plano de Tratamento: ${data.treatmentPlan}`)
-
-      if (lines.length > 0) {
-        sorted.unshift({
-          date: data.updated_at || new Date().toISOString(),
-          content: lines.join('\n'),
-          professional_name: 'Ficha de Avaliação (Geral)',
-        })
-      }
-    }
-
-    return sorted
-  }, [appointments, patient?.general_assessment])
+  const notesPagesTotal = Math.ceil(notesTotalCount / PAGE_SIZE_NOTES)
 
   const getInitials = (name: string) => {
     return name
@@ -277,52 +241,87 @@ const ProfessionalPatientDetail = () => {
 
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-3">
-                  <StickyNote className="w-6 h-6" />
-                  Histórico de Anotações
-                </CardTitle>
-                <CardDescription>
-                  Histórico consolidado de todas as sessões.
-                </CardDescription>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                  <div>
+                    <CardTitle className="flex items-center gap-3">
+                      <StickyNote className="w-6 h-6" />
+                      Histórico de Anotações
+                    </CardTitle>
+                    <CardDescription>
+                      {notesTotalCount > 0
+                        ? `${notesTotalCount} anotação${notesTotalCount !== 1 ? 'ões' : ''} no total`
+                        : 'Histórico consolidado de todas as sessões.'}
+                    </CardDescription>
+                  </div>
+                </div>
               </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-[300px] w-full rounded-md border p-4 bg-muted/20">
-                  {consolidatedNotes.length > 0 ? (
-                    <div className="space-y-4">
-                      {consolidatedNotes.map((note, index) => (
-                        <div
-                          key={index}
-                          className="bg-background p-4 rounded-lg border shadow-sm"
-                        >
-                          <div className="flex justify-between items-center mb-2">
-                            <span className="font-semibold text-sm text-primary">
-                              {note.professional_name}
-                            </span>
-                            <div className="text-xs text-muted-foreground text-right">
-                              <p>
-                                {format(new Date(note.date), 'dd/MM/yyyy', {
-                                  locale: ptBR,
-                                })}
-                              </p>
-                              <p>
-                                {format(new Date(note.date), 'HH:mm', {
-                                  locale: ptBR,
-                                })}
-                              </p>
-                            </div>
+              <CardContent className="space-y-3">
+                {isLoadingNotes && clientNotes.length === 0 ? (
+                  <div className="flex justify-center items-center h-[200px]">
+                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : clientNotes.length > 0 ? (
+                  <div className="space-y-3">
+                    {clientNotes.map((note, index) => (
+                      <div
+                        key={note.id || index}
+                        className="bg-muted/20 p-4 rounded-lg border shadow-sm"
+                      >
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="font-semibold text-sm text-primary">
+                            {note.professional_name || 'Profissional'}
+                          </span>
+                          <div className="text-xs text-muted-foreground text-right">
+                            <p>
+                              {format(new Date(note.date), "dd/MM/yyyy 'às' HH:mm", {
+                                locale: ptBR,
+                              })}
+                            </p>
                           </div>
-                          <p className="text-sm whitespace-pre-wrap">
-                            {note.content}
-                          </p>
                         </div>
-                      ))}
+                        <p className="text-sm whitespace-pre-wrap">
+                          {note.content}
+                        </p>
+                        {note.updated_at && (
+                          <span className="text-[10px] text-muted-foreground italic mt-2 block">
+                            Editado em {format(new Date(note.updated_at), 'dd/MM/yyyy HH:mm')}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-12">
+                    Nenhuma anotação registrada para este paciente.
+                  </p>
+                )}
+
+                {/* Paginação */}
+                {notesPagesTotal > 1 && (
+                  <div className="flex items-center justify-between pt-2 border-t">
+                    <span className="text-xs text-muted-foreground">
+                      {(notesPage - 1) * PAGE_SIZE_NOTES + 1}–{Math.min(notesPage * PAGE_SIZE_NOTES, notesTotalCount)} de {notesTotalCount}
+                    </span>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => loadClientNotes(notesPage - 1)}
+                        disabled={notesPage === 1 || isLoadingNotes}
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => loadClientNotes(notesPage + 1)}
+                        disabled={notesPage >= notesPagesTotal || isLoadingNotes}
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
                     </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground text-center py-12">
-                      Nenhuma anotação registrada para este paciente.
-                    </p>
-                  )}
-                </ScrollArea>
+                  </div>
+                )}
               </CardContent>
             </Card>
 

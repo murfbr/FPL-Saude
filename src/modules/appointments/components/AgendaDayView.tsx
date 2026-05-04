@@ -220,6 +220,7 @@ export const AgendaDayView = ({
                   !isEvent &&
                   appt.status === 'completed' &&
                   appt.services?.requires_observation !== false &&
+                  !(appt as any).has_clinical_notes &&
                   (!appt.notes || appt.notes.length === 0)
 
                 // Linha principal: nome do cliente ou título do evento
@@ -263,14 +264,14 @@ export const AgendaDayView = ({
                         onAppointmentClick(appt)
                       }}
                     >
-                        <div className="absolute top-1 right-1 flex items-center gap-1">
-                          {isEvent && (
-                            <PartyPopper className="h-3.5 w-3.5 text-purple-500" />
-                          )}
-                          {hasMissingNotes && (
-                            <AlertCircle className="h-4 w-4 text-red-600" />
-                          )}
-                        </div>
+                      <div className="absolute top-1 right-1 flex items-center gap-1">
+                        {isEvent && (
+                          <PartyPopper className="h-3.5 w-3.5 text-purple-500" />
+                        )}
+                        {hasMissingNotes && (
+                          <AlertCircle className="h-4 w-4 text-red-600" />
+                        )}
+                      </div>
                       <div className="flex flex-col h-full">
                         <div className="flex justify-between items-start font-bold pr-4">
                           <span className="truncate">{primaryLabel}</span>

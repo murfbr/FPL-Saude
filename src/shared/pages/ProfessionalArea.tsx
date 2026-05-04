@@ -3,17 +3,20 @@ import { useSearchParams } from 'react-router-dom'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ClientsTable } from '@/modules/clients/components/ClientsTable'
-import { getClientsByProfessional } from '@/shared/services'
+import { getClientsByProfessional, getAllClients } from '@/shared/services'
 import { Client } from '@/shared/types'
 import { useToast } from '@/shared/hooks/use-toast'
-import { Agenda } from '@/modules/appointments/components/Agenda'
+import { AgendaView } from '@/modules/appointments/components/AgendaView'
+import { ReadOnlyAvailabilitySettings } from '@/modules/availability/components/ReadOnlyAvailabilitySettings'
 import { TimeTracker } from '@/modules/time-tracking/components/TimeTracker'
 import ClinicalGalleryAdmin from '@/modules/gallery/pages/ClinicalGalleryAdmin'
 import { useAuth } from '@/shared/providers/AuthProvider'
+import { useTenant } from '@/shared/contexts/TenantContext'
 
 const ProfessionalArea = () => {
   const { toast } = useToast()
   const { user, professionalId } = useAuth()
+  const { config } = useTenant()
   const [searchParams, setSearchParams] = useSearchParams()
   const [clients, setClients] = useState<Client[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -34,9 +37,14 @@ const ProfessionalArea = () => {
       }
       setIsLoading(true)
       try {
-        const [clientRes] = await Promise.all([
-          getClientsByProfessional(professionalId),
-        ])
+        let clientRes
+        if (config?.features?.professionals_view_all_clients) {
+          // Quando a flag global estiver ativa, busca todos os clientes ativos da clínica
+          clientRes = await getAllClients({ status: 'active' })
+        } else {
+          // Comportamento padrão: busca apenas os clientes que o profissional atendeu
+          clientRes = await getClientsByProfessional(professionalId)
+        }
 
         if (clientRes.error) throw new Error('Erro ao buscar clientes.')
 
@@ -88,15 +96,23 @@ const ProfessionalArea = () => {
       </div>
 
       <Tabs value={currentTab} onValueChange={handleTabChange}>
-        <TabsList className="grid w-full grid-cols-4 mb-6">
+        <TabsList className="grid w-full grid-cols-5 mb-6">
           <TabsTrigger value="schedule">Agenda</TabsTrigger>
+          <TabsTrigger value="availability">Disponibilidade</TabsTrigger>
           <TabsTrigger value="clients">Pacientes</TabsTrigger>
           <TabsTrigger value="gallery">Galeria</TabsTrigger>
           <TabsTrigger value="time-tracking">Ponto</TabsTrigger>
         </TabsList>
 
         <TabsContent value="schedule">
-          <Agenda professionalId={professionalId} />
+          <AgendaView 
+            mode="professional" 
+            preselectedProfessionalId={config?.features?.professionals_view_all_schedules ? 'all' : professionalId} 
+          />
+        </TabsContent>
+
+        <TabsContent value="availability">
+          <ReadOnlyAvailabilitySettings professionalId={professionalId} />
         </TabsContent>
 
         <TabsContent value="clients">

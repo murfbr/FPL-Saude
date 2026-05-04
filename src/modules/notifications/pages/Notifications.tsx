@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/shared/providers/AuthProvider'
 import {
-  getNotifications,
   markNotificationAsRead,
   markAllNotificationsAsRead,
 } from '@/modules/notifications/service'
@@ -32,51 +31,20 @@ const NotificationsPage = () => {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
-  const fetchNotifications = async () => {
-    if (!professionalId) return
-    setIsLoading(true)
-    const { data } = await getNotifications(professionalId)
-    
-    // Auto-inject mock if completely empty
-    if (data && data.length === 0) {
-      try {
-        const ref = collection(db, 'companies', getCompanyId(), 'professionals', professionalId, 'notifications')
-        await addDoc(ref, {
-          title: 'Notificações Ativas!',
-          content: 'Sua caixa de entrada de notificações do novo banco Firestore está operando corretamente. A migração foi concluida com sucesso.',
-          is_read: false,
-          link: null,
-          created_at: new Date().toISOString()
-        })
-        const updated = await getNotifications(professionalId)
-        setNotifications(updated.data || [])
-      } catch (e) {
-        console.error('Failed to inject mock', e)
-      }
-    } else {
-      setNotifications(data || [])
-    }
-    
-    setIsLoading(false)
-  }
 
-  useEffect(() => {
-    fetchNotifications()
-  }, [professionalId])
 
   useEffect(() => {
     if (!user || !professionalId) return
 
+    setIsLoading(true)
     const ref = collection(db, 'companies', getCompanyId(), 'professionals', professionalId, 'notifications')
     const q = query(ref)
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === 'added') {
-          // Toast or similar could be added here if it wasn't the initial load
-        }
-      })
-      fetchNotifications()
+      const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Notification))
+      docs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      setNotifications(docs)
+      setIsLoading(false)
     })
 
     return () => {
