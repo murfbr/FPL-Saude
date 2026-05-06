@@ -514,7 +514,7 @@ export async function updateAppointment(appointmentId: string, updates: Partial<
   } catch (error) { return { data: null, error } }
 }
 
-export async function deleteAppointment(appointmentId: string): Promise<{ error: any }> {
+export async function deleteAppointment(appointmentId: string): Promise<{ deletedIds?: string[], error: any }> {
   try {
     const companyId = getCompanyId()
     const docRef = doc(db, 'companies', companyId, 'appointments', appointmentId)
@@ -570,11 +570,11 @@ export async function deleteAppointment(appointmentId: string): Promise<{ error:
     }
     
     await deleteDoc(docRef)
-    return { error: null }
-  } catch (error) { return { error } }
+    return { deletedIds: [appointmentId], error: null }
+  } catch (error) { return { deletedIds: [], error } }
 }
 
-export async function deleteFutureAppointments(appointmentId: string): Promise<{ error: any }> {
+export async function deleteFutureAppointments(appointmentId: string): Promise<{ deletedIds?: string[], error: any }> {
   try {
     const companyId = getCompanyId()
     const sourceDocRef = doc(db, 'companies', companyId, 'appointments', appointmentId)
@@ -585,18 +585,52 @@ export async function deleteFutureAppointments(appointmentId: string): Promise<{
     const groupId = sourceData.recurrence_group_id
     
     // If not recurring, just do a normal delete
-    if (!sourceData.is_recurring || !groupId) {
+    if (!sourceData.is_recurring) {
       return deleteAppointment(appointmentId)
     }
 
     const appointmentsRef = collection(db, 'companies', companyId, 'appointments')
-    const q = query(
-      appointmentsRef,
-      where('recurrence_group_id', '==', groupId)
-    )
-    const snapshot = await getDocs(q)
+    let snapshotDocs: any[] = []
+
+    if (groupId) {
+      const q = query(
+        appointmentsRef,
+        where('recurrence_group_id', '==', groupId)
+      )
+      const snapshot = await getDocs(q)
+      snapshotDocs = snapshot.docs
+    } else {
+      // Legacy fallback: Query by client_id and filter in JS
+      if (!sourceData.client_id) {
+         return deleteAppointment(appointmentId)
+      }
+      const q = query(
+        appointmentsRef,
+        where('client_id', '==', sourceData.client_id)
+      )
+      const clientSnap = await getDocs(q)
+      
+      snapshotDocs = clientSnap.docs.filter(d => {
+        const data = d.data()
+        return data.is_recurring === true &&
+               data.professional_id === sourceData.professional_id &&
+               data.service_id === sourceData.service_id &&
+               data.schedules?.start_time
+      })
+    }
     
-    const batch = writeBatch(db)
+    let batch = writeBatch(db)
+    const batches: any[] = []
+    let operationCount = 0
+
+    const commitOperation = () => {
+      operationCount++
+      if (operationCount >= 450) {
+        batches.push(batch.commit())
+        batch = writeBatch(db)
+        operationCount = 0
+      }
+    }
 
     let clientSubs: any[] = []
     if (sourceData.client_id) {
@@ -607,11 +641,12 @@ export async function deleteFutureAppointments(appointmentId: string): Promise<{
     
     const packageRefunds = new Map<string, number>()
     const finAppointmentsToDelete: string[] = []
+    const deletedIds: string[] = []
 
     const sourceStartTimeStr = sourceData.schedules?.start_time
     const sourceStartTimeMs = sourceStartTimeStr ? new Date(sourceStartTimeStr).getTime() : 0
 
-    snapshot.docs.forEach(d => {
+    snapshotDocs.forEach(d => {
       const appData = d.data()
       const appStartTimeStr = appData.schedules?.start_time
       
@@ -649,6 +684,8 @@ export async function deleteFutureAppointments(appointmentId: string): Promise<{
       }
 
       batch.delete(d.ref)
+      commitOperation()
+      deletedIds.push(d.id)
     })
     
     // Aplicar devoluções de pacotes
@@ -659,6 +696,7 @@ export async function deleteFutureAppointments(appointmentId: string): Promise<{
         const pkgData = pkgSnap.data()
         const newRemaining = (pkgData.sessions_remaining || 0) + refundsCount
         batch.update(pkgRef, { sessions_remaining: newRemaining })
+        commitOperation()
       }
     }
     
@@ -672,15 +710,20 @@ export async function deleteFutureAppointments(appointmentId: string): Promise<{
         const finSnap = await getDocs(finQuery)
         finSnap.docs.forEach((docSnap) => {
           batch.delete(docSnap.ref)
+          commitOperation()
         })
       }
     }
 
-    await batch.commit()
-    return { error: null }
+    if (operationCount > 0) {
+      batches.push(batch.commit())
+    }
+    await Promise.all(batches)
+
+    return { deletedIds, error: null }
   } catch (error) {
     console.error("Error deleting future appointments:", error)
-    return { error }
+    return { deletedIds: [], error }
   }
 }
 

@@ -291,7 +291,7 @@ export const AppointmentDetailDialog = ({
       ? deleteFutureAppointments 
       : deleteAppointment
 
-    const { error } = await serviceFn(appointment.id)
+    const { deletedIds, error } = await serviceFn(appointment.id)
     if (error) {
       toast({
         title: 'Erro ao excluir agendamento',
@@ -301,7 +301,11 @@ export const AppointmentDetailDialog = ({
     } else {
       toast({ title: 'Agendamento(s) excluído(s) com sucesso!' })
       // Sempre remover do cache local imediatamente para a UI ficar rápida
-      updateAppointmentCache(appointment.id, () => null)
+      if (deletedIds && deletedIds.length > 0) {
+        deletedIds.forEach(id => updateAppointmentCache(id, () => null))
+      } else {
+        updateAppointmentCache(appointment.id, () => null)
+      }
       
       onAppointmentUpdated(deleteMode === 'this-and-future')
       onOpenChange(false)
