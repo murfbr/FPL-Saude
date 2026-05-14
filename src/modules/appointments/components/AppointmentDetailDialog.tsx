@@ -70,6 +70,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/shared/providers/AuthProvider'
+import { useTenant } from '@/shared/contexts/TenantContext'
 import { formatInTimeZone } from '@/shared/lib/utils'
 import { getFriendlyErrorMessage } from '@/shared/lib/error-mapping'
 import { getCompanyId } from '@/shared/lib/tenantStore'
@@ -126,6 +127,7 @@ export const AppointmentDetailDialog = ({
   const { toast } = useToast()
   const updateAppointmentCache = useUpdateAppointmentCache()
   const { user, professionalId, role } = useAuth()
+  const { config } = useTenant()
   const [isDeleting, setIsDeleting] = useState(false)
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
@@ -427,6 +429,8 @@ export const AppointmentDetailDialog = ({
   const displayStatus = localStatus || appointment.status
   const canEdit = ['scheduled'].includes(displayStatus)
   const isAdmin = role === 'admin'
+  const canChangeStatus = isAdmin || role === 'professional'
+  const canReschedule = isAdmin || config?.features?.professionals_can_reschedule
 
   return (
     <>
@@ -471,7 +475,7 @@ export const AppointmentDetailDialog = ({
                     icon={FileText}
                     label="Status"
                     value={
-                      isAdmin ? (
+                      canChangeStatus ? (
                         <Select
                           value={displayStatus}
                           onValueChange={handleStatusChange}
@@ -605,7 +609,7 @@ export const AppointmentDetailDialog = ({
                 icon={FileText}
                 label="Status"
                 value={
-                  isAdmin ? (
+                  canChangeStatus ? (
                     <Select
                       value={displayStatus}
                       onValueChange={handleStatusChange}
@@ -956,7 +960,7 @@ export const AppointmentDetailDialog = ({
               </AlertDialog>
             )}
 
-            {canEdit && !isEvent && (
+            {canReschedule && canEdit && !isEvent && (
               <Button
                 variant="secondary"
                 className="w-full sm:w-auto"

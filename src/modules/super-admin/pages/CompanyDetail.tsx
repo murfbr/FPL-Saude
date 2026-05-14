@@ -608,6 +608,11 @@ const FeaturesTab = ({
       label: 'Permitir que profissionais gerenciem pacotes e assinaturas',
       description: 'Se desmarcado, o botão de associar pacotes ficará oculto no perfil do paciente para profissionais.',
     },
+    {
+      key: 'professionals_can_reschedule',
+      label: 'Permitir que profissionais remarquem agendamentos',
+      description: 'Se desmarcado, apenas administradores poderão reagendar.',
+    },
   ]
 
   return (
