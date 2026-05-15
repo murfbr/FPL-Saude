@@ -613,6 +613,11 @@ const FeaturesTab = ({
       label: 'Permitir que profissionais remarquem agendamentos',
       description: 'Se desmarcado, apenas administradores poderão reagendar.',
     },
+    {
+      key: 'professionals_can_view_financials',
+      label: 'Permitir que profissionais visualizem valores',
+      description: 'Se desmarcado, o valor financeiro do atendimento ficará oculto para o profissional.',
+    },
   ]
 
   return (

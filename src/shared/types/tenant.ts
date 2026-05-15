@@ -37,6 +37,7 @@ export interface CompanyFeatures {
   professionals_view_all_clients: boolean
   professionals_can_manage_packages: boolean
   professionals_can_reschedule: boolean
+  professionals_can_view_financials: boolean
 }
 
 export interface CompanyConfig {
@@ -74,6 +75,7 @@ export const DEFAULT_FEATURES: CompanyFeatures = {
   professionals_view_all_clients: false,
   professionals_can_manage_packages: false,
   professionals_can_reschedule: false,
+  professionals_can_view_financials: false,
 }
 
 export const DEFAULT_MODULES: Record<ModuleKey, ModuleConfig> = {

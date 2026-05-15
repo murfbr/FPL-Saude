@@ -431,6 +431,7 @@ export const AppointmentDetailDialog = ({
   const isAdmin = role === 'admin'
   const canChangeStatus = isAdmin || role === 'professional'
   const canReschedule = isAdmin || config?.features?.professionals_can_reschedule
+  const canViewFinancials = isAdmin || config?.features?.professionals_can_view_financials
 
   return (
     <>
@@ -513,20 +514,22 @@ export const AppointmentDetailDialog = ({
                 )}
 
                 {/* Financeiro do evento */}
-                <div className="flex items-start gap-3 p-3 rounded-md border bg-purple-50/60 border-purple-200">
-                  <DollarSign className="h-5 w-5 text-purple-600 mt-1" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Valor do Evento</p>
-                    <p className="font-bold text-lg text-purple-700">
-                      R$ {(appointment.event_price || 0).toFixed(2)}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {displayStatus === 'completed'
-                        ? 'Registrado financeiramente após conclusão'
-                        : 'Será registrado ao marcar como Concluído'}
-                    </p>
+                {canViewFinancials && (
+                  <div className="flex items-start gap-3 p-3 rounded-md border bg-purple-50/60 border-purple-200">
+                    <DollarSign className="h-5 w-5 text-purple-600 mt-1" />
+                    <div>
+                      <p className="text-sm text-muted-foreground">Valor do Evento</p>
+                      <p className="font-bold text-lg text-purple-700">
+                        R$ {(appointment.event_price || 0).toFixed(2)}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {displayStatus === 'completed'
+                          ? 'Registrado financeiramente após conclusão'
+                          : 'Será registrado ao marcar como Concluído'}
+                      </p>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             ) : (
               /* ===== PAINEL DE AGENDAMENTO NORMAL ===== */
@@ -561,11 +564,11 @@ export const AppointmentDetailDialog = ({
                       <span className="text-xs text-purple-600 font-medium flex items-center gap-1">
                         <CreditCard className="h-3 w-3" /> Assinatura Mensal
                       </span>
-                    ) : (
+                    ) : canViewFinancials ? (
                       <span className="text-xs text-muted-foreground">
                         Valor Base: R$ {servicePrice.toFixed(2)}
                       </span>
-                    )}
+                    ) : null}
                     {appointment.is_recurring && (
                       <span className="text-xs text-primary font-medium flex items-center gap-1 mt-0.5">
                         <Repeat className="h-3 w-3" /> Recorrente
@@ -636,8 +639,9 @@ export const AppointmentDetailDialog = ({
               />
 
               {/* Financeiro / Desconto */}
-              <div className="flex items-start gap-3 col-span-1 sm:col-span-2 bg-muted/20 p-3 rounded-md border">
-                <DollarSign className="h-5 w-5 text-primary mt-1" />
+              {canViewFinancials && (
+                <div className="flex items-start gap-3 col-span-1 sm:col-span-2 bg-muted/20 p-3 rounded-md border">
+                  <DollarSign className="h-5 w-5 text-primary mt-1" />
                 <div className="w-full">
                   <div className="flex justify-between items-center mb-1">
                     <p className="text-sm text-muted-foreground font-medium">
@@ -734,6 +738,7 @@ export const AppointmentDetailDialog = ({
                   )}
                 </div>
               </div>
+              )}
             </div>
 
             {/* Payment Method Block */}
