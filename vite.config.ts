@@ -9,9 +9,6 @@ export default defineConfig(({ mode }) => ({
     host: '::',
     port: 8080,
   },
-  experimental: {
-    enableNativePlugin: true
-  },
   build: {
     minify: mode !== 'development',
     sourcemap: mode === 'development',
@@ -25,9 +22,7 @@ export default defineConfig(({ mode }) => ({
     },
   },
   plugins: [react()],
-  define: {
-    'process.env.NODE_ENV': JSON.stringify(mode ?? process.env.NODE_ENV ?? 'production'),
-  },
+
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
