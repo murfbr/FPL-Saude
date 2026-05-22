@@ -338,6 +338,8 @@ export async function updateAppointmentStatus(appointmentId: string, status: str
        return { error: null }
     }
 
+    const batch = writeBatch(db)
+
     // Verificar se é evento flexível — lógica financeira separada
     const isEvent = appData.entry_type === 'event'
 
@@ -351,7 +353,7 @@ export async function updateAppointmentStatus(appointmentId: string, status: str
           const existingSnap = await getDocs(q)
           if (existingSnap.empty) {
             const newDoc = doc(finRef)
-            await setDoc(newDoc, {
+            batch.set(newDoc, {
               id: newDoc.id,
               client_id: null,
               professional_id: appData.professional_id,
@@ -367,9 +369,10 @@ export async function updateAppointmentStatus(appointmentId: string, status: str
         const finRef = collection(db, 'companies', companyId, 'financial_records')
         const q = query(finRef, where('appointment_id', '==', appointmentId))
         const existingSnap = await getDocs(q)
-        await Promise.all(existingSnap.docs.map(d => deleteDoc(d.ref)))
+        existingSnap.docs.forEach(d => batch.delete(d.ref))
       }
-      await updateDoc(docRef, { status })
+      batch.update(docRef, { status })
+      await batch.commit()
       return { error: null }
     }
 
@@ -400,7 +403,28 @@ export async function updateAppointmentStatus(appointmentId: string, status: str
         if (pkgSnap.exists()) {
            const pkgData = pkgSnap.data()
            const newRemaining = Math.max(0, (pkgData.sessions_remaining || 0) - 1)
-           await updateDoc(packageRef, { sessions_remaining: newRemaining })
+           batch.update(packageRef, { sessions_remaining: newRemaining })
+
+           // Admin Notification: Pacote Acabando
+           if (newRemaining === 2 || newRemaining === 1) {
+             const usersRef = collection(db, 'users')
+             const adminsQuery = query(usersRef, where('companyId', '==', companyId), where('role', '==', 'admin'))
+             const adminsSnap = await getDocs(adminsQuery)
+             
+             adminsSnap.docs.forEach(adminDoc => {
+               const adminId = adminDoc.id
+               const notifRef = doc(collection(db, 'companies', companyId, 'admins', adminId, 'notifications'))
+               batch.set(notifRef, {
+                 id: notifRef.id,
+                 professional_id: adminId, 
+                 title: 'Aviso de Pacote',
+                 content: `Faltam ${newRemaining} sessões para o pacote de ${appData.clients?.name || 'um cliente'} acabar.`,
+                 is_read: false,
+                 link: `/admin/clientes/${appData.client_id}`,
+                 created_at: new Date().toISOString()
+               })
+             })
+           }
         }
       } else if (wasConsumingStatus && !isConsumingStatus) {
         // Estornar devolução da sessão
@@ -408,7 +432,7 @@ export async function updateAppointmentStatus(appointmentId: string, status: str
         if (pkgSnap.exists()) {
            const pkgData = pkgSnap.data()
            const newRemaining = (pkgData.sessions_remaining || 0) + 1
-           await updateDoc(packageRef, { sessions_remaining: newRemaining })
+           batch.update(packageRef, { sessions_remaining: newRemaining })
         }
       }
     }
@@ -428,7 +452,7 @@ export async function updateAppointmentStatus(appointmentId: string, status: str
           
           if (existingSnap.empty) {
             const newDoc = doc(finRef)
-            await setDoc(newDoc, {
+            batch.set(newDoc, {
               id: newDoc.id,
               client_id: appData.client_id,
               professional_id: appData.professional_id,
@@ -443,14 +467,39 @@ export async function updateAppointmentStatus(appointmentId: string, status: str
       } else if (oldStatus === 'completed' && status !== 'completed') {
         const q = query(finRef, where('appointment_id', '==', appointmentId))
         const existingSnap = await getDocs(q)
-        
-        const deletePromises = existingSnap.docs.map(d => deleteDoc(d.ref))
-        await Promise.all(deletePromises)
+        existingSnap.docs.forEach(d => batch.delete(d.ref))
       }
     }
 
     // Atualiza o status do agendamento ao final
-    await updateDoc(docRef, { status })
+    batch.update(docRef, { status })
+
+    // Professional Notification: Prontuário Pendente
+    if (status === 'completed' && oldStatus !== 'completed' && !isEvent) {
+      let requiresObs = appData.services?.requires_observation
+      if (requiresObs === undefined && (appData.service_id || appData.services?.id)) {
+        const sRef = doc(db, 'companies', companyId, 'services', appData.service_id || appData.services?.id)
+        const sSnap = await getDoc(sRef)
+        requiresObs = sSnap.data()?.requires_observation
+      }
+      
+      const hasNotes = appData.notes && appData.notes.length > 0
+      
+      if (requiresObs && !hasNotes) {
+        const notifRef = doc(collection(db, 'companies', companyId, 'professionals', appData.professional_id, 'notifications'))
+        batch.set(notifRef, {
+          id: notifRef.id,
+          professional_id: appData.professional_id,
+          title: 'Prontuário Pendente',
+          content: `O atendimento de ${appData.clients?.name || 'um cliente'} foi concluído. Por favor, adicione a evolução/observação.`,
+          is_read: false,
+          link: null,
+          created_at: new Date().toISOString()
+        })
+      }
+    }
+
+    await batch.commit()
     return { error: null }
   } catch (error) { 
     console.error("Erro ao atualizar status do agendamento: ", error)

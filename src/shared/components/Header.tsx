@@ -25,10 +25,12 @@ export const Header = () => {
     (role === 'admin' && location.pathname === '/') ||
     location.pathname.startsWith('/admin')
 
+  const logoLink = user ? '/dashboard' : '/'
+
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 print:hidden">
       <div className="container flex h-14 max-w-screen-2xl items-center justify-between">
-        <Link to="/" className="flex items-center space-x-2">
+        <Link to={logoLink} className="flex items-center space-x-2">
           {logoUrl !== '/logo.png' ? (
              <img src={logoUrl} alt={`${appName} Logo`} className="h-8 w-auto object-contain rounded" />
           ) : (

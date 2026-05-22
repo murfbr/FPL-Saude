@@ -4,8 +4,9 @@ import { useAuth } from '@/shared/providers/AuthProvider'
 import {
   markNotificationAsRead,
   markAllNotificationsAsRead,
+  getNotifications,
+  UnifiedNotification
 } from '@/modules/notifications/service'
-import { Notification } from '@/shared/types'
 import {
   Card,
   CardContent,
@@ -15,7 +16,7 @@ import {
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Bell, CheckCheck } from 'lucide-react'
+import { Bell, CheckCheck, ArrowLeft } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { cn } from '@/shared/lib/utils'
@@ -25,38 +26,52 @@ import { collection, query, onSnapshot, addDoc } from 'firebase/firestore'
 import { getCompanyId } from '@/shared/lib/tenantStore'
 
 const NotificationsPage = () => {
-  const { professionalId, user } = useAuth()
+  const { professionalId, user, role } = useAuth()
+  const adminId = role === 'admin' ? user?.id || null : null
   const navigate = useNavigate()
   const { toast } = useToast()
-  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [notifications, setNotifications] = useState<UnifiedNotification[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
 
 
+  const fetchData = async () => {
+    if (!professionalId && !adminId) return
+    const { data } = await getNotifications(professionalId, adminId)
+    setNotifications(data || [])
+    setIsLoading(false)
+  }
+
   useEffect(() => {
-    if (!user || !professionalId) return
-
     setIsLoading(true)
-    const ref = collection(db, 'companies', getCompanyId(), 'professionals', professionalId, 'notifications')
-    const q = query(ref)
+    fetchData()
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Notification))
-      docs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      setNotifications(docs)
+    if (!professionalId && !adminId) {
       setIsLoading(false)
-    })
+      return
+    }
+
+    const unsubscribes: (() => void)[] = []
+
+    if (professionalId) {
+      const ref = collection(db, 'companies', getCompanyId(), 'professionals', professionalId, 'notifications')
+      unsubscribes.push(onSnapshot(query(ref), () => fetchData()))
+    }
+    
+    if (adminId) {
+      const ref = collection(db, 'companies', getCompanyId(), 'admins', adminId, 'notifications')
+      unsubscribes.push(onSnapshot(query(ref), () => fetchData()))
+    }
 
     return () => {
-      unsubscribe()
+      unsubscribes.forEach(unsub => unsub())
     }
-  }, [user, professionalId, toast])
+  }, [user, professionalId, adminId, toast])
 
-  const handleNotificationClick = async (notification: Notification) => {
+  const handleNotificationClick = async (notification: UnifiedNotification) => {
     if (!notification.is_read) {
-      if (professionalId) {
-        await markNotificationAsRead(professionalId, notification.id)
-      }
+      await markNotificationAsRead(professionalId, adminId, notification.id, notification.source)
+      
       setNotifications((prev) =>
         prev.map((n) =>
           n.id === notification.id ? { ...n, is_read: true } : n,
@@ -69,8 +84,8 @@ const NotificationsPage = () => {
   }
 
   const handleMarkAllAsRead = async () => {
-    if (!professionalId) return
-    await markAllNotificationsAsRead(professionalId)
+    if (!professionalId && !adminId) return
+    await markAllNotificationsAsRead(professionalId, adminId)
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })))
     toast({ title: 'Todas as notificações foram marcadas como lidas.' })
   }
@@ -79,14 +94,19 @@ const NotificationsPage = () => {
     <div className="container mx-auto py-8 px-4">
       <Card>
         <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <CardTitle className="text-2xl flex items-center gap-2">
-              <Bell />
-              Notificações
-            </CardTitle>
-            <CardDescription>
-              Mantenha-se atualizado sobre suas atividades.
-            </CardDescription>
+          <div className="flex items-start sm:items-center gap-2">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')} className="mt-1 sm:mt-0 shrink-0">
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div>
+              <CardTitle className="text-2xl flex items-center gap-2">
+                <Bell />
+                Notificações
+              </CardTitle>
+              <CardDescription>
+                Mantenha-se atualizado sobre suas atividades.
+              </CardDescription>
+            </div>
           </div>
           <Button
             onClick={handleMarkAllAsRead}

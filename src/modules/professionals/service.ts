@@ -78,10 +78,17 @@ export async function getAllProfessionals(options?: {
   }
 }
 
-export async function getProfessionalsCount(): Promise<{ count: number; error: any }> {
+export async function getProfessionalsCount(filter?: { status?: 'all' | 'active' | 'inactive' }): Promise<{ count: number; error: any }> {
   try {
     const profsRef = collection(db, 'companies', getCompanyId(), 'professionals')
-    const q = query(profsRef)
+    let q = query(profsRef)
+
+    if (filter?.status === 'active') {
+      q = query(profsRef, where('is_active', '==', true))
+    } else if (filter?.status === 'inactive') {
+      q = query(profsRef, where('is_active', '==', false))
+    }
+
     const snapshot = await getCountFromServer(q)
     return { count: snapshot.data().count, error: null }
   } catch (error) {

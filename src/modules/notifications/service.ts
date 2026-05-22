@@ -1,16 +1,27 @@
 import { db } from '@/shared/lib/firebase'
 import { Notification } from '@/shared/types'
-import { collection, query, where, getDocs, doc, setDoc, updateDoc, orderBy, limit, getCountFromServer, getDoc } from 'firebase/firestore'
+import { collection, query, where, getDocs, doc, updateDoc, getCountFromServer } from 'firebase/firestore'
 
 import { getCompanyId } from '@/shared/lib/tenantStore'
 
-export async function getNotifications(professionalId: string) {
-  try {
-    const ref = collection(db, 'companies', getCompanyId(), 'professionals', professionalId, 'notifications')
-    const q = query(ref)
-    const snapshot = await getDocs(q)
+export type UnifiedNotification = Notification & { source: 'professional' | 'admin' }
 
-    const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Notification))
+export async function getNotifications(professionalId: string | null, adminId: string | null) {
+  try {
+    const promises = []
+    
+    if (professionalId) {
+      const ref = collection(db, 'companies', getCompanyId(), 'professionals', professionalId, 'notifications')
+      promises.push(getDocs(query(ref)).then(s => s.docs.map(d => ({ id: d.id, source: 'professional', ...d.data() } as UnifiedNotification))))
+    }
+    
+    if (adminId) {
+      const ref = collection(db, 'companies', getCompanyId(), 'admins', adminId, 'notifications')
+      promises.push(getDocs(query(ref)).then(s => s.docs.map(d => ({ id: d.id, source: 'admin', ...d.data() } as UnifiedNotification))))
+    }
+
+    const results = await Promise.all(promises)
+    const data = results.flat()
     data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
     return { data, error: null }
@@ -20,15 +31,25 @@ export async function getNotifications(professionalId: string) {
 }
 
 export async function getRecentUnreadNotifications(
-  professionalId: string,
+  professionalId: string | null,
+  adminId: string | null,
   limitNum = 3,
 ) {
   try {
-    const ref = collection(db, 'companies', getCompanyId(), 'professionals', professionalId, 'notifications')
-    const q = query(ref, where('is_read', '==', false))
-    const snapshot = await getDocs(q)
+    const promises = []
+    
+    if (professionalId) {
+      const ref = collection(db, 'companies', getCompanyId(), 'professionals', professionalId, 'notifications')
+      promises.push(getDocs(query(ref, where('is_read', '==', false))).then(s => s.docs.map(d => ({ id: d.id, source: 'professional', ...d.data() } as UnifiedNotification))))
+    }
+    
+    if (adminId) {
+      const ref = collection(db, 'companies', getCompanyId(), 'admins', adminId, 'notifications')
+      promises.push(getDocs(query(ref, where('is_read', '==', false))).then(s => s.docs.map(d => ({ id: d.id, source: 'admin', ...d.data() } as UnifiedNotification))))
+    }
 
-    let data = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Notification))
+    const results = await Promise.all(promises)
+    let data = results.flat()
 
     // Sort in memory to avoid requiring a composite index in Firestore
     data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
@@ -40,37 +61,61 @@ export async function getRecentUnreadNotifications(
   }
 }
 
-export async function getUnreadNotificationCount(professionalId: string) {
+export async function getUnreadNotificationCount(professionalId: string | null, adminId: string | null) {
   try {
-    const ref = collection(db, 'companies', getCompanyId(), 'professionals', professionalId, 'notifications')
-    const q = query(ref, where('is_read', '==', false))
-    const snapshot = await getCountFromServer(q)
+    const promises = []
+    
+    if (professionalId) {
+      const ref = collection(db, 'companies', getCompanyId(), 'professionals', professionalId, 'notifications')
+      promises.push(getCountFromServer(query(ref, where('is_read', '==', false))).then(s => s.data().count))
+    }
+    
+    if (adminId) {
+      const ref = collection(db, 'companies', getCompanyId(), 'admins', adminId, 'notifications')
+      promises.push(getCountFromServer(query(ref, where('is_read', '==', false))).then(s => s.data().count))
+    }
 
-    return { count: snapshot.data().count, error: null }
+    const counts = await Promise.all(promises)
+    return { count: counts.reduce((a, b) => a + b, 0), error: null }
   } catch (error) {
     return { count: 0, error }
   }
 }
 
-export async function markNotificationAsRead(professionalId: string, notificationId: string) {
+export async function markNotificationAsRead(professionalId: string | null, adminId: string | null, notificationId: string, source: 'professional' | 'admin' = 'professional') {
   try {
-    const ref = doc(db, 'companies', getCompanyId(), 'professionals', professionalId, 'notifications', notificationId)
+    const targetId = source === 'admin' ? adminId : professionalId
+    if (!targetId) return { error: null }
+    
+    const collectionName = source === 'admin' ? 'admins' : 'professionals'
+    const ref = doc(db, 'companies', getCompanyId(), collectionName, targetId, 'notifications', notificationId)
     await updateDoc(ref, { is_read: true })
+    
     return { error: null }
   } catch (error) {
     return { error }
   }
 }
 
-export async function markAllNotificationsAsRead(professionalId: string) {
+export async function markAllNotificationsAsRead(professionalId: string | null, adminId: string | null) {
   try {
-    const ref = collection(db, 'companies', getCompanyId(), 'professionals', professionalId, 'notifications')
-    const q = query(ref, where('is_read', '==', false))
-    const snapshot = await getDocs(q)
+    const queries = []
+    
+    if (professionalId) {
+      const ref = collection(db, 'companies', getCompanyId(), 'professionals', professionalId, 'notifications')
+      queries.push(getDocs(query(ref, where('is_read', '==', false))))
+    }
+    
+    if (adminId) {
+      const ref = collection(db, 'companies', getCompanyId(), 'admins', adminId, 'notifications')
+      queries.push(getDocs(query(ref, where('is_read', '==', false))))
+    }
+
+    const snapshots = await Promise.all(queries)
 
     // Simplification for batch update
     // Depending on size this could need a batched write, doing individual updates for safety here
-    const promises = snapshot.docs.map(d => updateDoc(d.ref, { is_read: true }))
+    const promises = snapshots.flatMap(s => s.docs.map(d => updateDoc(d.ref, { is_read: true })))
     await Promise.all(promises)
 
     return { error: null }

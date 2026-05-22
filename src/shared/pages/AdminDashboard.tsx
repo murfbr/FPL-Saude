@@ -58,6 +58,15 @@ import { useIsMobile } from '@/shared/hooks/use-mobile'
 
 type ClientStatusFilter = 'all' | 'active' | 'inactive'
 
+const translateStatus = (status: ClientStatusFilter) => {
+  switch (status) {
+    case 'active': return 'ativos'
+    case 'inactive': return 'inativos'
+    case 'all': return 'todos'
+    default: return status
+  }
+}
+
 const AdminDashboard = () => {
   const { user, professionalId, role, loading, companyId } = useAuth()
   const { config, tenantLoading } = useTenant()
@@ -147,7 +156,7 @@ const AdminDashboard = () => {
       if (loading || !user || (!companyId && role !== 'super_admin')) return
       setIsCountsLoading(true)
       const [profRes, clientRes] = await Promise.all([
-        getProfessionalsCount(),
+        getProfessionalsCount({ status: 'active' }),
         getClientsCount({ status: clientStatusFilter === 'all' ? undefined : clientStatusFilter }),
       ])
       if (profRes.count !== undefined) setProfessionalsCount(profRes.count)
@@ -288,7 +297,7 @@ const AdminDashboard = () => {
                       </div>
                     )}
                     <p className="text-xs text-muted-foreground">
-                      Profissionais cadastrados
+                      Profissionais (ativos)
                     </p>
                   </CardContent>
                 </Card>
@@ -303,7 +312,7 @@ const AdminDashboard = () => {
                       <div className="text-3xl font-bold">{clientsCount}</div>
                     )}
                     <p className="text-xs text-muted-foreground">
-                      Pacientes ({clientStatusFilter})
+                      Pacientes ({translateStatus(clientStatusFilter)})
                     </p>
                   </CardContent>
                 </Card>

@@ -7,8 +7,8 @@ import {
   getUnreadNotificationCount,
   getRecentUnreadNotifications,
   markNotificationAsRead,
+  UnifiedNotification
 } from '@/modules/notifications/service'
-import { Notification } from '@/shared/types'
 import { db } from '@/shared/lib/firebase'
 import { collection, query, onSnapshot } from 'firebase/firestore'
 import {
@@ -21,19 +21,21 @@ import { ptBR } from 'date-fns/locale'
 import { getCompanyId } from '@/shared/lib/tenantStore'
 
 export const NotificationBell = () => {
-  const { professionalId, user } = useAuth()
+  const { professionalId, user, role } = useAuth()
+  const adminId = role === 'admin' ? user?.id || null : null
+  
   const [unreadCount, setUnreadCount] = useState(0)
   const [recentNotifications, setRecentNotifications] = useState<
-    Notification[]
+    UnifiedNotification[]
   >([])
   const [isOpen, setIsOpen] = useState(false)
   const navigate = useNavigate()
 
   const fetchData = async () => {
-    if (!professionalId) return
+    if (!professionalId && !adminId) return
     const [countRes, recentRes] = await Promise.all([
-      getUnreadNotificationCount(professionalId),
-      getRecentUnreadNotifications(professionalId),
+      getUnreadNotificationCount(professionalId, adminId),
+      getRecentUnreadNotifications(professionalId, adminId),
     ])
     setUnreadCount(countRes.count || 0)
     setRecentNotifications(recentRes.data || [])
@@ -42,25 +44,28 @@ export const NotificationBell = () => {
   useEffect(() => {
     fetchData()
 
-    if (!professionalId) return
+    if (!professionalId && !adminId) return
 
-    const ref = collection(db, 'companies', getCompanyId(), 'professionals', professionalId, 'notifications')
-    const q = query(ref)
+    const unsubscribes: (() => void)[] = []
 
-    const unsubscribe = onSnapshot(q, () => {
-      fetchData()
-    })
+    if (professionalId) {
+      const ref = collection(db, 'companies', getCompanyId(), 'professionals', professionalId, 'notifications')
+      unsubscribes.push(onSnapshot(query(ref), () => fetchData()))
+    }
+    
+    if (adminId) {
+      const ref = collection(db, 'companies', getCompanyId(), 'admins', adminId, 'notifications')
+      unsubscribes.push(onSnapshot(query(ref), () => fetchData()))
+    }
 
     return () => {
-      unsubscribe()
+      unsubscribes.forEach(unsub => unsub())
     }
-  }, [professionalId, user])
+  }, [professionalId, adminId, user])
 
-  const handleNotificationClick = async (notification: Notification) => {
+  const handleNotificationClick = async (notification: UnifiedNotification) => {
     // Mark as read
-    if (professionalId) {
-      await markNotificationAsRead(professionalId, notification.id)
-    }
+    await markNotificationAsRead(professionalId, adminId, notification.id, notification.source)
 
     // Update local state optimistically or re-fetch
     fetchData()
