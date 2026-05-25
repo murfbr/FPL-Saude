@@ -23,7 +23,7 @@ import {
 import { useAuth } from '@/shared/providers/AuthProvider'
 import { Professional, Client, Service } from '@/shared/types'
 import { useTenant } from '@/shared/contexts/TenantContext'
-import { getAllProfessionals, getProfessionalById, getProfessionalsCount } from '@/modules/professionals/service'
+import { useProfessionalsQuery, useProfessionalDetailQuery, useProfessionalsCountQuery } from '@/modules/professionals/hooks/useProfessionals'
 import { getAllClients, getClientsCount } from '@/modules/clients/service'
 import { getAllServices } from '@/modules/services-catalog/service'
 import { UpcomingAppointments } from '@/modules/appointments/components/UpcomingAppointmentsAdmin'
@@ -71,13 +71,19 @@ const AdminDashboard = () => {
   const { user, professionalId, role, loading, companyId } = useAuth()
   const { config, tenantLoading } = useTenant()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [professionals, setProfessionals] = useState<Professional[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [services, setServices] = useState<Service[]>([])
-  const [professionalsCount, setProfessionalsCount] = useState<number>(0)
   const [clientsCount, setClientsCount] = useState<number>(0)
   const [isLoading, setIsLoading] = useState(false)
   const [isCountsLoading, setIsCountsLoading] = useState(true)
+
+  // Query Hooks
+  const { data: professionalDetail } = useProfessionalDetailQuery(professionalId || '')
+  const { data: professionalsCountQuery, isLoading: isProfCountLoading } = useProfessionalsCountQuery({ status: 'active' })
+  const professionalsCount = professionalsCountQuery ?? 0
+  
+  const { data: professionalsQuery, isLoading: isProfessionalsLoading } = useProfessionalsQuery()
+  const professionals = professionalsQuery || []
 
   // Modal State Management - Explicit initialization to false
   const [isPatientFormOpen, setIsPatientFormOpen] = useState(false)
@@ -124,22 +130,16 @@ const AdminDashboard = () => {
   }, [config, currentTab, setSearchParams])
 
   useEffect(() => {
-    const fetchUserName = async () => {
-      if (professionalId) {
-        const { data } = await getProfessionalById(professionalId)
-        if (data) {
-          setUserName(data.name)
-          return
-        }
-      }
-      if (user?.displayName) {
-        setUserName(user.displayName)
-      } else {
-        setUserName('Administrador')
-      }
+    if (professionalDetail) {
+      setUserName(professionalDetail.name)
+      return
     }
-    fetchUserName()
-  }, [professionalId, user])
+    if (user?.displayName) {
+      setUserName(user.displayName)
+    } else {
+      setUserName('Administrador')
+    }
+  }, [professionalDetail, user])
 
   // Fetch Services for Filter
   useEffect(() => {
@@ -155,11 +155,9 @@ const AdminDashboard = () => {
     const fetchCounts = async () => {
       if (loading || !user || (!companyId && role !== 'super_admin')) return
       setIsCountsLoading(true)
-      const [profRes, clientRes] = await Promise.all([
-        getProfessionalsCount({ status: 'active' }),
+      const [clientRes] = await Promise.all([
         getClientsCount({ status: clientStatusFilter === 'all' ? undefined : clientStatusFilter }),
       ])
-      if (profRes.count !== undefined) setProfessionalsCount(profRes.count)
       if (clientRes.count !== undefined) setClientsCount(clientRes.count)
       setIsCountsLoading(false)
     }
@@ -168,10 +166,7 @@ const AdminDashboard = () => {
 
   const fetchLists = async () => {
     setIsLoading(true)
-    if (currentTab === 'professionals') {
-      const profRes = await getAllProfessionals()
-      if (profRes.data) setProfessionals(profRes.data)
-    } else if (currentTab === 'patients') {
+    if (currentTab === 'patients') {
       const clientRes = await getAllClients({
         status: clientStatusFilter,
         serviceId: clientServiceFilter,
@@ -289,7 +284,7 @@ const AdminDashboard = () => {
                     <CardTitle>Profissionais</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {isCountsLoading ? (
+                    {isProfCountLoading ? (
                       <Skeleton className="h-10 w-24" />
                     ) : (
                       <div className="text-3xl font-bold">
@@ -347,7 +342,7 @@ const AdminDashboard = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                {isLoading ? (
+                {isProfessionalsLoading ? (
                   <Skeleton className="h-64 w-full" />
                 ) : (
                   <ProfessionalsList professionals={professionals} />

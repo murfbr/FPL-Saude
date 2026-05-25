@@ -1,12 +1,12 @@
 export type ModuleKey =
   | 'overview'
-  | 'agenda'
+  | 'appointments'
   | 'kpi'
-  | 'financials'
+  | 'financial'
   | 'professionals'
-  | 'patients'
-  | 'timesheets'
-  | 'messages'
+  | 'clients'
+  | 'time_tracking'
+  | 'notifications'
   | 'services'
   | 'partnerships'
   | 'maintenance'
@@ -27,17 +27,50 @@ export interface ModuleConfig {
   label: string
 }
 
+export type RoleFeatureKey =
+  | 'view_all_schedules'
+  | 'view_all_clients'
+  | 'manage_packages'
+  | 'reschedule'
+  | 'view_financials'
+
+export const ROLE_FEATURE_DEFINITIONS: { key: RoleFeatureKey; label: string; description: string }[] = [
+  {
+    key: 'view_all_schedules',
+    label: 'Ver agenda de todos os profissionais',
+    description: 'Permite ver a agenda completa da clínica.',
+  },
+  {
+    key: 'view_all_clients',
+    label: 'Ver lista completa de pacientes',
+    description: 'Permite ver pacientes que nunca atendeu.',
+  },
+  {
+    key: 'manage_packages',
+    label: 'Gerenciar pacotes/assinaturas',
+    description: 'Permite vender e gerenciar pacotes.',
+  },
+  {
+    key: 'reschedule',
+    label: 'Remarcar agendamentos',
+    description: 'Permite remarcar consultas.',
+  },
+  {
+    key: 'view_financials',
+    label: 'Ver valores financeiros',
+    description: 'Permite ver o valor dos atendimentos.',
+  },
+]
+
 export interface RolePermissions {
   can_view: string[]
   can_edit: string[]
+  features: RoleFeatureKey[]
 }
 
+// Global company features (non-role specific). Currently empty as previous features moved to Roles.
 export interface CompanyFeatures {
-  professionals_view_all_schedules: boolean
-  professionals_view_all_clients: boolean
-  professionals_can_manage_packages: boolean
-  professionals_can_reschedule: boolean
-  professionals_can_view_financials: boolean
+  [key: string]: any
 }
 
 export interface CompanyConfig {
@@ -70,23 +103,17 @@ export const DEFAULT_BRANDING: CompanyBranding = {
   foreground_hex: '#1e2e20',
 }
 
-export const DEFAULT_FEATURES: CompanyFeatures = {
-  professionals_view_all_schedules: false,
-  professionals_view_all_clients: false,
-  professionals_can_manage_packages: false,
-  professionals_can_reschedule: false,
-  professionals_can_view_financials: false,
-}
+export const DEFAULT_FEATURES: CompanyFeatures = {}
 
 export const DEFAULT_MODULES: Record<ModuleKey, ModuleConfig> = {
   overview:      { enabled: true,  label: 'Visão Geral' },
-  agenda:        { enabled: true,  label: 'Agenda' },
+  appointments:  { enabled: true,  label: 'Agenda' },
   kpi:           { enabled: true,  label: 'Indicadores' },
-  financials:    { enabled: true,  label: 'Gestão Financeira' },
+  financial:     { enabled: true,  label: 'Gestão Financeira' },
   professionals: { enabled: true,  label: 'Profissionais' },
-  patients:      { enabled: true,  label: 'Pacientes' },
-  timesheets:    { enabled: true,  label: 'Ponto Eletrônico' },
-  messages:      { enabled: true,  label: 'Confirmações' },
+  clients:       { enabled: true,  label: 'Pacientes' },
+  time_tracking: { enabled: true,  label: 'Ponto Eletrônico' },
+  notifications: { enabled: true,  label: 'Confirmações' },
   services:      { enabled: true,  label: 'Serviços e Pacotes' },
   partnerships:  { enabled: true,  label: 'Parcerias' },
   maintenance:   { enabled: false, label: 'Manutenção' },
@@ -94,7 +121,7 @@ export const DEFAULT_MODULES: Record<ModuleKey, ModuleConfig> = {
 }
 
 export const DEFAULT_ROLES: Record<string, RolePermissions> = {
-  admin:        { can_view: ['*'], can_edit: ['*'] },
-  professional: { can_view: ['patients', 'agenda', 'timesheets'], can_edit: ['agenda', 'timesheets'] },
-  client:       { can_view: ['dashboard'], can_edit: [] },
+  admin:        { can_view: ['*'], can_edit: ['*'], features: ['view_all_schedules', 'view_all_clients', 'manage_packages', 'reschedule', 'view_financials'] },
+  professional: { can_view: ['clients', 'appointments', 'time_tracking', 'notifications'], can_edit: ['appointments', 'time_tracking'], features: [] },
+  client:       { can_view: ['dashboard'], can_edit: [], features: [] },
 }

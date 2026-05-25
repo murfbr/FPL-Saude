@@ -104,7 +104,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     while (attempts <= MAX_RETRIES && !success) {
       try {
-        // Check super_admins/{uid} first — if found and active, skip tenant lookup
+        const fbUser = firebaseAuth.currentUser
+        let userRole: UserRole | null = null
+        let resolvedCompanyId: string | null = null
+
+        // 1. Check SuperAdmin via root collection (fallback first if needed, but normally SuperAdmin could be a claim)
         const superAdminRef = doc(firebaseDb, 'super_admins', currentUser.id)
         const superAdminSnap = await getDoc(superAdminRef)
         if (superAdminSnap.exists() && superAdminSnap.data()?.is_active === true) {
@@ -120,25 +124,43 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           break
         }
 
-        // Read from root users/{uid} collection — tenant-agnostic lookup
-        const docRef = doc(firebaseDb, 'users', currentUser.id)
-        const docSnap = await getDoc(docRef)
+        // 2. Try to get Role and CompanyId from Custom Claims (JWT)
+        if (fbUser) {
+          let tokenResult = await fbUser.getIdTokenResult()
+          if (!tokenResult.claims.companyId || !tokenResult.claims.role) {
+            // Force refresh se a claim não chegou ainda (comum logo após signup)
+            tokenResult = await fbUser.getIdTokenResult(true)
+          }
 
-        if (!docSnap.exists()) {
-          throw new Error('Perfil de usuário não encontrado no sistema.')
+          if (tokenResult.claims.companyId && tokenResult.claims.role) {
+            resolvedCompanyId = tokenResult.claims.companyId as string
+            userRole = tokenResult.claims.role as UserRole
+            console.log('[Auth] Claims carregadas do Token JWT com sucesso:', { userRole, resolvedCompanyId })
+          }
         }
 
-        const userData = docSnap.data()
-        const userRole = userData?.role as UserRole
-        const resolvedCompanyId = userData?.companyId as string
+        // 3. Fallback para leitura do banco (se Claims falharem ou usuário muito antigo sem backfill)
+        if (!userRole || !resolvedCompanyId) {
+          console.warn('[Auth] Custom claims ausentes, fazendo fallback para leitura no Firestore...')
+          const docRef = doc(firebaseDb, 'users', currentUser.id)
+          const docSnap = await getDoc(docRef)
 
-        if (!resolvedCompanyId) {
-          throw new Error('Empresa do usuário não configurada.')
+          if (!docSnap.exists()) {
+            throw new Error('Perfil de usuário não encontrado no sistema.')
+          }
+
+          const userData = docSnap.data()
+          userRole = userData?.role as UserRole
+          resolvedCompanyId = userData?.companyId as string
+
+          if (!resolvedCompanyId) {
+            throw new Error('Empresa do usuário não configurada.')
+          }
         }
 
-        // Resolve professional ID from the company's professionals collection
+        // 4. Resolve professional ID for any staff member (removendo o hardcoding de "professional" ou "admin")
         let profId = null
-        if (userRole === 'professional' || userRole === 'admin') {
+        if (userRole !== 'client') {
           const profQuery = query(
             collection(firebaseDb, 'companies', resolvedCompanyId, 'professionals'),
             where('user_id', '==', currentUser.id)

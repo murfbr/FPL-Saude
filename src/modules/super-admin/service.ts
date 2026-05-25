@@ -16,6 +16,32 @@ import type { CompanyConfig, CompanyFeatures } from '@/shared/types/tenant'
 import { DEFAULT_BRANDING, DEFAULT_ROLES, DEFAULT_FEATURES } from '@/shared/types/tenant'
 import { MODULE_REGISTRY } from '@/modules/registry'
 
+// ─── Legacy Migration Helper ───────────────────────────────────────────────────
+
+function parseCompanyRoles(rawRoles: any, rawFeatures: any) {
+  const roles = rawRoles ? JSON.parse(JSON.stringify(rawRoles)) : { ...DEFAULT_ROLES }
+  
+  // Migrate legacy global professional features to the 'professional' role
+  if (rawFeatures && roles.professional && !roles.professional.features) {
+    roles.professional.features = []
+    if (rawFeatures.professionals_view_all_schedules) roles.professional.features.push('view_all_schedules')
+    if (rawFeatures.professionals_view_all_clients) roles.professional.features.push('view_all_clients')
+    if (rawFeatures.professionals_can_manage_packages) roles.professional.features.push('manage_packages')
+    if (rawFeatures.professionals_can_reschedule) roles.professional.features.push('reschedule')
+    if (rawFeatures.professionals_can_view_financials) roles.professional.features.push('view_financials')
+  }
+
+  // Ensure all roles have a features array to prevent undefined errors in UI
+  for (const key of Object.keys(roles)) {
+    if (!roles[key].features) {
+       roles[key].features = key === 'admin' 
+         ? ['view_all_schedules', 'view_all_clients', 'manage_packages', 'reschedule', 'view_financials'] 
+         : []
+    }
+  }
+  return roles
+}
+
 // ─── Company CRUD ────────────────────────────────────────────────────────────
 
 export async function getAllCompanies(): Promise<{ data: CompanyConfig[] | null; error: any }> {
@@ -44,7 +70,7 @@ export async function getAllCompanies(): Promise<{ data: CompanyConfig[] | null;
         is_active: raw.is_active ?? false,
         branding: raw.branding ?? { ...DEFAULT_BRANDING },
         modules: mergedModules,
-        roles: raw.roles ?? { ...DEFAULT_ROLES },
+        roles: parseCompanyRoles(raw.roles, raw.features),
         features: { ...DEFAULT_FEATURES, ...(raw.features || {}) },
       } as CompanyConfig
     })
@@ -79,7 +105,7 @@ export async function getCompanyConfig(companyId: string): Promise<{ data: Compa
       is_active: raw.is_active ?? false,
       branding: raw.branding ?? { ...DEFAULT_BRANDING },
       modules: mergedModules,
-      roles: raw.roles ?? { ...DEFAULT_ROLES },
+      roles: parseCompanyRoles(raw.roles, raw.features),
       features: { ...DEFAULT_FEATURES, ...(raw.features || {}) },
     }
     return { data, error: null }

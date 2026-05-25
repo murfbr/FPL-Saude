@@ -59,6 +59,24 @@ import {
   useInvalidateFinancial,
 } from '@/modules/financial/queries'
 
+// Mirrors proration logic from paySubscription service
+export const calculateSubscriptionAmount = (sub: ClientSubscription, forMonth: Date): number => {
+  const fullPrice = sub.amount || sub.subscription_plans?.price || sub.services?.price || 0
+  if (!sub.start_date) return fullPrice
+
+  const startDate = new Date(sub.start_date)
+  const isSameMonthAsStart =
+    startDate.getFullYear() === forMonth.getFullYear() &&
+    startDate.getMonth() === forMonth.getMonth()
+
+  if (isSameMonthAsStart) {
+    const daysInMonth = new Date(forMonth.getFullYear(), forMonth.getMonth() + 1, 0).getDate()
+    const daysActive = daysInMonth - startDate.getDate() + 1
+    return Math.round((fullPrice / daysInMonth) * daysActive * 100) / 100
+  }
+  return fullPrice
+}
+
 export const FinancialManagement = () => {
   const { professionalId, user } = useAuth()
   const { toast } = useToast()
@@ -185,23 +203,7 @@ export const FinancialManagement = () => {
       currency: 'BRL',
     }).format(val || 0)
 
-  // Mirrors proration logic from paySubscription service
-  const calculateSubscriptionAmount = (sub: ClientSubscription, forMonth: Date): number => {
-    const fullPrice = sub.amount || sub.subscription_plans?.price || sub.services?.price || 0
-    if (!sub.start_date) return fullPrice
 
-    const startDate = new Date(sub.start_date)
-    const isSameMonthAsStart =
-      startDate.getFullYear() === forMonth.getFullYear() &&
-      startDate.getMonth() === forMonth.getMonth()
-
-    if (isSameMonthAsStart) {
-      const daysInMonth = new Date(forMonth.getFullYear(), forMonth.getMonth() + 1, 0).getDate()
-      const daysActive = daysInMonth - startDate.getDate() + 1
-      return Math.round((fullPrice / daysInMonth) * daysActive * 100) / 100
-    }
-    return fullPrice
-  }
 
   return (
     <div className="space-y-6">

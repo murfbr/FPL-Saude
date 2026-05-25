@@ -16,13 +16,13 @@ export interface ModuleRegistryEntry {
  */
 export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
   { key: 'overview',      label: 'Visão Geral',       defaultEnabled: true  },
-  { key: 'agenda',        label: 'Agenda',             defaultEnabled: true  },
+  { key: 'appointments',  label: 'Agenda',             defaultEnabled: true  },
   { key: 'kpi',           label: 'Indicadores',        defaultEnabled: true  },
-  { key: 'financials',    label: 'Gestão Financeira',  defaultEnabled: true  },
+  { key: 'financial',     label: 'Gestão Financeira',  defaultEnabled: true  },
   { key: 'professionals', label: 'Profissionais',      defaultEnabled: true  },
-  { key: 'patients',      label: 'Pacientes',          defaultEnabled: true  },
-  { key: 'timesheets',    label: 'Ponto Eletrônico',   defaultEnabled: true  },
-  { key: 'messages',      label: 'Confirmações',       defaultEnabled: true  },
+  { key: 'clients',       label: 'Pacientes',          defaultEnabled: true  },
+  { key: 'time_tracking', label: 'Ponto Eletrônico',   defaultEnabled: true  },
+  { key: 'notifications', label: 'Confirmações',       defaultEnabled: true  },
   { key: 'services',      label: 'Serviços e Pacotes', defaultEnabled: true  },
   { key: 'partnerships',  label: 'Parcerias',          defaultEnabled: true  },
   { key: 'maintenance',   label: 'Manutenção',         defaultEnabled: false },

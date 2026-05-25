@@ -3,58 +3,81 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Função auxiliar — verifica se o usuário logado é um super-admin ativo  ← NOVO
-    function isSuperAdmin() {                                                  // ← NOVO
-      return request.auth != null                                              // ← NOVO
+    function isSuperAdmin() {
+      return request.auth != null 
         && exists(/databases/$(database)/documents/super_admins/$(request.auth.uid))
         && get(/databases/$(database)/documents/super_admins/$(request.auth.uid)).data.is_active == true;
-    }                                                                          // ← NOVO
-
-    // Função auxiliar — verifica se o usuário pertence à empresa solicitada
-    function isUserInCompany(companyId) {
-      return request.auth != null 
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == companyId;
     }
 
-    // Coleção de super-admins — somente leitura do próprio documento         ← NOVO
-    // Escrita bloqueada pelo app (criação só manual no Console do Firebase)   ← NOVO
-    match /super_admins/{uid} {                                                // ← NOVO
-      allow read: if request.auth != null && request.auth.uid == uid;          // ← NOVO
-      allow write: if false;                                                   // ← NOVO
-    }                                                                          // ← NOVO
-
-    // Perfis de usuário na raiz — cada usuário pode ler/escrever o próprio documento
-    // Super-admins podem ler e escrever qualquer documento (gestão de usuários) ← ALTERADO
-    match /users/{uid} {
-      allow read, write: if request.auth != null && (
-        request.auth.uid == uid
-        || isSuperAdmin()                                                       // ← NOVO
+    function isUserInCompany(companyId) {
+      // Fallback seguro: Tenta a claim, senão lê do documento (Zero Downtime)
+      return request.auth != null && (
+        (request.auth.token.companyId != null && request.auth.token.companyId == companyId)
+        || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == companyId
       );
     }
 
-    // Regra para liberar buscas do tipo collectionGroup nas novas subcoleções  ← ALTERADO
-    // Agora validam se o usuário pertence à empresa correta via o caminho do documento
+    // Função auxiliar — mapeia nomes de coleções físicas para as chaves do Registry (RolesTab)
+    function getModuleKey(collectionName) {
+      return collectionName == 'appointments' ? 'agenda'
+           : collectionName == 'clients' ? 'patients'
+           : collectionName == 'notifications' ? 'messages'
+           : collectionName == 'financial' ? 'financials'
+           : collectionName == 'time_tracking' ? 'timesheets'
+           : collectionName;
+    }
+
+    // Função auxiliar — RBAC Dinâmico por módulo lendo da configuração da Empresa
+    function hasModuleAccess(companyId, collectionName, action) {
+      let moduleName = getModuleKey(collectionName);
+      let userRole = request.auth.token.role != null 
+        ? request.auth.token.role 
+        : get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+
+      let companyDoc = get(/databases/$(database)/documents/companies/$(companyId));
+      
+      // Uso do Map.get() para garantir que nunca quebra (evita Null Reference se a empresa antiga não tiver 'roles')
+      let companyRoles = companyDoc.data.get('roles', {});
+      let rolePerms = companyRoles.get(userRole, {});
+      let allowedArray = action == 'write' ? rolePerms.get('can_edit', []) : rolePerms.get('can_view', []);
+      
+      return userRole == 'admin' 
+        || isSuperAdmin() 
+        || moduleName in allowedArray 
+        || '*' in allowedArray;
+    }
+
+    match /super_admins/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    match /users/{uid} {
+      allow read, write: if request.auth != null && (
+        request.auth.uid == uid
+        || isSuperAdmin()
+      );
+    }
+
     match /{path=**}/subscriptions/{subscriptionId} {
       allow read, write: if request.auth != null && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId in path
+        (request.auth.token.companyId != null && request.auth.token.companyId in path)
+        || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId in path
         || isSuperAdmin()
       );
     }
     match /{path=**}/packages/{packageId} {
       allow read, write: if request.auth != null && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId in path
+        (request.auth.token.companyId != null && request.auth.token.companyId in path)
+        || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId in path
         || isSuperAdmin()
       );
     }
 
-    // Escopo das empresas (SaaS)
     match /companies/{companyId} {
-      // Leitura pública mantida (igual a antes)
       allow read: if true;
-      // Super-admins podem escrever o documento de configuração da empresa  ← ALTERADO
-      allow write: if isSuperAdmin();                                          // ← ALTERADO
+      allow write: if isSuperAdmin();
 
-      // Coleção de Usuários dentro da empresa (mantida igual)
       match /users/{userId} {
         allow read, write: if request.auth != null && (
           isUserInCompany(companyId)
@@ -62,11 +85,14 @@ service cloud.firestore {
         );
       }
 
-      // Demais coleções — Protegido por Tenant (Apenas membros ou Super-Admin) ← ALTERADO
-      match /{document=**} {
-        allow read, write: if request.auth != null && (
-          isUserInCompany(companyId)
-          || isSuperAdmin()
+      match /{module}/{document=**} {
+        allow read: if module != 'users' && (
+          isSuperAdmin() 
+          || (isUserInCompany(companyId) && hasModuleAccess(companyId, module, 'read'))
+        );
+        allow write: if module != 'users' && (
+          isSuperAdmin() 
+          || (isUserInCompany(companyId) && hasModuleAccess(companyId, module, 'write'))
         );
       }
     }

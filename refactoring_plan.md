@@ -1,52 +1,59 @@
-# Plano de Refatoração de Arquitetura
+# Plano de Refatoração de Arquitetura - Visão Geral e Status
 
-O sistema atualmente possui arquivos bastante extensos, tanto no backend (Cloud Functions) quanto no frontend (Componentes e Serviços). Arquivos como `index.ts` das functions (25KB, 700 linhas) e `AppointmentDetailDialog.tsx` (42KB, 1004 linhas) centralizam muitas lógicas, o que dificulta a manutenção.
-
-O objetivo deste plano é estruturar a refatoração em fases bem definidas para dividir responsabilidades, separar componentes/lógicas complexas e utilizar nomenclaturas mais semânticas, mantendo o sistema funcional a cada passo.
-
-## Fases Propostas
+O sistema acumulou arquivos bastante extensos ao longo do tempo. O objetivo deste plano é estruturar a refatoração em fases bem definidas para dividir responsabilidades, separar componentes/lógicas complexas e utilizar nomenclaturas mais semânticas, garantindo o bom desempenho do frontend e backend.
 
 ---
 
-### Fase 1: Cloud Functions (Backend)
-O arquivo `functions/src/index.ts` hoje centraliza várias responsabilidades (agendamentos, financeiro, assinaturas, reconciliação). 
+## ✅ Fases Concluídas (O que já foi resolvido)
 
-**O que será feito:**
-- Criar pastas/módulos para cada domínio: `appointments`, `financial`, `subscriptions`, e `cron`.
-- Extrair cada trigger (`onAppointmentWrite`, `onFinancialRecordWrite`, etc.) para seu próprio arquivo (ex: `functions/src/appointments/onAppointmentWrite.ts`).
-- Extrair os helpers (ex: `appointmentDelta`) para arquivos de utils (ex: `functions/src/shared/helpers.ts`).
-- O `functions/src/index.ts` passará a ser apenas um indexador (barrel file), importando e exportando as funções modularizadas, por exemplo: `export * from './appointments/onAppointmentWrite'`.
+### Fase 1: Cloud Functions (Backend) - *Concluído*
+O arquivo `functions/src/index.ts` centralizava todas as funções.
+- **O que foi feito:** Migração para o padrão TypeScript, separação dos triggers (`onAppointmentWrite`, `onFinancialRecordWrite`) em pastas por domínio (`appointments`, `financial`), e o arquivo `index.ts` virou apenas um indexador de exportações.
+- **Benefícios Obtidos:** Melhor legibilidade, deploy de funções mais seguro, redução drástica de conflitos de git e facilidade extrema de testar/manter cron jobs isolados.
 
----
+### Fase 2: Serviços e Adoção do TanStack Query (Frontend) - *Concluído*
+Arquivos como `clients/service.ts` e `appointments/service.ts` eram gigantes.
+- **O que foi feito:** Quebra desses serviços pesados em múltiplos submódulos (`queries.ts`, `mutations.ts`). Criação dos *Custom Hooks* usando **TanStack Query** (`useClients`, `useAppointments`).
+- **Benefícios Obtidos:** Cache poderoso de memória. Agora o app não trava com `useEffects` pesados na mesma tela, e temos a famosa renderização rápida (cache-first).
 
-### Fase 2: Serviços e Adoção do TanStack Query (Frontend)
-Existem arquivos de serviço gigantes como `src/modules/clients/service.ts` (38KB) e `src/modules/appointments/service.ts` (34KB).
+### Fase 3: Componentes de UI Complexos (Frontend) - *Concluído*
+Os gigantes `AppointmentDetailDialog.tsx` e `AppointmentFormDialog.tsx` tinham mais de 1.000 linhas cada.
+- **O que foi feito:** Criação de diretórios modulares, fatiamento em componentes visuais simples (`EventPanel.tsx`, `FinancialSection.tsx`) e delegação de toda a lógica para os hooks recém criados (`useAppointmentDetail.ts`).
+- **Benefícios Obtidos:** Remoção de código monolítico. Agora bugs isolados (como desconto) são ajustados em um mini-arquivo, sem risco de corromper o layout do resto da plataforma, permitindo total reutilização de peças.
 
-**O que será feito:**
-- Quebrar os grandes arquivos de serviços em submódulos menores. Por exemplo, dividir `clients/service.ts` em:
-  - `clients/services/queries.ts` (lógica de leitura)
-  - `clients/services/mutations.ts` (lógica de escrita/delete)
-- **Integração com TanStack Query**: Alinhado ao `/tanstack-query` workflow, extrair a lógica complexa de estado de chamadas HTTP dos componentes e movê-las para hooks de query/mutations, isolando `useEffect` e `useState` dedicados a carregar dados.
-
----
-
-### Fase 3: Componentes de UI Complexos (Frontend)
-Dialogs e formulários como `AppointmentDetailDialog.tsx` e `AppointmentFormDialog.tsx` possuem mais de 1.000 linhas, englobando fetch de dados, estado interno, cálculos e a renderização de várias sessões (evento vs agendamento normal, pacotes, financeiro, etc).
-
-**O que será feito:**
-- Criar uma pasta específica para cada grande componente, por exemplo `components/AppointmentDetailDialog/`.
-- Dividir a renderização em subcomponentes menores e semânticos:
-  - `EventPanel.tsx` (visão para evento clínico)
-  - `AppointmentPanel.tsx` (visão padrão)
-  - `FinancialSummary.tsx` (cálculo de descontos e pacotes)
-  - `NotesSection.tsx` (gestão das evoluções)
-- Extrair a lógica de negócio (funções de handle, variáveis derivadas de estado) para um Custom Hook, por exemplo `useAppointmentDetail.ts`. O componente principal orquestrará os subcomponentes passando as props.
+### Fase 5: Integração Total do TanStack Query nos Serviços Restantes - *Concluído*
+A estrutura de serviços foi expandida além dos Agendamentos. Os serviços de `Professionals`, `Financial` e `Availability` foram completamente refatorados.
+- **O que foi feito:** O monolítico `service.ts` de cada módulo foi quebrado em `queries.ts` e `mutations.ts` utilizando *barrel files*. Os hooks correspondentes foram criados e componentes-chave como o `AdminDashboard.tsx` e `FinancialManagement.tsx` foram atualizados para utilizá-los.
+- **Benefícios Obtidos:** Melhoria imensa na gestão de estado do aplicativo e transições visuais aceleradas pelo cache inteligente, evitando travas nas renderizações da interface.
 
 ---
 
-### Fase 4: Páginas e Views (Frontend)
-Páginas inteiras que concentram as views principais também estão inchadas, como `CompanyDetail.tsx` (Super Admin) e `AdminPatientDetail.tsx`.
+## 🚀 Fases Restantes (O que falta fazer)
 
-**O que será feito:**
-- Similar à Fase 3, quebrar as abas e seções (Dashboard, Prontuário, Financeiro do paciente) em arquivos independentes que serão renderizados dentro da página principal.
-- Melhorar a legibilidade dos imports usando a padronização de indexadores.
+### Fase 4: Refatoração de Páginas Inchadas (Frontend)
+Páginas inteiras que concentram as rotas principais cresceram fora do ideal, como por exemplo o `AdminPatientDetail.tsx` (Prontuário/Perfil do paciente) e o `CompanyDetail.tsx` (Dashboard do Super Admin).
+
+**O que será feito de forma detalhada:**
+- Transformar cada "Aba" ou "Seção" dessas páginas em um componente avulso dentro de um diretório `components/AdminPatientDetail/`. Exemplo:
+  - `PatientOverviewPanel.tsx` (Dados básicos)
+  - `PatientHistoryTab.tsx` (Aba de Prontuário)
+  - `PatientFinancialTab.tsx` (Aba Financeira / Assinaturas / Contratos)
+- Extrair as queries pesadas da raiz da página e utilizar *lazy load* via TanStack Query para carregar apenas a aba em que o usuário clicar.
+
+**Benefícios:**
+- **Performance Imediata:** O usuário não precisará esperar todas as transações financeiras carregarem se ele apenas quer ler a evolução médica do paciente. O tempo de renderização (Time To Interactive) da tela cairá drasticamente.
+- **Isolamento Cognitivo:** Se precisarmos adicionar um novo botão no Prontuário, editaremos um arquivo de 50 linhas focado somente no prontuário, ao invés de abrir uma página de 800 linhas.
+
+---
+
+
+### Fase 6: Otimização de Componentes e Contextos Globais
+Alguns componentes que ficam na raiz do layout sofrem muito processamento não-focado, como o `Header.tsx` e o sininho `NotificationBell.tsx`.
+
+**O que será feito de forma detalhada:**
+- Otimização do `NotificationBell.tsx` que hoje é engatado num Contexto Geral. Iremos separá-lo para que ele escute e realize polling das notificações sozinho de forma assíncrona.
+- Separação de lógicas de "Perfil do Usuário Autenticado" para evitar re-renderizações acidentais em todo o esqueleto da aplicação.
+
+**Benefícios:**
+- **Fluidez (Sem Engasgos):** O sino de notificação não vai re-renderizar o gráfico do dashboard principal quando um novo aviso chegar. A navegação será suave como a de um app nativo de celular.
+- **Redução do Consumo de Rede:** Com um controle mais afiado, bateremos menos vezes no Firebase sem necessidade, reduzindo a conta final de Cloud Database da empresa.
