@@ -101,10 +101,10 @@ const ProfessionalArea = () => {
     return matchesName || matchesCPF
   })
 
-  const hasAgenda = config?.modules?.agenda?.enabled !== false
-  const hasPatients = config?.modules?.patients?.enabled !== false
+  const hasAgenda = config?.modules?.appointments?.enabled !== false
+  const hasPatients = config?.modules?.clients?.enabled !== false
   const hasGallery = config?.modules?.gallery?.enabled === true
-  const hasTimesheets = config?.modules?.timesheets?.enabled === true
+  const hasTimesheets = config?.modules?.time_tracking?.enabled === true
 
   return (
     <div className="container mx-auto py-8 px-4">

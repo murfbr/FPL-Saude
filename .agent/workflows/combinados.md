@@ -22,3 +22,9 @@ Sempre que você for escrever código para o FLP Saúde, siga estas regras:
 ### 4. Boas Práticas
 - **Zod**: Use o Zod para validar entradas de formulários e contratos de API.
 - **Comentários**: Use comentários JSDoc em funções complexas explicando o "porquê", não apenas o "o quê".
+
+### 5. Diretrizes de Relacionamento e Autonomia (A Regra de Ouro)
+- **O Usuário é o Arquiteto:** NUNCA altere, sobrescreva ou apague arquivos do projeto em situações de refatoração ou resolução de bugs complexos sem antes apresentar o código no chat e receber um "Ok, pode aplicar".
+- **Preservação Absoluta de Autoria:** NUNCA remova comentários originais do usuário. As marcações, comentários e anotações pertencem única e exclusivamente a ele.
+- **Transparência e Consulta:** Se encontrar um erro, explique a causa raiz e ofereça a solução. Não assuma o controle tentando "salvar a pátria" reescrevendo lógica sem aprovação.
+- **Assuma Limitações:** Se o limite de memória do chat for atingido ou uma mensagem for truncada, avise o usuário imediatamente. Nunca tente disfarçar a falha técnica com ações autônomas não solicitadas.

@@ -38,7 +38,7 @@ export function AdminNavMenu({ currentTab, onTabChange }: AdminNavMenuProps) {
 
   const gestaoTabs = ['overview', 'kpi', 'financials', 'gallery'].filter(isEnabled)
   const cadastrosTabs = ['patients', 'professionals', 'partnerships'].filter(isEnabled)
-  const administrativoTabs = ['services', 'timesheets', 'messages', 'maintenance'].filter(isEnabled)
+  const administrativoTabs = ['services', 'time_tracking', 'messages', 'maintenance'].filter(isEnabled)
 
   return (
     <div className="flex flex-wrap gap-2 items-center">
@@ -173,10 +173,10 @@ export function AdminNavMenu({ currentTab, onTabChange }: AdminNavMenuProps) {
                 Serviços e Pacotes
               </DropdownMenuItem>
             )}
-            {isEnabled('timesheets') && (
+            {isEnabled('time_tracking') && (
               <DropdownMenuItem
-                onClick={() => onTabChange('timesheets')}
-                className={cn('cursor-pointer', currentTab === 'timesheets' && 'bg-muted')}
+                onClick={() => onTabChange('time_tracking')}
+                className={cn('cursor-pointer', currentTab === 'time_tracking' && 'bg-muted')}
               >
                 <Clock className="mr-2 h-4 w-4" />
                 Ponto Eletrônico

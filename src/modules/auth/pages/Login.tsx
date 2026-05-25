@@ -33,7 +33,12 @@ const Login = () => {
       if (role) {
         console.log('[Login] Authenticated with role:', role, 'Redirecting...')
         // Smart redirect based on role
-        if (from === '/' || from === '/login') {
+        // Se o profissional tentar acessar uma rota de admin por acidente (histórico/cache), forçamos ele para o painel dele
+        if (
+          from === '/' || 
+          from === '/login' || 
+          (role === 'professional' && (from.startsWith('/admin') || from.startsWith('/super-admin')))
+        ) {
           if (role === 'admin') navigate('/admin', { replace: true })
           else if (role === 'professional')
             navigate('/profissional', { replace: true })

@@ -120,7 +120,7 @@ const AdminDashboard = () => {
       if (config.modules[currentTab as keyof typeof config.modules]?.enabled === false) {
         const firstEnabled = [
           'overview', 'kpi', 'agenda', 'financials', 'professionals', 'patients', 
-          'timesheets', 'messages', 'services', 'gallery', 'partnerships', 'maintenance'
+          'time_tracking', 'messages', 'services', 'gallery', 'partnerships', 'maintenance'
         ].find(t => config.modules[t as keyof typeof config.modules]?.enabled !== false)
         if (firstEnabled) {
           setSearchParams({ tab: firstEnabled })
@@ -210,7 +210,7 @@ const AdminDashboard = () => {
     { value: 'financials', label: 'Gestão Financeira', icon: CreditCard },
     { value: 'professionals', label: 'Profissionais', icon: Briefcase },
     { value: 'patients', label: 'Pacientes', icon: Users },
-    { value: 'timesheets', label: 'Ponto Eletrônico', icon: Clock },
+    { value: 'time_tracking', label: 'Ponto Eletrônico', icon: Clock },
     { value: 'messages', label: 'Confirmações', icon: MessageSquare },
     { value: 'services', label: 'Serviços e Pacotes', icon: Stethoscope },
     { value: 'gallery', label: 'Galeria Clínica', icon: Camera },
@@ -426,7 +426,7 @@ const AdminDashboard = () => {
             <FinancialManagement />
           </TabsContent>
 
-          <TabsContent value="timesheets">
+          <TabsContent value="time_tracking">
             <TimeSheetReport />
           </TabsContent>
 
