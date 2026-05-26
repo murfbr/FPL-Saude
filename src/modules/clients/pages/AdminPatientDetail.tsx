@@ -659,8 +659,8 @@ const PatientDetail = () => {
                     {validAppointments.map((appt) => (
                     <AccordionItem value={appt.id} key={appt.id}>
                       <AccordionTrigger>
-                        <div className="flex justify-between w-full pr-4">
-                          <span>
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center w-full pr-4 text-left gap-1">
+                          <span className="font-medium">
                             {appt.services.name} com {appt.professionals.name}
                           </span>
                           <span className="text-sm text-muted-foreground">
