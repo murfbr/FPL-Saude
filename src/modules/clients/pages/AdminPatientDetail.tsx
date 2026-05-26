@@ -672,32 +672,30 @@ const PatientDetail = () => {
                           </span>
                         </div>
                       </AccordionTrigger>
-                      <AccordionContent className="prose prose-sm max-w-none dark:prose-invert">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p>
-                              <strong>Status:</strong>{' '}
+                      <AccordionContent>
+                          <div className="space-y-2 pt-1">
+                            <div className="flex items-center gap-2">
+                              <strong className="text-sm">Status:</strong>{' '}
                               <Badge>{appt.status}</Badge>
-                            </p>
-                            <p>
-                              <strong>Anotações da Sessão:</strong>
-                            </p>
-                            <div className="p-2 border rounded-md bg-muted/50 min-h-[60px]">
+                            </div>
+                            <div className="text-sm font-semibold">Anotações da Sessão:</div>
+                            <div className="p-2 border rounded-md bg-muted/50 min-h-[60px] w-full text-sm">
                               {appt.notes && appt.notes.length > 0
                                 ? appt.notes[appt.notes.length - 1].content
                                 : 'Nenhuma anotação para esta sessão.'}
                             </div>
+                            <div className="flex justify-end pt-1">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleAppointmentClick(appt)}
+                              >
+                                <Edit className="mr-2 h-4 w-4" />
+                                Detalhes
+                              </Button>
+                            </div>
                           </div>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleAppointmentClick(appt)}
-                          >
-                            <Edit className="mr-2 h-4 w-4" />
-                            Detalhes
-                          </Button>
-                        </div>
-                      </AccordionContent>
+                        </AccordionContent>
                     </AccordionItem>
                   ))}
                 </Accordion>

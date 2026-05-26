@@ -112,16 +112,28 @@ export const GeneralAssessmentForm = ({
   const [isExamDialogOpen, setIsExamDialogOpen] = useState(false)
   const [isDownloading, setIsDownloading] = useState<string | null>(null)
 
-  // Data parsing
+  // Data parsing — normaliza o general_assessment para os campos do formulário
   const assessmentData = useMemo(() => {
     const raw = client.general_assessment
+    let entry: Record<string, any> = {}
     if (Array.isArray(raw)) {
-      return raw.find((i: any) => i.type === 'assessment' || !i.type) || {}
+      entry = raw.find((i: any) => i.type === 'assessment' || !i.type) || {}
+    } else if (raw && typeof raw === 'object') {
+      entry = raw
     }
-    if (raw && typeof raw === 'object') {
-      return raw
-    }
-    return {}
+    // Extrai apenas os campos do schema, ignorando type/updated_at
+    return {
+      mainComplaint: entry.mainComplaint ?? '',
+      profession: entry.profession ?? '',
+      physicalActivity: entry.physicalActivity ?? '',
+      clinicalDiagnosis: entry.clinicalDiagnosis ?? '',
+      historyOfPresentIllness: entry.historyOfPresentIllness ?? '',
+      pastMedicalHistory: entry.pastMedicalHistory ?? '',
+      medications: entry.medications ?? '',
+      physicalExam: entry.physicalExam ?? '',
+      diagnosis: entry.diagnosis ?? '',
+      treatmentPlan: entry.treatmentPlan ?? '',
+    } as AssessmentFormValues
   }, [client.general_assessment])
 
   const [historyData, setHistoryData] = useState<NoteEntry[]>([])
@@ -136,20 +148,15 @@ export const GeneralAssessmentForm = ({
 
   const form = useForm<AssessmentFormValues>({
     resolver: zodResolver(assessmentSchema),
-    values: assessmentData as AssessmentFormValues,
-    defaultValues: {
-      mainComplaint: '',
-      profession: '',
-      physicalActivity: '',
-      clinicalDiagnosis: '',
-      historyOfPresentIllness: '',
-      pastMedicalHistory: '',
-      medications: '',
-      physicalExam: '',
-      diagnosis: '',
-      treatmentPlan: '',
-    },
+    defaultValues: assessmentData,
   })
+
+  // Injeta os dados do cliente no formulário sempre que assessmentData mudar
+  // Usamos JSON.stringify para evitar loops infinitos causados por nova referência de objeto
+  useEffect(() => {
+    form.reset(assessmentData)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(assessmentData)])
 
   const fetchExams = async () => {
     if (!client.id) return
