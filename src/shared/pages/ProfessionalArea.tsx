@@ -18,7 +18,7 @@ import { useTenant } from '@/shared/contexts/TenantContext'
 
 const ProfessionalArea = () => {
   const { toast } = useToast()
-  const { user, professionalId } = useAuth()
+  const { user, professionalId, role } = useAuth()
   const { config } = useTenant()
   const [searchParams, setSearchParams] = useSearchParams()
   const [clients, setClients] = useState<Client[]>([])
@@ -42,7 +42,7 @@ const ProfessionalArea = () => {
       setIsLoading(true)
       try {
         let clientRes
-        if (config?.features?.professionals_view_all_clients) {
+        if (config?.roles?.[role || 'professional']?.features?.includes('view_all_clients')) {
           // Quando a flag global estiver ativa, busca todos os clientes ativos da clínica
           clientRes = await getAllClients({ status: 'active' })
         } else {
@@ -64,7 +64,7 @@ const ProfessionalArea = () => {
       }
     }
     fetchData()
-  }, [toast, user, professionalId])
+  }, [toast, user, professionalId, config, role])
 
   if (isLoading) {
     return (
@@ -129,7 +129,7 @@ const ProfessionalArea = () => {
             <TabsContent value="schedule">
               <AgendaView 
                 mode="professional" 
-                preselectedProfessionalId={config?.features?.professionals_view_all_schedules ? 'all' : professionalId} 
+                preselectedProfessionalId={config?.roles?.[role || 'professional']?.features?.includes('view_all_schedules') ? 'all' : professionalId} 
               />
             </TabsContent>
             <TabsContent value="availability">

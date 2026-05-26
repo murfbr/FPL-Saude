@@ -1,94 +1,105 @@
 # Plano de Evolução Estratégica: Arquitetura Multi-Tenant e Superadmin
 
-Este documento consolida o planejamento técnico para evoluir as funcionalidades de Superadmin e a infraestrutura Multi-Tenant do FPL-Saúde, alinhando-se estritamente à realidade do código atual (incluindo as necessidades de refatoração identificadas).
+Este documento consolida o planejamento técnico para evoluir as funcionalidades de Superadmin e a infraestrutura Multi-Tenant do FPL-Saúde. A análise apresentada aqui é conclusiva e reflete a arquitetura exata encontrada no código-fonte do sistema.
 
 ---
 
 ## 1. Isolamento de Dados Robusto (Segurança e Compliance)
 
-**A Necessidade Atual:**
-O isolamento entre tenants depende de passagem de filtros pelo frontend e funções do backend (usando `getCompanyId()`).
+**Status Geral:** 🟢 Concluído
 
-**Evolução Arquitetural:**
-Transferir a fronteira de segurança para a camada do banco de dados (Firestore Security Rules ou RLS), rejeitando ativamente qualquer leitura que fuja do escopo do inquilino.
+**Diagnóstico Arquitetural:**
+- O isolamento via *Firestore Rules* está ativo. O arquivo `firestore.rules` foi reescrito e valida permissões pelo Token JWT e fallback via banco.
+- O problema da criação de novos usuários no client-side sem claims foi **resolvido** com a Cloud Function `onUserWrite.ts` escutando a coleção raiz `users` e aplicando `admin.auth().setCustomUserClaims()`.
+- A lógica de Soft Delete de ponta-a-ponta foi implementada: a exclusão apenas marca `is_active: false` na raiz, e a Cloud Function intercepta essa flag para suspender o Auth e anonimizar a interface do profissional.
+- A exceção de Catálogo Público para dropdowns (`services` e `subscription_plans`) já está regida corretamente no Firestore.
 
-### 🏆 Benefícios
-- **Segurança "Zero Trust":** Impossibilita vazamento de dados cruzado mesmo em caso de falha ou esquecimento no código.
-- **Auditoria LGPD:** Fundamental para fechar contratos B2B com clínicas maiores, garantindo isolamento técnico incontestável.
-
-### 🛠️ Execução Técnica
-1. **Injeção de Contexto no Auth:** Assegurar que o Custom Token do usuário possua a claim do `companyId`.
-2. **Regras Estritas de Banco:** Escrever regras que bloqueiem queries se o `companyId` do documento não bater com o do token da requisição.
-3. **Refatoração de Acesso:** Adequar a interface para lidar com erros de permissão (`403 Permission Denied`).
+### ✅ O Que Já Está Feito
+- Refatoração total do `firestore.rules` (RBAC e Catálogos).
+- Injeção das Custom Claims pela Cloud Function `onUserWrite.ts`.
+- Refatoração do fluxo de Deleção para proteger integridade referencial ("Soft Delete").
 
 ---
 
 ## 2. Dashboard de Visão Global (Business Intelligence do Superadmin)
 
-**A Necessidade Atual:**
-O arquivo `SuperAdminDashboard.tsx` lista as empresas e a contagem de usuários. Faltam métricas de negócio executivas para o Superadmin entender o engajamento e a saúde financeira das clínicas usando o sistema.
+**Status Geral:** 🔴 Pendente
 
-**Evolução Arquitetural:**
-Expandir o `SuperAdminDashboard.tsx` com painéis de BI alimentados por agregadores assíncronos.
+**Diagnóstico Arquitetural:**
+O `SuperAdminDashboard.tsx` atual renderiza a contagem de usuários fazendo um loop com `Promise.all` (`getUsersByCompany`). Isso não escala e não provê inteligência de negócios real.
 
-### 🏆 Benefícios
-- **Decisão Orientada a Dados:** Ver de forma agregada o crescimento de agendamentos, usuários ativos e uso do sistema sem precisar entrar na conta de cada clínica.
-
-### 🛠️ Execução Técnica
-1. **Modelagem de Agregadores (Cloud Functions):** Criar rotinas em background que consolidam os números de todos os tenants (total de consultas realizadas no mês, total faturado pelas clínicas) e salvam em um documento global cacheados.
-2. **Desenvolvimento de UI/Gráficos:** Inserir gráficos no painel usando o dado em cache para não onerar o banco.
+### 🚧 O Que Falta Fazer
+- Eliminar as dezenas de leituras em paralelo na renderização do componente.
+- Criar a rotina assíncrona que mastigue os dados do banco para o dashboard.
 
 ---
 
 ## 3. Refatoração e Gestão de Módulos / Features (Painel Superadmin)
 
-**A Necessidade Atual:**
-O arquivo `CompanyDetail.tsx` (onde o Superadmin liga/desliga módulos, ajusta roles, e edita as features) cresceu para quase 800 linhas, concentrando todas as abas e regras em um único lugar, causando lentidão e sobrecarga cognitiva (conforme já apontado no `refactoring_plan.md`).
+**Status Geral:** 🟡 Em Andamento
 
-**Evolução Arquitetural:**
-Desacoplar a página de gestão do Tenant no Superadmin em componentes isolados e introduzir o conceito de "Pacotes de Configuração" base.
+**Diagnóstico Arquitetural:**
+O antigo arquivo monolítico `CompanyDetail` foi fragmentado com sucesso (`ModulesTab.tsx`, `BrandingTab.tsx`, etc.). Contudo, o fluxo de "Onboarding" de um novo inquilino exige acionar toggle por toggle na aba de módulos e features. Precisamos de **Templates de Configuração**.
 
-### 🏆 Benefícios
-- **Performance e Manutenibilidade:** Separar as abas de "Módulos", "Features", "Branding" e "Roles" isolará o código, facilitando muito a manutenção por parte dos desenvolvedores.
-- **Organização Operacional:** Permite ao Superadmin gerir as configurações (`ModuleConfig` e `CompanyFeatures`) de forma modular.
+### 🛠️ Plano de Implementação Técnico Profundo (Templates)
 
-### 🛠️ Execução Técnica
-1. **Separação de Componentes:** Mover os blocos como `ModulesTab`, `FeaturesTab` e `BrandingTab` para arquivos independentes (ex: `/super-admin/components/CompanyDetail/`).
-2. **Lazy Loading:** Utilizar TanStack Query para carregar apenas os dados da aba clicada (ex: carregar a lista de usuários apenas quando clicar na aba `Users`), acelerando a montagem inicial da página da empresa.
-3. **Pacotes de Features:** Adicionar funcionalidade para o Superadmin aplicar "Configurações em Lote" (aplicar um pacote padrão que já liga Módulos X e Y de uma vez para agilizar o setup de uma nova clínica).
+1. **Definição Estrita dos Templates (`src/modules/super-admin/constants/templates.ts`):**
+   Vamos criar um dicionário de configurações seladas no código-fonte para refletir os planos comerciais reais:
+   ```typescript
+   export const COMPANY_TEMPLATES = {
+     'basico': {
+       name: 'Clínica Básica',
+       modules: { agenda: true, prontuario: true, financeiro: false, notificacoes: false }
+     },
+     'completo': {
+       name: 'Gestão Completa',
+       modules: { agenda: true, prontuario: true, financeiro: true, notificacoes: true, relatorios: true }
+     }
+   }
+   ```
+2. **Refatoração da `ModulesTab.tsx`:**
+   - Adicionar o componente `<Select>` (Shadcn UI) no cabeçalho da tab.
+   - Ao selecionar um template, interceptar a escolha com um Alert Dialog: *"Atenção: Aplicar este pacote sobrescreverá as permissões atuais. Deseja continuar?"*
+   - O botão 'Aplicar' chamará a função existente `updateCompanyModules(company.id, generatedModulesObject)`.
+   - Como os módulos no banco também guardam uma propriedade `label`, será necessário um mapeador iterativo que junte os defaults do `MODULE_REGISTRY` com o status do Template antes de injetar no Firebase.
 
 ---
 
-## 4. Whitelabeling e Customização Visual Dinâmica
+## 4. Whitelabeling Comercial (Experiência Customizada por Inquilino)
 
-**A Necessidade Atual:**
-A estrutura de marca `CompanyBranding` (logo e cores) já existe e está perfeitamente manipulável no `CompanyDetail.tsx`. Agora precisamos garantir que ela permeie todo o ciclo de contato do cliente.
+**Status Geral:** 🔴 Pendente
 
-**Evolução Arquitetural:**
-Um motor de propagação da identidade visual do tenant que atinja áreas externas ao painel React (documentos gerados e disparos de e-mail).
+**Diagnóstico Arquitetural:**
+A infraestrutura de banco de dados (`BrandingTab.tsx` -> `logo_url`, `primary_hex`, `app_name`, etc.) já existe. Porém, a "cara" do sistema continua sendo da FPL-Saúde. Para o produto ser *comercializável* no modelo SaaS B2B, a clínica precisa sentir que o software é dela desde o momento do login até a barra de navegação.
 
-### 🏆 Benefícios
-- **Efeito Lock-in B2B:** Quando o paciente recebe relatórios ou lembretes com a logo e cores exatas da clínica, o valor percebido do FPL-Saúde atinge seu ápice.
+### 🛠️ Plano de Implementação Técnico Profundo (Commercial Whitelabel)
 
-### 🛠️ Execução Técnica
-1. **Padronização em PDFs:** Alterar geradores (como o export de Ficha de Avaliação) para buscar a `logo_url` e `primary_hex` no banco e renderizar no cabeçalho.
-2. **E-mails Dinâmicos:** Integrar as cores e logo nos templates de e-mail transacional (confirmação de agenda, boas-vindas).
-3. **Propagação de Estilo UI:** Injeção das variáveis CSS no SSR para assegurar que componentes de UI base herdem as cores da clínica instaneamente.
+1. **Roteamento Dinâmico de Login por Tenant (Slug):**
+   - Atualmente o login é genérico (`/login`).
+   - Implementar roteamento por *Slug* da empresa: `/:companySlug/login`.
+   - Ao acessar essa URL, a tela de login fará um fetch assíncrono público (sem auth) das configurações de branding dessa clínica.
+   - A tela de login exibirá a `logo_url` da clínica e o `app_name` no cabeçalho em vez do logo da plataforma matriz. O botão de "Entrar" já será tingido com o `primary_hex` da clínica.
+
+2. **Injeção de Metatags (Favicon e Title):**
+   - Criar um hook `useDynamicBranding()` que será acionado no `TenantProvider.tsx`.
+   - Ele alterará a tag `<title>` do documento HTML dinamicamente para o `app_name` da clínica (ex: "Clínica Nova Vida - Gestão").
+   - Trocará o `<link rel="icon">` (Favicon) para a `logo_url` da clínica.
+
+3. **Substituição Visual em toda a UI (Sidebar e Navbar):**
+   - O logo do FPL-Saúde que fica fixo no topo da barra lateral/menu superior será trocado dinamicamente pelo `config.branding.logo_url`.
+   - O nome do software exibido aos pacientes no portal ou nos exports de PDF/Atestados também usará as chaves de branding.
+
+4. **Injeção de Variáveis CSS Nativas no DOM:**
+   - Para que todo o *Shadcn UI* respire as cores da clínica sem piscar tela, injetaremos o `primary_hex` (convertido para HSL) diretamente no `:root` através do `TenantProvider`, garantindo que toda a navegação do usuário seja "tingida" instantaneamente.
 
 ---
 
 ## 5. Motor Interno de Geração de Módulos (Formulários Dinâmicos)
 
-**A Necessidade Atual:**
-Hoje, formulários como o `GeneralAssessmentForm` possuem campos fixos (`mainComplaint`, `physicalExam`) via código estático, embora salvem em um array flexível no banco (`general_assessment`). Lançar especialidades novas requer criar componentes React do zero.
+**Status Geral:** 🔴 Pendente
 
-**Evolução Arquitetural:**
-Criar um construtor de esquemas (JSON Schema) para uso **interno** dos desenvolvedores do FPL-Saúde.
+**Diagnóstico Arquitetural:**
+Hoje os formulários usam `react-hook-form`, mas seus inputs estão hardcoded. Lançar uma ficha diferente exige deploy de código.
 
-### 🏆 Benefícios
-- **Agilidade de Lançamento:** A equipe de TI lança uma ficha completa de Anamnese Psiquiátrica apenas escrevendo um arquivo JSON, sem desenhar inputs na mão. Mantém o código incrivelmente limpo.
-
-### 🛠️ Execução Técnica
-1. **Implementação de Renderizador JSON:** Adotar uma lib como `react-jsonschema-form` para ler os esquemas e gerar inputs validados.
-2. **Modelagem de Schemas por Especialidade:** Cadastrar no sistema os "tipos" de avaliação (Ex: `Odonto`, `Psicologia`), onde cada um devolve um JSON Schema específico.
-3. **Renderização Agnóstica:** O `GeneralAssessmentForm` passará a pedir ao backend: "qual o schema dessa clínica?" e desenhará a tela magicamente, salvando os dados no formato atual.
+### 🚧 O Que Falta Fazer
+- O Motor que transforme um JSON estrito em um componente React renderizável na tela do usuário.

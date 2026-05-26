@@ -3,7 +3,7 @@ import { collection, doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/
 import { Professional } from '@/shared/types'
 import { getCompanyId } from '@/shared/lib/tenantStore'
 import { secondaryAuth, secondaryDb } from '@/shared/lib/firebase'
-import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth'
+import { createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail } from 'firebase/auth'
 
 export async function updateProfessional(
   id: string,
@@ -22,8 +22,8 @@ export async function updateProfessional(
 
 export async function deleteProfessional(id: string): Promise<{ error: any }> {
   try {
-    const docRef = doc(db, 'companies', getCompanyId(), 'professionals', id)
-    await deleteDoc(docRef)
+    const docRef = doc(db, 'users', id)
+    await updateDoc(docRef, { is_active: false, deleted_at: new Date().toISOString() })
     return { error: null }
   } catch (error) {
     return { error }
@@ -74,7 +74,9 @@ export async function createProfessionalUser(
     const companyId = getCompanyId()
     
     // 1. Criar usuário no Firebase Auth usando o app secundário (não desloga o admin atual)
-    const userCredential = await createUserWithEmailAndPassword(secondaryAuth, data.email, data.password)
+    const finalPassword = data.password || (Math.random().toString(36).slice(-10) + 'A1!')
+    
+    const userCredential = await createUserWithEmailAndPassword(secondaryAuth, data.email, finalPassword)
     const user = userCredential.user
 
     await updateProfile(user, { displayName: data.name })
@@ -90,10 +92,9 @@ export async function createProfessionalUser(
     })
 
     // 3. Criar registro na subcoleção `professionals` da empresa logada
-    // Usamos secondaryDb pois, após o passo 2, este ambiente já passou a pertencer à companyId perante o Firestore Rules
-    const professionalDocRef = doc(collection(secondaryDb, 'companies', companyId, 'professionals'))
+    const professionalDocRef = doc(secondaryDb, 'companies', companyId, 'professionals', user.uid)
     const profData = {
-      id: professionalDocRef.id,
+      id: user.uid,
       user_id: user.uid,
       name: data.name,
       email: data.email,
@@ -106,9 +107,20 @@ export async function createProfessionalUser(
     }
     await setDoc(professionalDocRef, profData)
 
-    // O secondaryAuth não precisa de signOut explícito, pois a instância auth principal do app 
-    // continua conectada com o Admin. Apenas fechamos as operações.
+    // O secondaryAuth não precisa de signOut explícito.
     
+    if (!data.password) {
+      try {
+        const actionCodeSettings = {
+          url: `${window.location.origin}/reset-password`,
+          handleCodeInApp: false,
+        }
+        await sendPasswordResetEmail(secondaryAuth, data.email, actionCodeSettings)
+      } catch (emailError: any) {
+        console.error('Error sending reset email:', emailError)
+      }
+    }
+
     return { data: profData, error: null }
   } catch (error) {
     console.error("Erro ao criar usuário profissional:", error)

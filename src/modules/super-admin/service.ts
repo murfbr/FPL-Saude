@@ -297,6 +297,20 @@ export async function createCompanyUser(
         companyId,
         created_at: new Date().toISOString(),
       })
+
+      if (role === 'professional' || role === 'admin') {
+        await setDoc(doc(db, 'companies', companyId, 'professionals', uid), {
+          user_id: uid,
+          name,
+          email,
+          specialty: '',
+          bio: '',
+          avatar_url: '',
+          is_active: true,
+          service_ids: [],
+          created_at: new Date().toISOString(),
+        })
+      }
     } catch (dbError) {
       console.error('Error writing to Firestore:', dbError)
       throw new Error('Usuário criado no Auth, mas falhou ao salvar perfil no banco de dados.')
@@ -306,7 +320,11 @@ export async function createCompanyUser(
     // ONLY if a manual password was NOT provided
     if (!password) {
       try {
-        await sendPasswordResetEmail(secondaryAuth, email)
+        const actionCodeSettings = {
+          url: `${window.location.origin}/reset-password`,
+          handleCodeInApp: false,
+        }
+        await sendPasswordResetEmail(secondaryAuth, email, actionCodeSettings)
       } catch (emailError: any) {
         console.error('Error sending reset email:', emailError)
         // Custom message for critical failures

@@ -40,7 +40,7 @@ export const AgendaView = ({
   mode?: 'admin' | 'professional'
   preselectedProfessionalId?: string
 } = {}) => {
-  const { loading, companyId } = useAuth()
+  const { loading, companyId, role } = useAuth()
   const [viewMode, setViewMode] = useState<ViewMode>('day')
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isEventFormOpen, setIsEventFormOpen] = useState(false)
@@ -53,7 +53,7 @@ export const AgendaView = ({
   const invalidateAppointments = useInvalidateAppointments()
   const { config } = useTenant()
 
-  const canEdit = mode === 'admin' || config?.modules?.agenda?.access_level === 'edit'
+  const canEdit = mode === 'admin' || role === 'professional'
 
   // Lifted State
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -186,7 +186,7 @@ export const AgendaView = ({
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full md:w-auto">
           <h2 className="text-lg font-semibold whitespace-nowrap">Agenda</h2>
 
-          {(mode === 'admin' || config?.features?.professionals_view_all_schedules) && (
+          {(mode === 'admin' || config?.roles?.[role || 'professional']?.features?.includes('view_all_schedules')) && (
             <Select
               value={selectedProfessional}
               onValueChange={setSelectedProfessional}

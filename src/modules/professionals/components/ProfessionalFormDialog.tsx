@@ -29,7 +29,7 @@ import { getFriendlyErrorMessage } from '@/shared/lib/error-mapping'
 const professionalSchema = z.object({
   name: z.string().min(3, 'O nome deve ter pelo menos 3 caracteres.'),
   email: z.string().email('Por favor, insira um email válido.'),
-  password: z.string().min(6, 'A senha deve ter pelo menos 6 caracteres.'),
+  password: z.string().min(6, 'A senha deve ter pelo menos 6 caracteres.').optional().or(z.literal('')),
   specialty: z.string().optional(),
   bio: z.string().optional(),
   avatar_url: z
@@ -148,9 +148,9 @@ export const ProfessionalFormDialog = ({
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Senha Inicial</FormLabel>
+                    <FormLabel>Senha Inicial (Opcional)</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="******" {...field} />
+                      <Input type="password" placeholder="Se vazio, envia convite" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

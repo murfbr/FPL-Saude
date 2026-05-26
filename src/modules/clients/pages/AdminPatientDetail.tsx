@@ -62,6 +62,8 @@ import {
 } from 'lucide-react'
 import { format, isValid } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { DateRange } from 'react-day-picker'
+import { DateRangePicker } from '@/components/ui/date-range-picker'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/shared/hooks/use-toast'
 import { PatientEditDialog } from '@/modules/clients/components/PatientEditDialog'
@@ -105,9 +107,11 @@ const PatientDetail = () => {
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [dateRange, setDateRange] = useState<DateRange | undefined>()
   const [lastVisibleDoc, setLastVisibleDoc] = useState<any>(null)
   const [hasMoreAppointments, setHasMoreAppointments] = useState(false)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [isLoadingAppointments, setIsLoadingAppointments] = useState(true)
 
   // Prontuário — notas com fallback robusto (subcoleção + legado)
   const [clientNotes, setClientNotes] = useState<NoteEntry[]>([])
@@ -149,17 +153,36 @@ const PatientDetail = () => {
   const fetchPatientData = async () => {
     if (!id) return
     setIsLoading(true)
-    const [patientRes, apptRes, partnershipRes] = await Promise.all([
+    const [patientRes, partnershipRes] = await Promise.all([
       getClientById(id),
-      getAppointmentsByClientIdPaginated(id, 15),
       getAllPartnerships(),
     ])
     setPatient(patientRes.data)
-    setAppointments(apptRes.data || [])
-    setLastVisibleDoc(apptRes.lastVisible)
-    setHasMoreAppointments(apptRes.hasMore)
     setPartnerships(partnershipRes.data || [])
     setIsLoading(false)
+  }
+
+  const fetchAppointments = async () => {
+    if (!id) return
+    setIsLoadingAppointments(true)
+    const { data, lastVisible, hasMore } = await getAppointmentsByClientIdPaginated(
+      id,
+      15,
+      null,
+      {
+        status: statusFilter,
+        startDate: dateRange?.from,
+        endDate: dateRange?.to,
+      }
+    )
+    if (data) {
+      setAppointments(data)
+      setLastVisibleDoc(lastVisible)
+      setHasMoreAppointments(hasMore)
+    } else {
+      setAppointments([])
+    }
+    setIsLoadingAppointments(false)
   }
 
   const loadMoreAppointments = async () => {
@@ -169,7 +192,12 @@ const PatientDetail = () => {
     const { data, lastVisible, hasMore } = await getAppointmentsByClientIdPaginated(
       id, 
       15, 
-      lastVisibleDoc
+      lastVisibleDoc,
+      {
+        status: statusFilter,
+        startDate: dateRange?.from,
+        endDate: dateRange?.to,
+      }
     )
 
     if (data) {
@@ -193,6 +221,10 @@ const PatientDetail = () => {
     fetchExams()
     loadClientNotes(1)
   }, [id])
+
+  useEffect(() => {
+    fetchAppointments()
+  }, [id, statusFilter, dateRange])
 
   const handleStatusChange = async (isActive: boolean) => {
     if (!patient) return
@@ -302,14 +334,10 @@ const PatientDetail = () => {
         isValid(new Date(appt.schedules.start_time)),
     )
     
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(appt => appt.status === statusFilter)
-    }
-    
     return filtered.sort((a, b) => 
       new Date(b.schedules.start_time).getTime() - new Date(a.schedules.start_time).getTime()
     )
-  }, [appointments, statusFilter])
+  }, [appointments])
 
   const notesPagesTotal = Math.ceil(notesTotalCount / PAGE_SIZE_NOTES)
 
@@ -596,23 +624,39 @@ const PatientDetail = () => {
                       Total de {validAppointments.length} agendamentos.
                     </CardDescription>
                   </div>
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-full sm:w-[180px]">
-                      <SelectValue placeholder="Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos</SelectItem>
-                      <SelectItem value="scheduled">Agendado</SelectItem>
-                      <SelectItem value="completed">Concluído</SelectItem>
-                      <SelectItem value="cancelled">Cancelado</SelectItem>
-                      <SelectItem value="no_show">Faltou</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <DateRangePicker 
+                      date={dateRange} 
+                      onDateChange={setDateRange} 
+                      className="w-full sm:w-auto" 
+                    />
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger className="w-full sm:w-[150px]">
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos</SelectItem>
+                        <SelectItem value="scheduled">Agendado</SelectItem>
+                        <SelectItem value="completed">Concluído</SelectItem>
+                        <SelectItem value="cancelled">Cancelado</SelectItem>
+                        <SelectItem value="no_show">Faltou</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
-                <Accordion type="single" collapsible className="w-full">
-                  {validAppointments.map((appt) => (
+                {isLoadingAppointments ? (
+                  <div className="flex justify-center items-center py-12">
+                    <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : validAppointments.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">
+                    Nenhum agendamento encontrado para este período.
+                  </p>
+                ) : (
+                  <Accordion type="single" collapsible className="w-full">
+                    {validAppointments.map((appt) => (
                     <AccordionItem value={appt.id} key={appt.id}>
                       <AccordionTrigger>
                         <div className="flex justify-between w-full pr-4">
@@ -657,6 +701,7 @@ const PatientDetail = () => {
                     </AccordionItem>
                   ))}
                 </Accordion>
+                )}
 
                 {hasMoreAppointments && (
                   <div className="mt-6 flex justify-center">

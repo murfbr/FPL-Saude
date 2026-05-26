@@ -46,6 +46,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -130,6 +136,7 @@ export const GeneralAssessmentForm = ({
 
   const form = useForm<AssessmentFormValues>({
     resolver: zodResolver(assessmentSchema),
+    values: assessmentData as AssessmentFormValues,
     defaultValues: {
       mainComplaint: '',
       profession: '',
@@ -143,10 +150,6 @@ export const GeneralAssessmentForm = ({
       treatmentPlan: '',
     },
   })
-
-  useEffect(() => {
-    form.reset(assessmentData as AssessmentFormValues)
-  }, [assessmentData, form])
 
   const fetchExams = async () => {
     if (!client.id) return
@@ -355,11 +358,17 @@ export const GeneralAssessmentForm = ({
           </TabsList>
 
           <TabsContent value="assessment">
-            <Form {...form}>
-              <form
-                onSubmit={form.handleSubmit(onSubmit)}
-                className="space-y-4"
-              >
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="ficha" className="border-none">
+                <AccordionTrigger className="text-sm font-semibold pt-0 hover:no-underline">
+                  Clique para expandir/recolher a Ficha de Avaliação
+                </AccordionTrigger>
+                <AccordionContent>
+                  <Form {...form}>
+                    <form
+                      onSubmit={form.handleSubmit(onSubmit)}
+                      className="space-y-4 pt-4"
+                    >
                 <FormField
                   control={form.control}
                   name="mainComplaint"
@@ -552,10 +561,13 @@ export const GeneralAssessmentForm = ({
                     )}
                     Salvar Avaliação
                   </Button>
-                </div>
-              </form>
-            </Form>
-          </TabsContent>
+                    </div>
+                  </form>
+                </Form>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </TabsContent>
 
           <TabsContent value="history" className="space-y-6">
             <Card className="bg-muted/30 border-dashed">

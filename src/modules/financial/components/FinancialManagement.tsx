@@ -60,7 +60,7 @@ import {
 } from '@/modules/financial/queries'
 
 // Mirrors proration logic from paySubscription service
-export const calculateSubscriptionAmount = (sub: ClientSubscription, forMonth: Date): number => {
+const calculateSubscriptionAmount = (sub: ClientSubscription, forMonth: Date): number => {
   const fullPrice = sub.amount || sub.subscription_plans?.price || sub.services?.price || 0
   if (!sub.start_date) return fullPrice
 

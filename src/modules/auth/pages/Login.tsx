@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useLocation, useNavigate, Link } from 'react-router-dom'
+import { useLocation, useNavigate, Link, useParams } from 'react-router-dom'
 import { useAuth } from '@/shared/providers/AuthProvider'
 import { Button } from '@/components/ui/button'
 import {
@@ -14,8 +14,15 @@ import { Label } from '@/components/ui/label'
 import { useToast } from '@/shared/hooks/use-toast'
 import { LogIn, Loader2, AlertTriangle } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { db } from '@/shared/lib/firebase'
+import { collection, query, where, getDocs } from 'firebase/firestore'
+import { applyBranding } from '@/shared/lib/utils'
+import type { CompanyBranding } from '@/shared/types/tenant'
 
 const Login = () => {
+  const { companySlug } = useParams()
+  const [tenantBranding, setTenantBranding] = useState<CompanyBranding | null>(null)
+  const [loadingBranding, setLoadingBranding] = useState(!!companySlug)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -25,6 +32,31 @@ const Login = () => {
   const { toast } = useToast()
 
   const from = location.state?.from?.pathname || '/'
+
+  useEffect(() => {
+    if (!companySlug) return
+    const fetchBranding = async () => {
+      try {
+        const q = query(collection(db, 'companies'), where('slug', '==', companySlug))
+        const snap = await getDocs(q)
+        if (!snap.empty) {
+          const company = snap.docs[0].data()
+          if (company.branding) {
+            setTenantBranding(company.branding)
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching tenant branding', err)
+      } finally {
+        setLoadingBranding(false)
+      }
+    }
+    fetchBranding()
+  }, [companySlug])
+
+  useEffect(() => {
+    applyBranding(tenantBranding)
+  }, [tenantBranding])
 
   // Redirect if already authenticated and role is loaded
   useEffect(() => {
@@ -144,10 +176,18 @@ const Login = () => {
     <div className="container flex items-center justify-center min-h-[calc(100vh-112px)] py-12">
       <Card className="w-full max-w-sm animate-fade-in-up shadow-lg">
         <CardHeader className="text-center">
-          <div className="mx-auto bg-primary text-primary-foreground rounded-full h-16 w-16 flex items-center justify-center mb-4 shadow-md">
-            <LogIn className="h-8 w-8" />
-          </div>
-          <CardTitle className="text-2xl">Acesse sua Conta</CardTitle>
+          {tenantBranding?.logo_url ? (
+            <div className="mx-auto h-20 w-auto flex items-center justify-center mb-4">
+              <img src={tenantBranding.logo_url} alt="Logo" className="max-h-full max-w-full object-contain" />
+            </div>
+          ) : (
+            <div className="mx-auto bg-primary text-primary-foreground rounded-full h-16 w-16 flex items-center justify-center mb-4 shadow-md">
+              <LogIn className="h-8 w-8" />
+            </div>
+          )}
+          <CardTitle className="text-2xl">
+            {tenantBranding?.app_name ? `Acesso ${tenantBranding.app_name}` : 'Acesse sua Conta'}
+          </CardTitle>
           <CardDescription>
             Use seu email e senha para entrar no sistema.
           </CardDescription>

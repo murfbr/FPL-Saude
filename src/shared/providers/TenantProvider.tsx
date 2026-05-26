@@ -3,6 +3,7 @@ import { TenantContext } from '@/shared/contexts/TenantContext'
 import { useAuth } from '@/shared/providers/AuthProvider'
 import { getCompanyConfig } from '@/modules/super-admin/service'
 import type { CompanyConfig } from '@/shared/types/tenant'
+import { applyBranding } from '@/shared/lib/utils'
 
 /**
  * TenantProvider — Resolves tenant data from companyId
@@ -27,7 +28,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
 
       setConfigLoading(true)
       const { data, error } = await getCompanyConfig(companyId)
-      
+
       if (!isMounted) return
 
       if (error) {
@@ -44,6 +45,11 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
       isMounted = false
     }
   }, [companyId])
+
+  // Hook para injeção dinâmica de Branding (Whitelabel)
+  useEffect(() => {
+    applyBranding(config?.branding)
+  }, [config?.branding])
 
   return (
     <TenantContext.Provider

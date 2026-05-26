@@ -166,15 +166,36 @@ export async function getAppointmentsByClientId(clientId: string): Promise<{ dat
 export async function getAppointmentsByClientIdPaginated(
   clientId: string,
   limitCount: number = 15,
-  lastDoc: any = null
+  lastDoc: any = null,
+  filters?: {
+    status?: string;
+    startDate?: Date;
+    endDate?: Date;
+  }
 ): Promise<{ data: Appointment[] | null; lastVisible: any; hasMore: boolean; error: any }> {
   try {
     const appointmentsRef = collection(db, 'companies', getCompanyId(), 'appointments')
-    let qParts = [
-      where('client_id', '==', clientId),
-      orderBy('schedules.start_time', 'desc'),
-      fbLimit(limitCount)
+    let qParts: any[] = [
+      where('client_id', '==', clientId)
     ]
+
+    if (filters?.status && filters.status !== 'all') {
+      qParts.push(where('status', '==', filters.status))
+    }
+
+    if (filters?.startDate) {
+      qParts.push(where('schedules.start_time', '>=', filters.startDate.toISOString()))
+    }
+
+    if (filters?.endDate) {
+      // Ajusta o endDate para o fim do dia
+      const endOfDay = new Date(filters.endDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      qParts.push(where('schedules.start_time', '<=', endOfDay.toISOString()))
+    }
+
+    qParts.push(orderBy('schedules.start_time', 'desc'))
+    qParts.push(fbLimit(limitCount))
 
     let q = query(appointmentsRef, ...qParts)
 

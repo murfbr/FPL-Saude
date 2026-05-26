@@ -17,11 +17,11 @@ import {
 import {
   getTodayRecord,
   upsertTimeRecord,
-  getTimeTrackingHistory,
+  getMonthlyTimeRecords,
 } from '@/modules/time-tracking/service'
 import { TimeRecord } from '@/shared/types'
 import { useToast } from '@/shared/hooks/use-toast'
-import { Clock, Loader2, Save, AlertCircle, History } from 'lucide-react'
+import { Clock, Loader2, Save, AlertCircle, History, ChevronLeft, ChevronRight } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import {
@@ -47,6 +47,29 @@ export const TimeTracker = ({ professionalId }: TimeTrackerProps) => {
   const { toast } = useToast()
   const [currentTime, setCurrentTime] = useState(new Date())
 
+  // Filtros e paginação
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1)
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
+
+  const currentYear = new Date().getFullYear()
+  const years = Array.from({ length: 5 }, (_, i) => currentYear - i)
+  const months = [
+    { value: 1, label: 'Janeiro' },
+    { value: 2, label: 'Fevereiro' },
+    { value: 3, label: 'Março' },
+    { value: 4, label: 'Abril' },
+    { value: 5, label: 'Maio' },
+    { value: 6, label: 'Junho' },
+    { value: 7, label: 'Julho' },
+    { value: 8, label: 'Agosto' },
+    { value: 9, label: 'Setembro' },
+    { value: 10, label: 'Outubro' },
+    { value: 11, label: 'Novembro' },
+    { value: 12, label: 'Dezembro' },
+  ]
+
   // Generate 30-min interval times options starting from 06:00 to 23:30
   const timeOptions = Array.from({ length: 36 }, (_, i) => {
     const hours = 6 + Math.floor(i / 2)
@@ -63,9 +86,15 @@ export const TimeTracker = ({ professionalId }: TimeTrackerProps) => {
   useEffect(() => {
     if (professionalId) {
       fetchStatus()
-      fetchHistory()
     }
   }, [professionalId])
+
+  useEffect(() => {
+    if (professionalId) {
+      fetchHistory()
+      setCurrentPage(1)
+    }
+  }, [professionalId, selectedMonth, selectedYear])
 
   const fetchStatus = async () => {
     setIsLoading(true)
@@ -79,10 +108,17 @@ export const TimeTracker = ({ professionalId }: TimeTrackerProps) => {
 
   const fetchHistory = async () => {
     setIsHistoryLoading(true)
-    const { data } = await getTimeTrackingHistory(professionalId)
-    setHistory(data || [])
+    const { data } = await getMonthlyTimeRecords(professionalId, selectedYear, selectedMonth)
+    const sortedData = (data || []).sort((a, b) => b.date.localeCompare(a.date))
+    setHistory(sortedData)
     setIsHistoryLoading(false)
   }
+
+  const totalPages = Math.ceil(history.length / itemsPerPage)
+  const paginatedHistory = history.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  )
 
   const handleSave = async () => {
     if (!clockIn) {
@@ -212,12 +248,40 @@ export const TimeTracker = ({ professionalId }: TimeTrackerProps) => {
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <History className="w-5 h-5" />
-            Registros Anteriores
-          </CardTitle>
-          <CardDescription>Seus últimos registros de ponto.</CardDescription>
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <History className="w-5 h-5" />
+              Registros Anteriores
+            </CardTitle>
+            <CardDescription>Seus últimos registros de ponto.</CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <Select value={selectedMonth.toString()} onValueChange={(v) => setSelectedMonth(Number(v))}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Mês" />
+              </SelectTrigger>
+              <SelectContent>
+                {months.map((m) => (
+                  <SelectItem key={m.value} value={m.value.toString()}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={selectedYear.toString()} onValueChange={(v) => setSelectedYear(Number(v))}>
+              <SelectTrigger className="w-[100px]">
+                <SelectValue placeholder="Ano" />
+              </SelectTrigger>
+              <SelectContent>
+                {years.map((y) => (
+                  <SelectItem key={y} value={y.toString()}>
+                    {y}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </CardHeader>
         <CardContent>
           {isHistoryLoading ? (
@@ -229,32 +293,61 @@ export const TimeTracker = ({ professionalId }: TimeTrackerProps) => {
               Nenhum registro encontrado.
             </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Entrada</TableHead>
-                  <TableHead>Saída</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {history.map((record) => (
-                  <TableRow key={record.id}>
-                    <TableCell className="font-medium capitalize">
-                      {format(
-                        parseISO(`${record.date}T00:00:00`),
-                        'EEE, dd/MM/yyyy',
-                        {
-                          locale: ptBR,
-                        },
-                      )}
-                    </TableCell>
-                    <TableCell>{record.clock_in}</TableCell>
-                    <TableCell>{record.clock_out || '-'}</TableCell>
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Entrada</TableHead>
+                    <TableHead>Saída</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {paginatedHistory.map((record) => (
+                    <TableRow key={record.id}>
+                      <TableCell className="font-medium capitalize">
+                        {format(
+                          parseISO(`${record.date}T00:00:00`),
+                          'EEE, dd/MM/yyyy',
+                          {
+                            locale: ptBR,
+                          },
+                        )}
+                      </TableCell>
+                      <TableCell>{record.clock_in}</TableCell>
+                      <TableCell>{record.clock_out || '-'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between pt-4">
+                  <div className="text-sm text-muted-foreground">
+                    Página {currentPage} de {totalPages}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronLeft className="w-4 h-4 mr-1" />
+                      Anterior
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                    >
+                      Próxima
+                      <ChevronRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

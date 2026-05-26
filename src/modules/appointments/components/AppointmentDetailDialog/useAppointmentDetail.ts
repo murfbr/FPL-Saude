@@ -304,8 +304,8 @@ export function useAppointmentDetail({
   const canEdit = ['scheduled'].includes(displayStatus)
   const isAdmin = role === 'admin'
   const canChangeStatus = isAdmin || role === 'professional'
-  const canReschedule = isAdmin || config?.features?.professionals_can_reschedule
-  const canViewFinancials = isAdmin || config?.features?.professionals_can_view_financials
+  const canReschedule = isAdmin || config?.roles?.[role || 'professional']?.features?.includes('reschedule')
+  const canViewFinancials = isAdmin || config?.roles?.[role || 'professional']?.features?.includes('view_financials')
 
   return {
     state: {

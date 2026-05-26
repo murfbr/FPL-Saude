@@ -63,153 +63,154 @@ const OverlayCleanup = () => {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-  <ErrorBoundary>
-    <BrowserRouter
-      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
-    >
-      <Analytics />
-      <OverlayCleanup />
-      <AuthProvider>
-        <TenantProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <Routes>
-            {/* Landing Page */}
-            <Route path="/" element={<Landing />} />
+    <ErrorBoundary>
+      <BrowserRouter
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <Analytics />
+        <OverlayCleanup />
+        <AuthProvider>
+          <TenantProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <Routes>
+                {/* Landing Page */}
+                <Route path="/" element={<Landing />} />
 
-            {/* Public Routes */}
-            <Route element={<PublicLayout />}>
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-              <Route path="/forgot-password" element={<ForgotPassword />} />
-              <Route path="/reset-password" element={<ResetPassword />} />
-              <Route
-                path="/cliente-indisponivel"
-                element={<ClientAreaUnavailable />}
-              />
-              <Route path="/access-denied" element={<AccessDenied />} />
-            </Route>
+                {/* Public Routes */}
+                <Route element={<PublicLayout />}>
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/:companySlug/login" element={<Login />} />
+                  <Route path="/register" element={<Register />} />
+                  <Route path="/forgot-password" element={<ForgotPassword />} />
+                  <Route path="/reset-password" element={<ResetPassword />} />
+                  <Route
+                    path="/cliente-indisponivel"
+                    element={<ClientAreaUnavailable />}
+                  />
+                  <Route path="/access-denied" element={<AccessDenied />} />
+                </Route>
 
-            {/* Protected Routes - Flattened structure using RoleGuard for inner routes */}
-            <Route
-              element={
-                <ProtectedRoute>
-                  <Layout />
-                </ProtectedRoute>
-              }
-            >
-              {/* Dashboard Route (Internal Routing) */}
-              <Route path="/dashboard" element={<Index />} />
+                {/* Protected Routes - Flattened structure using RoleGuard for inner routes */}
+                <Route
+                  element={
+                    <ProtectedRoute>
+                      <Layout />
+                    </ProtectedRoute>
+                  }
+                >
+                  {/* Dashboard Route (Internal Routing) */}
+                  <Route path="/dashboard" element={<Index />} />
 
-              {/* Admin Routes - Using RoleGuard instead of nested ProtectedRoute */}
-              <Route path="/admin">
-                <Route
-                  index
-                  element={
-                    <RoleGuard allowedRoles={['admin']}>
-                      <AdminDashboard />
-                    </RoleGuard>
-                  }
-                />
-                <Route
-                  path="pacientes"
-                  element={
-                    <RoleGuard allowedRoles={['admin']}>
-                      <Patients />
-                    </RoleGuard>
-                  }
-                />
-                <Route
-                  path="pacientes/:id"
-                  element={
-                    <RoleGuard allowedRoles={['admin']}>
-                      <PatientDetail />
-                    </RoleGuard>
-                  }
-                />
-                <Route
-                  path="profissionais/:id"
-                  element={
-                    <RoleGuard allowedRoles={['admin']}>
-                      <ProfessionalDetail />
-                    </RoleGuard>
-                  }
-                />
-              </Route>
+                  {/* Admin Routes - Using RoleGuard instead of nested ProtectedRoute */}
+                  <Route path="/admin">
+                    <Route
+                      index
+                      element={
+                        <RoleGuard allowedRoles={['admin']}>
+                          <AdminDashboard />
+                        </RoleGuard>
+                      }
+                    />
+                    <Route
+                      path="pacientes"
+                      element={
+                        <RoleGuard allowedRoles={['admin']}>
+                          <Patients />
+                        </RoleGuard>
+                      }
+                    />
+                    <Route
+                      path="pacientes/:id"
+                      element={
+                        <RoleGuard allowedRoles={['admin']}>
+                          <PatientDetail />
+                        </RoleGuard>
+                      }
+                    />
+                    <Route
+                      path="profissionais/:id"
+                      element={
+                        <RoleGuard allowedRoles={['admin']}>
+                          <ProfessionalDetail />
+                        </RoleGuard>
+                      }
+                    />
+                  </Route>
 
-              {/* Professional Routes */}
-              <Route path="/profissional">
-                <Route
-                  index
-                  element={
-                    <RoleGuard allowedRoles={['professional', 'admin']}>
-                      <ProfessionalArea />
-                    </RoleGuard>
-                  }
-                />
-                <Route
-                  path="pacientes/:id"
-                  element={
-                    <RoleGuard allowedRoles={['professional', 'admin']}>
-                      <ProfessionalPatientDetail />
-                    </RoleGuard>
-                  }
-                />
-                <Route
-                  path="notifications"
-                  element={
-                    <RoleGuard allowedRoles={['professional', 'admin']}>
-                      <NotificationsPage />
-                    </RoleGuard>
-                  }
-                />
-              </Route>
-            </Route>
+                  {/* Professional Routes */}
+                  <Route path="/profissional">
+                    <Route
+                      index
+                      element={
+                        <RoleGuard allowedRoles={['professional', 'admin']}>
+                          <ProfessionalArea />
+                        </RoleGuard>
+                      }
+                    />
+                    <Route
+                      path="pacientes/:id"
+                      element={
+                        <RoleGuard allowedRoles={['professional', 'admin']}>
+                          <ProfessionalPatientDetail />
+                        </RoleGuard>
+                      }
+                    />
+                    <Route
+                      path="notifications"
+                      element={
+                        <RoleGuard allowedRoles={['professional', 'admin']}>
+                          <NotificationsPage />
+                        </RoleGuard>
+                      }
+                    />
+                  </Route>
+                </Route>
 
-            {/* Super-Admin Routes */}
-            <Route
-              element={
-                <ProtectedRoute>
-                  <SuperAdminLayout />
-                </ProtectedRoute>
-              }
-            >
-              <Route
-                path="/super-admin"
-                element={
-                  <SuperAdminGuard>
-                    <SuperAdminDashboard />
-                  </SuperAdminGuard>
-                }
-              />
-              <Route
-                path="/super-admin/companies/new"
-                element={
-                  <SuperAdminGuard>
-                    <CompanyForm />
-                  </SuperAdminGuard>
-                }
-              />
-              <Route
-                path="/super-admin/companies/:id"
-                element={
-                  <SuperAdminGuard>
-                    <CompanyDetail />
-                  </SuperAdminGuard>
-                }
-              />
-            </Route>
+                {/* Super-Admin Routes */}
+                <Route
+                  element={
+                    <ProtectedRoute>
+                      <SuperAdminLayout />
+                    </ProtectedRoute>
+                  }
+                >
+                  <Route
+                    path="/super-admin"
+                    element={
+                      <SuperAdminGuard>
+                        <SuperAdminDashboard />
+                      </SuperAdminGuard>
+                    }
+                  />
+                  <Route
+                    path="/super-admin/companies/new"
+                    element={
+                      <SuperAdminGuard>
+                        <CompanyForm />
+                      </SuperAdminGuard>
+                    }
+                  />
+                  <Route
+                    path="/super-admin/companies/:id"
+                    element={
+                      <SuperAdminGuard>
+                        <CompanyDetail />
+                      </SuperAdminGuard>
+                    }
+                  />
+                </Route>
 
-            {/* Catch-all for 404 */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </TooltipProvider>
-        </TenantProvider>
-      </AuthProvider>
-    </BrowserRouter>
-  </ErrorBoundary>
-  <ReloadPrompt />
+                {/* Catch-all for 404 */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </TooltipProvider>
+          </TenantProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
+    <ReloadPrompt />
   </QueryClientProvider>
 )
 

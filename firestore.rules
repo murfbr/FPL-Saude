@@ -3,14 +3,14 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Função auxiliar — verifica se o usuário logado é um super-admin ativo  ← NOVO
-    function isSuperAdmin() {                                                  // ← NOVO
-      return request.auth != null                                              // ← NOVO
+    // Verifica se o usuário é um super-admin ativo
+    function isSuperAdmin() {
+      return request.auth != null
         && exists(/databases/$(database)/documents/super_admins/$(request.auth.uid))
         && get(/databases/$(database)/documents/super_admins/$(request.auth.uid)).data.is_active == true;
-    }                                                                          // ← NOVO
+    }
 
-    // Função auxiliar — verifica se o usuário pertence à empresa solicitada (Com Fallback de Custom Claim)
+    // Verifica se o usuário pertence à empresa (Custom Claim com fallback no documento)
     function isUserInCompany(companyId) {
       return request.auth != null && (
         (request.auth.token.companyId != null && request.auth.token.companyId == companyId)
@@ -18,64 +18,89 @@ service cloud.firestore {
       );
     }
 
-    // Função auxiliar — RBAC Dinâmico por módulo lendo da configuração da Empresa  ← NOVO
-    function hasModuleAccess(companyId, moduleName, action) {                  // ← NOVO
-      let userRole = request.auth.token.role != null                           // ← NOVO
-        ? request.auth.token.role                                              // ← NOVO
-        : get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role; // ← NOVO
-
-      let companyDoc = get(/databases/$(database)/documents/companies/$(companyId)); // ← NOVO
-      let companyRoles = companyDoc.data.get('roles', {});                     // ← NOVO
-      let rolePerms = companyRoles.get(userRole, {});                          // ← NOVO
-      let allowedArray = action == 'write' ? rolePerms.get('can_edit', []) : rolePerms.get('can_view', []); // ← NOVO
-      
-      return userRole == 'admin'                                               // ← NOVO
-        || isSuperAdmin()                                                      // ← NOVO
-        || moduleName in allowedArray                                          // ← NOVO
-        || '*' in allowedArray;                                                // ← NOVO
+    // Resolve o role do usuário (token claim com fallback no documento)
+    function getUserRole() {
+      return request.auth.token.role != null
+        ? request.auth.token.role
+        : get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
     }
 
-    // Coleção de super-admins — somente leitura do próprio documento         ← NOVO
-    // Escrita bloqueada pelo app (criação só manual no Console do Firebase)   ← NOVO
-    match /super_admins/{uid} {                                                // ← NOVO
-      allow read: if request.auth != null && request.auth.uid == uid;          // ← NOVO
-      allow write: if false;                                                   // ← NOVO
-    }                                                                          // ← NOVO
+    // Verifica se o usuário é admin da empresa (role 'admin') ou super-admin
+    function isAdmin(companyId) {
+      return isSuperAdmin() || (isUserInCompany(companyId) && getUserRole() == 'admin');
+    }
 
-    // Perfis de usuário na raiz — cada usuário pode ler/escrever o próprio documento
-    // Super-admins podem ler e escrever qualquer documento (gestão de usuários) ← ALTERADO
+    // RBAC de LEITURA por módulo.
+    // Fallback: se a empresa não tiver 'roles' configurado no Firestore, libera para qualquer
+    // usuário da empresa (exceto client, que é bloqueado explicitamente no allow read).
+    function canViewModule(companyId, moduleName) {
+      let companyDoc = get(/databases/$(database)/documents/companies/$(companyId));
+      let companyRoles = companyDoc.data.get('roles', {});
+      let userRole = getUserRole();
+      let rolePerms = companyRoles.get(userRole, null);
+      let allowedArray = rolePerms != null ? rolePerms.get('can_view', []) : [];
+
+      return !('roles' in companyDoc.data)   // Sem campo roles → libera (empresa legada)
+        || companyRoles.size() == 0          // Campo roles vazio → libera
+        || rolePerms == null                 // Role não mapeado na empresa → libera
+        || allowedArray.size() == 0          // can_view não configurado → libera
+        || userRole == 'admin'               // Admin sempre passa
+        || moduleName in allowedArray        // Módulo explicitamente permitido
+        || '*' in allowedArray;              // Wildcard — acesso total
+    }
+
+    // RBAC de ESCRITA por módulo.
+    // Comportamento:
+    //   - 'client' nunca pode escrever.
+    //   - 'admin' sempre pode escrever.
+    //   - Se a empresa NÃO tem 'roles' configurado: professional e outros roles (não client) podem
+    //     escrever (fallback que reflete o DEFAULT_ROLES da aplicação).
+    //   - Se a empresa TEM 'roles' configurado: aplica can_edit estritamente.
+    function canEditModule(companyId, moduleName) {
+      let userRole = getUserRole();
+      let companyDoc = get(/databases/$(database)/documents/companies/$(companyId));
+      let companyRoles = companyDoc.data.get('roles', {});
+      let hasRolesConfig = 'roles' in companyDoc.data && companyRoles.size() > 0;
+      let rolePerms = hasRolesConfig ? companyRoles.get(userRole, null) : null;
+      let allowedArray = rolePerms != null ? rolePerms.get('can_edit', []) : [];
+
+      return userRole != 'client'                                          // Client nunca escreve
+        && (
+          userRole == 'admin'                                              // Admin sempre passa
+          || (!hasRolesConfig && userRole != 'client')                    // Sem config → não-client escreve
+          || (hasRolesConfig && rolePerms != null                         // Com config → verifica can_edit
+              && (moduleName in allowedArray || '*' in allowedArray))
+        );
+    }
+
+    // super_admins — leitura apenas do próprio documento, escrita nunca pelo app
+    match /super_admins/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // Perfis de usuário raiz — usuário lê/escreve o próprio, super-admin lê/escreve qualquer
     match /users/{uid} {
       allow read, write: if request.auth != null && (
         request.auth.uid == uid
-        || isSuperAdmin()                                                      // ← ALTERADO
+        || isSuperAdmin()
       );
     }
 
-    // Regra para liberar buscas do tipo collectionGroup nas novas subcoleções  ← ALTERADO
-    // Agora validam se o usuário pertence à empresa correta via o caminho do documento
+    // collectionGroup queries para subcoleções que cruzam empresas
     match /{path=**}/subscriptions/{subscriptionId} {
-      allow read, write: if request.auth != null && (
-        (request.auth.token.companyId != null && request.auth.token.companyId in path)
-        || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId in path
-        || isSuperAdmin()
-      );
+      allow read, write: if request.auth != null && isUserInCompany(path[1]);
     }
     match /{path=**}/packages/{packageId} {
-      allow read, write: if request.auth != null && (
-        (request.auth.token.companyId != null && request.auth.token.companyId in path)
-        || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId in path
-        || isSuperAdmin()
-      );
+      allow read, write: if request.auth != null && isUserInCompany(path[1]);
     }
 
-    // Escopo das empresas (SaaS)
+    // Escopo das empresas (SaaS multi-tenant)
     match /companies/{companyId} {
-      // Leitura pública mantida (igual a antes)
       allow read: if true;
-      // Super-admins podem escrever o documento de configuração da empresa  ← ALTERADO
-      allow write: if isSuperAdmin();                                          // ← ALTERADO
+      allow write: if isSuperAdmin();
 
-      // Coleção de Usuários dentro da empresa (mantida igual)
+      // Usuários dentro da empresa
       match /users/{userId} {
         allow read, write: if request.auth != null && (
           isUserInCompany(companyId)
@@ -83,18 +108,34 @@ service cloud.firestore {
         );
       }
 
-      // Demais coleções — Protegido por Tenant e Módulo (RBAC Dinâmico) ← ALTERADO
+      // Ponto eletrônico — o próprio profissional ou admins da empresa
+      match /professionals/{professionalId}/time_tracking/{recordId} {
+        allow read, write: if request.auth != null && (
+          isAdmin(companyId)
+          || (isUserInCompany(companyId)
+              && get(/databases/$(database)/documents/companies/$(companyId)/professionals/$(professionalId)).data.user_id == request.auth.uid)
+        );
+      }
+
+      // Demais coleções da empresa
       match /{module}/{document=**} {
-        allow read: if module != 'users' && (
-          isSuperAdmin() 
-          || (isUserInCompany(companyId) && hasModuleAccess(companyId, module, 'read'))
-          // Exceção de segurança: O profissional precisa ler o próprio perfil na hora do login para o sistema funcionar
-          || (module == 'professionals' && isUserInCompany(companyId) && resource.data.user_id == request.auth.uid)
+        // Leitura — RBAC com fallback permissivo para empresas sem config
+        allow read: if module != 'users' && request.auth != null && (
+          isAdmin(companyId)
+          || (isUserInCompany(companyId) && canViewModule(companyId, module))
+          // Profissional sempre lê o próprio perfil (necessário no login)
+          || (module == 'professionals' && isUserInCompany(companyId)
+              && resource.data.user_id == request.auth.uid)
+          // Catálogo público: serviços e planos para dropdowns
+          || ((module == 'services' || module == 'subscription_plans' || module == 'packages')
+              && isUserInCompany(companyId))
         );
-        allow write: if module != 'users' && (
-          isSuperAdmin() 
-          || (isUserInCompany(companyId) && hasModuleAccess(companyId, module, 'write'))
-        );
+
+        // Escrita — RBAC estrito: 'client' nunca escreve, config da empresa é respeitada,
+        // fallback para empresas sem config (DEFAULT_ROLES: professional pode editar)
+        allow write: if module != 'users' && request.auth != null
+          && isUserInCompany(companyId)
+          && canEditModule(companyId, module);
       }
     }
 

@@ -312,7 +312,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const resetPasswordForEmail = async (email: string) => {
     try {
-      await sendPasswordResetEmail(firebaseAuth, email)
+      const actionCodeSettings = {
+        url: `${window.location.origin}/reset-password`,
+        handleCodeInApp: false,
+      }
+      await sendPasswordResetEmail(firebaseAuth, email, actionCodeSettings)
       return { error: null }
     } catch (error) {
        return { error }
