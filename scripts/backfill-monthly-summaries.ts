@@ -57,7 +57,9 @@ async function recalculateMonth(companyId: string, month: Date) {
 
   const byProfessional: Record<string, any> = {}
   const byService: Record<string, any> = {}
-  const byPartnership: Record<string, { name: string; clientIds: Set<string>; sessionCount: number }> = {}
+  const byPartnership: Record<string, { name: string; clientIds: Set<string>; sessionCount: number; cancelled: number; no_show: number; revenue: number }> = {}
+  const byProfessionalService: Record<string, any> = {}
+  const byProfessionalPartnership: Record<string, any> = {}
 
   apptsSnap.forEach((docSnap) => {
     const a = docSnap.data()
@@ -70,10 +72,18 @@ async function recalculateMonth(companyId: string, month: Date) {
     const price = a.services?.price || 0
     const partnershipId = a.partnership_id as string | null
 
-    if (!byProfessional[profId]) byProfessional[profId] = { name: profName, completed: 0, revenue: 0 }
-    if (!byService[serviceId]) byService[serviceId] = { name: serviceName, count: 0, revenue: 0 }
+    if (!byProfessional[profId]) byProfessional[profId] = { name: profName, completed: 0, cancelled: 0, no_show: 0, revenue: 0 }
+    if (!byService[serviceId]) byService[serviceId] = { name: serviceName, count: 0, cancelled: 0, no_show: 0, revenue: 0 }
     if (partnershipId && !byPartnership[partnershipId]) {
-      byPartnership[partnershipId] = { name: '', clientIds: new Set(), sessionCount: 0 }
+      byPartnership[partnershipId] = { name: '', clientIds: new Set(), sessionCount: 0, cancelled: 0, no_show: 0, revenue: 0 }
+    }
+
+    const profSvcId = `${profId}_${serviceId}`
+    if (!byProfessionalService[profSvcId]) byProfessionalService[profSvcId] = { completed: 0, cancelled: 0, no_show: 0, revenue: 0 }
+
+    if (partnershipId) {
+      const profPartId = `${profId}_${partnershipId}`
+      if (!byProfessionalPartnership[profPartId]) byProfessionalPartnership[profPartId] = { completed: 0, cancelled: 0, no_show: 0, revenue: 0 }
     }
 
     if (a.status === 'completed') {
@@ -83,14 +93,37 @@ async function recalculateMonth(companyId: string, month: Date) {
       byProfessional[profId].revenue += price
       byService[serviceId].count++
       byService[serviceId].revenue += price
+      byProfessionalService[profSvcId].completed++
+      byProfessionalService[profSvcId].revenue += price
+
       if (partnershipId) {
         byPartnership[partnershipId].clientIds.add(a.client_id)
         byPartnership[partnershipId].sessionCount++
+        byPartnership[partnershipId].revenue += price
+        const profPartId = `${profId}_${partnershipId}`
+        byProfessionalPartnership[profPartId].completed++
+        byProfessionalPartnership[profPartId].revenue += price
       }
     } else if (a.status === 'cancelled') {
       cancelledAppointments++
+      byProfessional[profId].cancelled++
+      byService[serviceId].cancelled++
+      byProfessionalService[profSvcId].cancelled++
+      if (partnershipId) {
+        byPartnership[partnershipId].cancelled++
+        const profPartId = `${profId}_${partnershipId}`
+        byProfessionalPartnership[profPartId].cancelled++
+      }
     } else if (a.status === 'no_show') {
       noShowAppointments++
+      byProfessional[profId].no_show++
+      byService[serviceId].no_show++
+      byProfessionalService[profSvcId].no_show++
+      if (partnershipId) {
+        byPartnership[partnershipId].no_show++
+        const profPartId = `${profId}_${partnershipId}`
+        byProfessionalPartnership[profPartId].no_show++
+      }
     }
   })
 
@@ -109,6 +142,9 @@ async function recalculateMonth(companyId: string, month: Date) {
       name: data.name,
       clientCount: data.clientIds.size,
       sessionCount: data.sessionCount,
+      cancelled: data.cancelled,
+      no_show: data.no_show,
+      revenue: data.revenue,
     }
   }
 
@@ -127,6 +163,8 @@ async function recalculateMonth(companyId: string, month: Date) {
       by_professional: byProfessional,
       by_service: byService,
       by_partnership: byPartnershipSerialized,
+      by_professional_service: byProfessionalService,
+      by_professional_partnership: byProfessionalPartnership,
     })
 
   console.log(`  ✅ ${monthKey}: ${totalAppointments} agendamentos, R$ ${totalRevenue.toFixed(2)}`)

@@ -26,15 +26,23 @@ export interface MonthlySummary {
   // Breakdowns
   by_professional: Record<
     string,
-    { name: string; completed: number; revenue: number }
+    { name: string; completed: number; cancelled: number; no_show: number; revenue: number }
   >
   by_service: Record<
     string,
-    { name: string; count: number; revenue: number }
+    { name: string; count: number; cancelled: number; no_show: number; revenue: number }
   >
   by_partnership: Record<
     string,
-    { name: string; clientCount: number; sessionCount: number; revenue: number }
+    { name: string; clientCount: number; sessionCount: number; cancelled: number; no_show: number; revenue: number }
+  >
+  by_professional_service?: Record<
+    string,
+    { completed: number; cancelled: number; no_show: number; revenue: number }
+  >
+  by_professional_partnership?: Record<
+    string,
+    { completed: number; cancelled: number; no_show: number; revenue: number }
   >
 }
 
@@ -56,6 +64,8 @@ function emptyMonthSummary(month: string): MonthlySummary {
     by_professional: {},
     by_service: {},
     by_partnership: {},
+    by_professional_service: {},
+    by_professional_partnership: {},
   }
 }
 

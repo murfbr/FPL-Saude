@@ -27,6 +27,12 @@ export interface ModuleConfig {
   label: string
 }
 
+export interface NavbarGroup {
+  label?: string
+  icon?: string
+  modules: ModuleKey[]
+}
+
 export type RoleFeatureKey =
   | 'view_all_schedules'
   | 'view_all_clients'
@@ -79,6 +85,7 @@ export interface CompanyConfig {
   slug: string
   is_active: boolean
   branding: CompanyBranding
+  navbar_config?: NavbarGroup[]
   modules: Record<ModuleKey, ModuleConfig>
   roles: Record<string, RolePermissions>
   features?: Partial<CompanyFeatures>

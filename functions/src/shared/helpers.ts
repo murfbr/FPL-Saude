@@ -50,121 +50,112 @@ export function appointmentDelta(
     if (delta !== 0) updates[field] = Inc(delta)
   }
 
-  // ── Breakdowns (by_professional, by_service, by_partnership) ──────────
-  // Breakdowns contam apenas appointments COMPLETED.
-  const wasCompleted = bStatus === 'completed'
-  const isCompleted = aStatus === 'completed'
+  // ── Breakdowns (by_professional, by_service, by_partnership e matrizes cruzadas)
+  const isTrackedStatus = (s?: string) => s === 'completed' || s === 'cancelled' || s === 'no_show'
+  const wasTracked = isTrackedStatus(bStatus)
+  const isTracked = isTrackedStatus(aStatus)
 
-  if (wasCompleted || isCompleted) {
-    // Acumula deltas numéricos por ID antes de converter em FieldValue
-    const profAcc: Record<
-      string,
-      { name: string; completed: number; revenue: number }
-    > = {}
-    const svcAcc: Record<
-      string,
-      { name: string; count: number; revenue: number }
-    > = {}
-    const partAcc: Record<string, { sessionCount: number }> = {}
+  if (wasTracked || isTracked) {
+    const profAcc: Record<string, any> = {}
+    const svcAcc: Record<string, any> = {}
+    const partAcc: Record<string, any> = {}
+    const profSvcAcc: Record<string, any> = {}
+    const profPartAcc: Record<string, any> = {}
 
-    // Subtrair breakdown do estado anterior (se era completed)
-    if (wasCompleted && before) {
-      const pId = before.professional_id as string
-      const sId = before.service_id as string
-      const price = (before.services?.price as number) || 0
-      const partnId = before.partnership_id as string | null
+    const applyStats = (docData: firestore.DocumentData, status: string, multiplier: number) => {
+      const pId = docData.professional_id as string
+      const sId = docData.service_id as string
+      const price = (docData.services?.price as number) || 0
+      const partnId = docData.partnership_id as string | null
 
-      if (pId) {
-        profAcc[pId] = profAcc[pId] || {
-          name: (before.professionals?.name as string) || '',
-          completed: 0,
-          revenue: 0,
-        }
-        profAcc[pId].completed -= 1
-        profAcc[pId].revenue -= price
-      }
-      if (sId) {
-        svcAcc[sId] = svcAcc[sId] || {
-          name: (before.services?.name as string) || '',
-          count: 0,
-          revenue: 0,
-        }
-        svcAcc[sId].count -= 1
-        svcAcc[sId].revenue -= price
-      }
-      if (partnId) {
-        partAcc[partnId] = partAcc[partnId] || { sessionCount: 0 }
-        partAcc[partnId].sessionCount -= 1
-      }
-    }
-
-    // Adicionar breakdown do estado atual (se é completed)
-    if (isCompleted && after) {
-      const pId = after.professional_id as string
-      const sId = after.service_id as string
-      const price = (after.services?.price as number) || 0
-      const partnId = after.partnership_id as string | null
+      const isComp = status === 'completed' ? multiplier : 0
+      const isCanc = status === 'cancelled' ? multiplier : 0
+      const isNoSh = status === 'no_show' ? multiplier : 0
+      const revDelta = status === 'completed' ? price * multiplier : 0
 
       if (pId) {
-        profAcc[pId] = profAcc[pId] || {
-          name: (after.professionals?.name as string) || '',
-          completed: 0,
-          revenue: 0,
+        profAcc[pId] = profAcc[pId] || { name: (docData.professionals?.name as string) || '', completed: 0, cancelled: 0, no_show: 0, revenue: 0 }
+        if (multiplier > 0) profAcc[pId].name = (docData.professionals?.name as string) || profAcc[pId].name
+        profAcc[pId].completed += isComp
+        profAcc[pId].cancelled += isCanc
+        profAcc[pId].no_show += isNoSh
+        profAcc[pId].revenue += revDelta
+
+        if (sId) {
+          const crossId = `${pId}_${sId}`
+          profSvcAcc[crossId] = profSvcAcc[crossId] || { completed: 0, cancelled: 0, no_show: 0, revenue: 0 }
+          profSvcAcc[crossId].completed += isComp
+          profSvcAcc[crossId].cancelled += isCanc
+          profSvcAcc[crossId].no_show += isNoSh
+          profSvcAcc[crossId].revenue += revDelta
         }
-        // Prioriza o nome mais recente
-        profAcc[pId].name =
-          (after.professionals?.name as string) || profAcc[pId].name
-        profAcc[pId].completed += 1
-        profAcc[pId].revenue += price
+
+        if (partnId) {
+          const crossId = `${pId}_${partnId}`
+          profPartAcc[crossId] = profPartAcc[crossId] || { completed: 0, cancelled: 0, no_show: 0, revenue: 0 }
+          profPartAcc[crossId].completed += isComp
+          profPartAcc[crossId].cancelled += isCanc
+          profPartAcc[crossId].no_show += isNoSh
+          profPartAcc[crossId].revenue += revDelta
+        }
       }
+
       if (sId) {
-        svcAcc[sId] = svcAcc[sId] || {
-          name: (after.services?.name as string) || '',
-          count: 0,
-          revenue: 0,
-        }
-        svcAcc[sId].name =
-          (after.services?.name as string) || svcAcc[sId].name
-        svcAcc[sId].count += 1
-        svcAcc[sId].revenue += price
+        svcAcc[sId] = svcAcc[sId] || { name: (docData.services?.name as string) || '', count: 0, cancelled: 0, no_show: 0, revenue: 0 }
+        if (multiplier > 0) svcAcc[sId].name = (docData.services?.name as string) || svcAcc[sId].name
+        svcAcc[sId].count += isComp
+        svcAcc[sId].cancelled += isCanc
+        svcAcc[sId].no_show += isNoSh
+        svcAcc[sId].revenue += revDelta
       }
+
       if (partnId) {
-        partAcc[partnId] = partAcc[partnId] || { sessionCount: 0 }
-        partAcc[partnId].sessionCount += 1
+        partAcc[partnId] = partAcc[partnId] || { sessionCount: 0, cancelled: 0, no_show: 0, revenue: 0 }
+        partAcc[partnId].sessionCount += isComp
+        partAcc[partnId].cancelled += isCanc
+        partAcc[partnId].no_show += isNoSh
+        partAcc[partnId].revenue += revDelta
       }
     }
 
-    // Converter acumuladores em FieldValue.increment para o Firestore
-    const profObj: Record<string, any> = {}
-    for (const [id, d] of Object.entries(profAcc)) {
-      if (d.completed !== 0 || d.revenue !== 0) {
-        profObj[id] = { name: d.name }
-        if (d.completed !== 0) profObj[id].completed = Inc(d.completed)
-        if (d.revenue !== 0) profObj[id].revenue = Inc(d.revenue)
-      }
+    if (wasTracked && before) {
+      applyStats(before, bStatus!, -1)
     }
+    if (isTracked && after) {
+      applyStats(after, aStatus!, 1)
+    }
+
+    const buildUpdate = (acc: Record<string, any>, nameField: string | null = null, countField: string = 'completed') => {
+      const obj: Record<string, any> = {}
+      for (const [id, d] of Object.entries(acc)) {
+        if (d[countField] !== 0 || d.revenue !== 0 || d.cancelled !== 0 || d.no_show !== 0) {
+          obj[id] = {}
+          if (nameField && d[nameField]) obj[id][nameField] = d[nameField]
+          if (d[countField] !== 0) obj[id][countField] = Inc(d[countField])
+          if (d.cancelled !== 0) obj[id].cancelled = Inc(d.cancelled)
+          if (d.no_show !== 0) obj[id].no_show = Inc(d.no_show)
+          if (d.revenue !== 0) obj[id].revenue = Inc(d.revenue)
+        }
+      }
+      return obj
+    }
+
+    const profObj = buildUpdate(profAcc, 'name', 'completed')
     if (Object.keys(profObj).length > 0) updates.by_professional = profObj
 
-    const svcObj: Record<string, any> = {}
-    for (const [id, d] of Object.entries(svcAcc)) {
-      if (d.count !== 0 || d.revenue !== 0) {
-        svcObj[id] = { name: d.name }
-        if (d.count !== 0) svcObj[id].count = Inc(d.count)
-        if (d.revenue !== 0) svcObj[id].revenue = Inc(d.revenue)
-      }
-    }
+    const svcObj = buildUpdate(svcAcc, 'name', 'count')
     if (Object.keys(svcObj).length > 0) updates.by_service = svcObj
 
-    const partObj: Record<string, any> = {}
-    for (const [id, d] of Object.entries(partAcc)) {
-      if (d.sessionCount !== 0) {
-        partObj[id] = { sessionCount: Inc(d.sessionCount) }
-      }
-    }
+    const partObj = buildUpdate(partAcc, null, 'sessionCount')
     if (Object.keys(partObj).length > 0) updates.by_partnership = partObj
+
+    const profSvcObj = buildUpdate(profSvcAcc, null, 'completed')
+    if (Object.keys(profSvcObj).length > 0) updates.by_professional_service = profSvcObj
+
+    const profPartObj = buildUpdate(profPartAcc, null, 'completed')
+    if (Object.keys(profPartObj).length > 0) updates.by_professional_partnership = profPartObj
   }
 
-  // Se o único campo é updated_at, não há mudança real → skip write
   const hasReal = Object.keys(updates).some((k) => k !== 'updated_at')
   return hasReal ? updates : null
 }

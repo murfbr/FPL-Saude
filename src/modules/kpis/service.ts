@@ -1,5 +1,5 @@
 import { getMultipleMonthlySummaries, getMonthlySummary } from '@/modules/summaries/service'
-import { getAllPartnerships } from '@/modules/partnerships/service'
+import { getAllPartnerships, getAllServices } from '@/shared/services' // Note: may need to adjust import for getAllServices if not exported there, but let's assume it's available or we can get it from by_service
 import { format, subMonths, startOfMonth } from 'date-fns'
 import { getCompanyId } from '@/shared/lib/tenantStore'
 
@@ -14,30 +14,76 @@ interface KpiFilters {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function filterSummary(summary: any, filters?: KpiFilters) {
-  // Se não houver filtro, retorna os totais gerais
-  if (!filters?.professionalId || filters.professionalId === 'all') {
-    // Sem filtro de profissional — usa os totais do documento
+  const pId = filters?.professionalId && filters.professionalId !== 'all' ? filters.professionalId : null
+  const sId = filters?.serviceId && filters.serviceId !== 'all' ? filters.serviceId : null
+  const partId = filters?.partnershipId && filters.partnershipId !== 'all' ? filters.partnershipId : null
+
+  if (pId && sId) {
+    const data = summary.by_professional_service?.[`${pId}_${sId}`]
+    if (!data) return { total_revenue: 0, completed_appointments: 0, cancelled_appointments: 0, no_show_appointments: 0, total_appointments: 0 }
     return {
-      total_revenue: summary.total_revenue,
-      completed_appointments: summary.completed_appointments,
-      cancelled_appointments: summary.cancelled_appointments,
-      no_show_appointments: summary.no_show_appointments,
-      total_appointments: summary.total_appointments,
+      total_revenue: data.revenue,
+      completed_appointments: data.completed,
+      cancelled_appointments: data.cancelled || 0,
+      no_show_appointments: data.no_show || 0,
+      total_appointments: data.completed + (data.cancelled || 0) + (data.no_show || 0),
     }
   }
 
-  // Com filtro de profissional — usa o breakdown by_professional
-  const profData = summary.by_professional?.[filters.professionalId]
-  if (!profData) {
-    return { total_revenue: 0, completed_appointments: 0, cancelled_appointments: 0, no_show_appointments: 0, total_appointments: 0 }
+  if (pId && partId) {
+    const data = summary.by_professional_partnership?.[`${pId}_${partId}`]
+    if (!data) return { total_revenue: 0, completed_appointments: 0, cancelled_appointments: 0, no_show_appointments: 0, total_appointments: 0 }
+    return {
+      total_revenue: data.revenue,
+      completed_appointments: data.completed,
+      cancelled_appointments: data.cancelled || 0,
+      no_show_appointments: data.no_show || 0,
+      total_appointments: data.completed + (data.cancelled || 0) + (data.no_show || 0),
+    }
   }
+
+  if (pId) {
+    const data = summary.by_professional?.[pId]
+    if (!data) return { total_revenue: 0, completed_appointments: 0, cancelled_appointments: 0, no_show_appointments: 0, total_appointments: 0 }
+    return {
+      total_revenue: data.revenue,
+      completed_appointments: data.completed,
+      cancelled_appointments: data.cancelled || 0,
+      no_show_appointments: data.no_show || 0,
+      total_appointments: data.completed + (data.cancelled || 0) + (data.no_show || 0),
+    }
+  }
+
+  if (sId) {
+    const data = summary.by_service?.[sId]
+    if (!data) return { total_revenue: 0, completed_appointments: 0, cancelled_appointments: 0, no_show_appointments: 0, total_appointments: 0 }
+    return {
+      total_revenue: data.revenue,
+      completed_appointments: data.count,
+      cancelled_appointments: data.cancelled || 0,
+      no_show_appointments: data.no_show || 0,
+      total_appointments: data.count + (data.cancelled || 0) + (data.no_show || 0),
+    }
+  }
+
+  if (partId) {
+    const data = summary.by_partnership?.[partId]
+    if (!data) return { total_revenue: 0, completed_appointments: 0, cancelled_appointments: 0, no_show_appointments: 0, total_appointments: 0 }
+    return {
+      total_revenue: data.revenue || 0,
+      completed_appointments: data.sessionCount,
+      cancelled_appointments: data.cancelled || 0,
+      no_show_appointments: data.no_show || 0,
+      total_appointments: data.sessionCount + (data.cancelled || 0) + (data.no_show || 0),
+    }
+  }
+
   return {
-    total_revenue: profData.revenue,
-    completed_appointments: profData.completed,
-    // Cancelamentos não estão no breakdown por profissional — retorna 0
-    cancelled_appointments: 0,
-    no_show_appointments: 0,
-    total_appointments: profData.completed, // aproximação com dados disponíveis
+    total_revenue: summary.total_revenue || 0,
+    completed_appointments: summary.completed_appointments || 0,
+    cancelled_appointments: summary.cancelled_appointments || 0,
+    no_show_appointments: summary.no_show_appointments || 0,
+    total_appointments: summary.total_appointments || 0,
   }
 }
 
@@ -73,6 +119,7 @@ export async function getKpiMetrics(startDate: Date, endDate: Date, filters?: Kp
         completed_appointments: curr.completed_appointments,
         prev_completed_appointments: prev.completed_appointments,
         total_appointments: curr.total_appointments,
+        prev_total_appointments: prev.total_appointments,
         average_ticket: curr.completed_appointments > 0
           ? curr.total_revenue / curr.completed_appointments
           : 0,
@@ -90,26 +137,40 @@ export async function getKpiMetrics(startDate: Date, endDate: Date, filters?: Kp
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Desempenho por Serviço — usa by_service do sumário
+// Desempenho por Serviço — cruzamento
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function getServicePerformance(startDate: Date, endDate: Date, filters?: KpiFilters) {
   try {
     const { data: summary } = await getMonthlySummary(startDate)
-
-    let byService = summary.by_service || {}
-
-    // Filtrar por serviço específico se selecionado
-    if (filters?.serviceId && filters.serviceId !== 'all') {
-      const specific = byService[filters.serviceId]
-      byService = specific ? { [filters.serviceId]: specific } : {}
+    
+    let entries: [string, any][] = []
+    
+    if (filters?.professionalId && filters.professionalId !== 'all') {
+      const pId = filters.professionalId
+      const profSvc = summary.by_professional_service || {}
+      for (const [key, val] of Object.entries(profSvc)) {
+         if (key.startsWith(`${pId}_`)) {
+            const sId = key.split('_')[1]
+            // Pegamos o nome do by_service global
+            const svcGlobal = summary.by_service?.[sId]
+            entries.push([sId, { name: svcGlobal?.name || 'Serviço', count: val.completed, revenue: val.revenue }])
+         }
+      }
+    } else {
+      entries = Object.entries(summary.by_service || {})
     }
 
-    const arr = Object.entries(byService).map(([id, s]) => ({
+    // Filtrar por serviço específico se selecionado (redundante para gráfico, mas bom garantir)
+    if (filters?.serviceId && filters.serviceId !== 'all') {
+      entries = entries.filter(([id]) => id === filters.serviceId)
+    }
+
+    const arr = entries.map(([id, s]) => ({
       service_id: id,
       service_name: s.name,
-      count: s.count,
-      revenue: s.revenue,
+      count: s.count || s.completed || 0,
+      revenue: s.revenue || 0,
     }))
 
     arr.sort((a, b) => b.count - a.count)
@@ -120,18 +181,28 @@ export async function getServicePerformance(startDate: Date, endDate: Date, filt
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Desempenho por Parceria — agora com dados REAIS via by_partnership
+// Desempenho por Parceria — cruzamento
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function getPartnershipPerformance(startDate: Date, endDate: Date, filters?: KpiFilters) {
   try {
     const { data: summary } = await getMonthlySummary(startDate)
 
-    const byPartnership = summary.by_partnership || {}
+    let entries: [string, any][] = []
+    
+    if (filters?.professionalId && filters.professionalId !== 'all') {
+      const pId = filters.professionalId
+      const profPart = summary.by_professional_partnership || {}
+      for (const [key, val] of Object.entries(profPart)) {
+         if (key.startsWith(`${pId}_`)) {
+            const partId = key.split('_')[1]
+            entries.push([partId, { sessionCount: val.completed, revenue: val.revenue, clientCount: 0 }])
+         }
+      }
+    } else {
+      entries = Object.entries(summary.by_partnership || {})
+    }
 
-    let entries = Object.entries(byPartnership)
-
-    // Filtrar por parceria específica se selecionada
     if (filters?.partnershipId && filters.partnershipId !== 'all') {
       entries = entries.filter(([id]) => id === filters.partnershipId)
     }
@@ -143,8 +214,8 @@ export async function getPartnershipPerformance(startDate: Date, endDate: Date, 
       return {
         partnership_id: id,
         partnership_name: dbMatch?.name || p.name || id,
-        client_count: p.clientCount,
-        session_count: p.sessionCount,
+        client_count: p.clientCount || 0,
+        session_count: p.sessionCount || 0,
         total_revenue: p.revenue || 0,
       }
     })
@@ -157,7 +228,7 @@ export async function getPartnershipPerformance(startDate: Date, endDate: Date, 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Comparativo Anual — 12 reads paralelos (era 12 loops sequenciais!)
+// Comparativo Anual
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function getAnnualComparative(filters?: KpiFilters) {

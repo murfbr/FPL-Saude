@@ -14,6 +14,7 @@ import { ModulesTab } from '@/modules/super-admin/components/CompanyDetail/Modul
 import { BrandingTab } from '@/modules/super-admin/components/CompanyDetail/BrandingTab'
 import { RolesTab } from '@/modules/super-admin/components/CompanyDetail/RolesTab'
 import { UsersTab } from '@/modules/super-admin/components/CompanyDetail/UsersTab'
+import { NavbarTab } from '@/modules/super-admin/components/CompanyDetail/NavbarTab'
 
 const CompanyDetail = () => {
   const { id } = useParams<{ id: string }>()
@@ -94,13 +95,13 @@ const CompanyDetail = () => {
         <CardContent className="p-0">
           <Tabs defaultValue="modules" className="w-full">
             <TabsList className="w-full justify-start rounded-none border-b bg-transparent h-auto p-0">
-              {['modules', 'branding', 'roles', 'users'].map((tab) => (
+              {['modules', 'branding', 'roles', 'users', 'navbar'].map((tab) => (
                 <TabsTrigger
                   key={tab}
                   value={tab}
                   className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-3"
                 >
-                  {{ modules: 'Módulos', branding: 'Branding', roles: 'Matriz de Permissões', users: 'Usuários' }[tab]}
+                  {{ modules: 'Módulos', branding: 'Branding', roles: 'Matriz de Permissões', users: 'Usuários', navbar: 'Navegação' }[tab]}
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -117,6 +118,9 @@ const CompanyDetail = () => {
               </TabsContent>
               <TabsContent value="users">
                 <UsersTab company={company} />
+              </TabsContent>
+              <TabsContent value="navbar">
+                <NavbarTab company={company} onUpdate={setCompany} />
               </TabsContent>
             </div>
           </Tabs>

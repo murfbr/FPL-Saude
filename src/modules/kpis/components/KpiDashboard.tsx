@@ -16,7 +16,6 @@ import {
   Users,
   Handshake,
   Ticket,
-  UserCheck,
 } from 'lucide-react'
 import { DateRange } from 'react-day-picker'
 import { startOfMonth } from 'date-fns'
@@ -73,47 +72,55 @@ const KpiCard = ({
   comparison,
   icon: Icon,
   isLoading,
+  invertColors = false,
 }: {
   title: string
   value: string | number
   comparison?: number
   icon: React.ElementType
   isLoading: boolean
-}) => (
-  <Card>
-    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-      <CardTitle className="text-sm font-medium">{title}</CardTitle>
-      <Icon className="h-4 w-4 text-muted-foreground" />
-    </CardHeader>
-    <CardContent>
-      {isLoading ? (
-        <>
-          <Skeleton className="h-8 w-32" />
-          <Skeleton className="h-4 w-48 mt-1" />
-        </>
-      ) : (
-        <>
-          <div className="text-2xl font-bold">{value}</div>
-          {comparison !== undefined && (
-            <p
-              className={cn(
-                'text-xs text-muted-foreground flex items-center',
-                comparison >= 0 ? 'text-green-600' : 'text-red-600',
-              )}
-            >
-              {comparison >= 0 ? (
-                <TrendingUp className="h-4 w-4 mr-1" />
-              ) : (
-                <TrendingDown className="h-4 w-4 mr-1" />
-              )}
-              {comparison.toFixed(1)}% em relação ao período anterior
-            </p>
-          )}
-        </>
-      )}
-    </CardContent>
-  </Card>
-)
+  invertColors?: boolean
+}) => {
+  const isPositive = comparison && comparison > 0 ? true : false
+  const colorClass = comparison === 0 || !comparison
+    ? 'text-muted-foreground'
+    : (isPositive && !invertColors) || (!isPositive && invertColors)
+      ? 'text-green-600'
+      : 'text-red-600'
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <Icon className="h-4 w-4 text-muted-foreground" />
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <>
+            <Skeleton className="h-8 w-32" />
+            <Skeleton className="h-4 w-48 mt-1" />
+          </>
+        ) : (
+          <>
+            <div className="text-2xl font-bold">{value}</div>
+            {comparison !== undefined && (
+              <p
+                className={cn('text-xs flex items-center mt-1', colorClass)}
+              >
+                {comparison >= 0 ? (
+                  <TrendingUp className="h-4 w-4 mr-1" />
+                ) : (
+                  <TrendingDown className="h-4 w-4 mr-1" />
+                )}
+                {comparison.toFixed(1)}% em relação ao período anterior
+              </p>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
 
 const serviceChartConfig = {
   count: {
@@ -127,8 +134,8 @@ const serviceChartConfig = {
 } satisfies ChartConfig
 
 const partnershipChartConfig = {
-  client_count: {
-    label: 'Clientes',
+  session_count: {
+    label: 'Sessões',
     color: 'hsl(var(--chart-1))',
   },
   total_revenue: {
@@ -176,7 +183,7 @@ export const KpiDashboard = () => {
   useEffect(() => {
     const fetchOptions = async () => {
       const [profRes, servRes, partRes] = await Promise.all([
-        getAllProfessionals(),
+        getAllProfessionals({ activeOnly: true }),
         getAllServices(),
         getAllPartnerships(),
       ])
@@ -243,10 +250,21 @@ export const KpiDashboard = () => {
         ? 100
         : 0
 
-  const retentionComparison =
-    kpis && kpis.prev_retention_rate > 0
-      ? kpis.retention_rate - kpis.prev_retention_rate // Percentage point diff
-      : 0
+  const totalAppointmentsComparison =
+    kpis && kpis.prev_total_appointments > 0
+      ? ((kpis.total_appointments - kpis.prev_total_appointments) /
+          kpis.prev_total_appointments) *
+        100
+      : kpis?.total_appointments > 0
+        ? 100
+        : 0
+
+  const tooltipFormatter = (value: any, name: any) => {
+    if (name === 'Faturamento' || name === 'revenue' || name === 'total_revenue') {
+      return formatCurrency(value as number)
+    }
+    return new Intl.NumberFormat('pt-BR').format(value as number)
+  }
 
   return (
     <div className="space-y-6">
@@ -330,8 +348,9 @@ export const KpiDashboard = () => {
         </div>
         <div className="xl:col-span-2">
           <KpiCard
-            title="Agendamentos Totais"
+            title="Evolução de Agendamentos"
             value={kpis?.total_appointments ?? 0}
+            comparison={totalAppointmentsComparison}
             icon={Users}
             isLoading={isLoading}
           />
@@ -348,16 +367,7 @@ export const KpiDashboard = () => {
         </div>
         <div className="xl:col-span-2">
           <KpiCard
-            title="Taxa de Retenção"
-            value={formatPercentage(kpis?.retention_rate)}
-            comparison={retentionComparison}
-            icon={UserCheck}
-            isLoading={isLoading}
-          />
-        </div>
-        <div className="xl:col-span-2">
-          <KpiCard
-            title="Cancelamentos"
+            title="Cancelamentos / Faltas"
             value={formatPercentage(kpis?.cancellation_rate)}
             comparison={
               kpis
@@ -366,17 +376,21 @@ export const KpiDashboard = () => {
             }
             icon={TrendingDown}
             isLoading={isLoading}
+            invertColors
           />
+        </div>
+        <div className="xl:col-span-2">
+          {/* Card vazio ou espaço reservado, podemos usar no futuro */}
         </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-base md:text-lg">
               <BarChart className="h-5 w-5" /> Desempenho dos Serviços
             </CardTitle>
-            <Tabs value={serviceChartMetric} onValueChange={(val) => setServiceChartMetric(val as any)} className="w-[200px]">
+            <Tabs value={serviceChartMetric} onValueChange={(val) => setServiceChartMetric(val as any)} className="w-[180px] md:w-[200px]">
               <TabsList className="grid w-full grid-cols-2 h-8">
                 <TabsTrigger value="count" className="text-xs">Sessões</TabsTrigger>
                 <TabsTrigger value="revenue" className="text-xs">Faturamento</TabsTrigger>
@@ -386,7 +400,7 @@ export const KpiDashboard = () => {
           <CardContent>
             <ChartContainer
               config={serviceChartConfig}
-              className="h-[300px] w-full"
+              className="h-[350px] w-full"
             >
               {serviceData.length === 0 ? (
                 <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -394,16 +408,17 @@ export const KpiDashboard = () => {
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
-                  <RechartsBarChart data={serviceData} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" />
+                  <RechartsBarChart data={serviceData} layout="vertical" margin={{ left: 0, right: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
+                    <XAxis type="number" hide />
                     <YAxis
                       type="category"
                       dataKey="service_name"
                       width={120}
                       tick={{ fontSize: 12 }}
+                      tickFormatter={(value) => value.length > 15 ? `${value.substring(0, 15)}...` : value}
                     />
-                    <Tooltip content={<ChartTooltipContent />} />
+                    <Tooltip content={<ChartTooltipContent formatter={tooltipFormatter} />} />
                     <ChartLegend content={<ChartLegendContent />} />
                     {serviceChartMetric === 'count' ? (
                       <RechartsBar
@@ -428,14 +443,14 @@ export const KpiDashboard = () => {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-base md:text-lg">
               <Handshake className="h-5 w-5" /> Desempenho das Parcerias
             </CardTitle>
           </CardHeader>
           <CardContent>
             <ChartContainer
               config={partnershipChartConfig}
-              className="h-[300px] w-full"
+              className="h-[350px] w-full"
             >
               {partnershipData.length === 0 ? (
                 <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -443,32 +458,29 @@ export const KpiDashboard = () => {
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
-                  <RechartsBarChart data={partnershipData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis
+                  <RechartsBarChart data={partnershipData} layout="vertical" margin={{ left: 0, right: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
+                    <XAxis type="number" hide />
+                    <YAxis
+                      type="category"
                       dataKey="partnership_name"
+                      width={120}
                       tick={{ fontSize: 12 }}
-                      angle={-45}
-                      textAnchor="end"
-                      height={60}
+                      tickFormatter={(value) => value.length > 15 ? `${value.substring(0, 15)}...` : value}
                     />
-                    <YAxis yAxisId="left" orientation="left" stroke="#8884d8" />
-                    <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" />
-                    <Tooltip content={<ChartTooltipContent />} />
+                    <Tooltip content={<ChartTooltipContent formatter={tooltipFormatter} />} />
                     <ChartLegend content={<ChartLegendContent />} />
                     <RechartsBar
-                      yAxisId="left"
-                      dataKey="client_count"
-                      fill="var(--color-client_count)"
-                      name="Clientes"
-                      radius={[4, 4, 0, 0]}
+                      dataKey="session_count"
+                      fill="var(--color-session_count)"
+                      name="Sessões"
+                      radius={[0, 4, 4, 0]}
                     />
                     <RechartsBar
-                      yAxisId="right"
                       dataKey="total_revenue"
                       fill="var(--color-total_revenue)"
                       name="Faturamento"
-                      radius={[4, 4, 0, 0]}
+                      radius={[0, 4, 4, 0]}
                     />
                   </RechartsBarChart>
                 </ResponsiveContainer>
@@ -492,17 +504,19 @@ export const KpiDashboard = () => {
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={annualData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis />
-                    <Tooltip content={<ChartTooltipContent />} />
+                  <LineChart data={annualData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={10} />
+                    <YAxis tickLine={false} axisLine={false} tickFormatter={(value) => value >= 1000 ? `${value / 1000}k` : value} />
+                    <Tooltip content={<ChartTooltipContent formatter={tooltipFormatter} />} />
                     <ChartLegend content={<ChartLegendContent />} />
                     <Line
                       type="monotone"
                       dataKey="total_revenue"
                       stroke="var(--color-total_revenue)"
                       name="Faturamento"
+                      strokeWidth={3}
+                      dot={false}
                       activeDot={{ r: 6, opacity: 0.8 }}
                     />
                     <Line
@@ -510,6 +524,8 @@ export const KpiDashboard = () => {
                       dataKey="total_appointments"
                       stroke="var(--color-total_appointments)"
                       name="Sessões"
+                      strokeWidth={3}
+                      dot={false}
                       activeDot={{ r: 6, opacity: 0.8 }}
                     />
                   </LineChart>

@@ -1,3 +1,4 @@
+import React from 'react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -7,7 +8,6 @@ import {
 import { Button } from '@/components/ui/button'
 import {
   Calendar,
-  CalendarDays as CalendarIcon,
   LayoutDashboard,
   BarChart,
   CreditCard,
@@ -20,189 +20,150 @@ import {
   ChevronDown,
   Database,
   Camera,
+  FolderTree
 } from 'lucide-react'
 
 import { cn } from '@/shared/lib/utils'
 import { useTenant } from '@/shared/contexts/TenantContext'
+import type { ModuleKey, NavbarGroup } from '@/shared/types/tenant'
 
 interface AdminNavMenuProps {
   currentTab: string
   onTabChange: (value: string) => void
 }
 
+const ICON_MAP: Record<string, React.ElementType> = {
+  agenda: Calendar,
+  overview: BarChart,
+  kpi: LayoutDashboard,
+  financial: CreditCard,
+  financials: CreditCard,
+  gallery: Camera,
+  patients: Users,
+  clients: Users,
+  professionals: Briefcase,
+  partnerships: Handshake,
+  services: Stethoscope,
+  time_tracking: Clock,
+  messages: MessageSquare,
+  notifications: MessageSquare,
+  maintenance: Database,
+  default: FolderTree
+}
+
+const MODULE_LABELS: Record<string, string> = {
+  agenda: 'Agenda',
+  overview: 'Visão Geral',
+  kpi: 'Indicadores',
+  financial: 'Gestão Financeira',
+  financials: 'Gestão Financeira',
+  gallery: 'Galeria Clínica',
+  patients: 'Pacientes',
+  clients: 'Pacientes',
+  professionals: 'Profissionais',
+  partnerships: 'Parcerias',
+  services: 'Serviços e Pacotes',
+  time_tracking: 'Ponto Eletrônico',
+  messages: 'Confirmações',
+  notifications: 'Confirmações',
+  maintenance: 'Manutenção de Dados',
+}
+
+const DEFAULT_NAVBAR: NavbarGroup[] = [
+  {
+    modules: ['agenda'] as unknown as ModuleKey[]
+  },
+  {
+    label: 'Gestão',
+    modules: ['overview', 'kpi', 'financials', 'gallery'] as unknown as ModuleKey[]
+  },
+  {
+    label: 'Cadastros',
+    modules: ['patients', 'professionals', 'partnerships'] as unknown as ModuleKey[]
+  },
+  {
+    label: 'Administrativo',
+    modules: ['services', 'time_tracking', 'messages', 'maintenance'] as unknown as ModuleKey[]
+  }
+]
+
 export function AdminNavMenu({ currentTab, onTabChange }: AdminNavMenuProps) {
   const { config } = useTenant()
 
-  const isEnabled = (key: string) =>
-    config?.modules ? config.modules[key as keyof typeof config.modules]?.enabled !== false : true
+  const isEnabled = (key: string) => {
+    // Agenda is always enabled as it's the core module
+    if (key === 'agenda') return true;
+    return config?.modules ? config.modules[key as keyof typeof config.modules]?.enabled !== false : true
+  }
 
-  const gestaoTabs = ['overview', 'kpi', 'financials', 'gallery'].filter(isEnabled)
-  const cadastrosTabs = ['patients', 'professionals', 'partnerships'].filter(isEnabled)
-  const administrativoTabs = ['services', 'time_tracking', 'messages', 'maintenance'].filter(isEnabled)
+  // Fallback to default if no navbar_config exists
+  const navbarConfig = config?.navbar_config && config.navbar_config.length > 0 
+    ? config.navbar_config 
+    : DEFAULT_NAVBAR
 
   return (
     <div className="flex flex-wrap gap-2 items-center">
-      {/* Agenda - Direct Link */}
-      {isEnabled('agenda') && (
-        <Button
-          variant={currentTab === 'agenda' ? 'secondary' : 'ghost'}
-          className={cn(currentTab === 'agenda' && 'bg-accent')}
-          onClick={() => onTabChange('agenda')}
-        >
-          <Calendar className="w-4 h-4 mr-2" />
-          Agenda
-        </Button>
-      )}
+      {navbarConfig.map((group, index) => {
+        // Filter modules that are enabled for this company
+        const enabledModules = group.modules.filter(m => isEnabled(m))
+        
+        if (enabledModules.length === 0) return null
 
-      {/* Gestão Dropdown */}
-      {gestaoTabs.length > 0 && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant={gestaoTabs.includes(currentTab) ? 'secondary' : 'ghost'}
-              className={cn(gestaoTabs.includes(currentTab) && 'bg-accent')}
-            >
-              Gestão
-              <ChevronDown className="ml-2 h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[200px]">
-            {isEnabled('overview') && (
-              <DropdownMenuItem
-                onClick={() => onTabChange('overview')}
-                className={cn('cursor-pointer', currentTab === 'overview' && 'bg-muted')}
-              >
-                <BarChart className="mr-2 h-4 w-4" />
-                Visão Geral
-              </DropdownMenuItem>
-            )}
-            {isEnabled('gallery') && (
-              <DropdownMenuItem
-                onClick={() => onTabChange('gallery')}
-                className={cn('cursor-pointer', currentTab === 'gallery' && 'bg-muted')}
-              >
-                <Camera className="mr-2 h-4 w-4" />
-                Galeria Clínica
-              </DropdownMenuItem>
-            )}
-            {isEnabled('kpi') && (
-              <DropdownMenuItem
-                onClick={() => onTabChange('kpi')}
-                className={cn('cursor-pointer', currentTab === 'kpi' && 'bg-muted')}
-              >
-                <LayoutDashboard className="mr-2 h-4 w-4" />
-                Indicadores
-              </DropdownMenuItem>
-            )}
-            {isEnabled('financials') && (
-              <DropdownMenuItem
-                onClick={() => onTabChange('financials')}
-                className={cn('cursor-pointer', currentTab === 'financials' && 'bg-muted')}
-              >
-                <CreditCard className="mr-2 h-4 w-4" />
-                Gestão Financeira
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
+        // If it has no label, render them as root buttons
+        if (!group.label) {
+          return enabledModules.map(moduleKey => {
+            const Icon = ICON_MAP[moduleKey] || ICON_MAP.default
+            const label = MODULE_LABELS[moduleKey] || moduleKey
 
-      {/* Cadastros Dropdown */}
-      {cadastrosTabs.length > 0 && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant={cadastrosTabs.includes(currentTab) ? 'secondary' : 'ghost'}
-              className={cn(cadastrosTabs.includes(currentTab) && 'bg-accent')}
-            >
-              Cadastros
-              <ChevronDown className="ml-2 h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[200px]">
-            {isEnabled('patients') && (
-              <DropdownMenuItem
-                onClick={() => onTabChange('patients')}
-                className={cn('cursor-pointer', currentTab === 'patients' && 'bg-muted')}
+            return (
+              <Button
+                key={moduleKey}
+                variant={currentTab === moduleKey ? 'secondary' : 'ghost'}
+                className={cn(currentTab === moduleKey && 'bg-accent')}
+                onClick={() => onTabChange(moduleKey)}
               >
-                <Users className="mr-2 h-4 w-4" />
-                Pacientes
-              </DropdownMenuItem>
-            )}
-            {isEnabled('professionals') && (
-              <DropdownMenuItem
-                onClick={() => onTabChange('professionals')}
-                className={cn('cursor-pointer', currentTab === 'professionals' && 'bg-muted')}
-              >
-                <Briefcase className="mr-2 h-4 w-4" />
-                Profissionais
-              </DropdownMenuItem>
-            )}
-            {isEnabled('partnerships') && (
-              <DropdownMenuItem
-                onClick={() => onTabChange('partnerships')}
-                className={cn('cursor-pointer', currentTab === 'partnerships' && 'bg-muted')}
-              >
-                <Handshake className="mr-2 h-4 w-4" />
-                Parcerias
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
+                <Icon className="w-4 h-4 mr-2" />
+                {label}
+              </Button>
+            )
+          })
+        }
 
-      {/* Administrativo Dropdown */}
-      {administrativoTabs.length > 0 && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant={administrativoTabs.includes(currentTab) ? 'secondary' : 'ghost'}
-              className={cn(administrativoTabs.includes(currentTab) && 'bg-accent')}
-            >
-              Administrativo
-              <ChevronDown className="ml-2 h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[200px]">
-            {isEnabled('services') && (
-              <DropdownMenuItem
-                onClick={() => onTabChange('services')}
-                className={cn('cursor-pointer', currentTab === 'services' && 'bg-muted')}
+        // Render as Dropdown
+        const isGroupActive = enabledModules.includes(currentTab as any)
+        const GroupIcon = group.icon && ICON_MAP[group.icon] ? ICON_MAP[group.icon] : null
+
+        return (
+          <DropdownMenu key={index}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant={isGroupActive ? 'secondary' : 'ghost'}
+                className={cn(isGroupActive && 'bg-accent')}
               >
-                <Stethoscope className="mr-2 h-4 w-4" />
-                Serviços e Pacotes
-              </DropdownMenuItem>
-            )}
-            {isEnabled('time_tracking') && (
-              <DropdownMenuItem
-                onClick={() => onTabChange('time_tracking')}
-                className={cn('cursor-pointer', currentTab === 'time_tracking' && 'bg-muted')}
-              >
-                <Clock className="mr-2 h-4 w-4" />
-                Ponto Eletrônico
-              </DropdownMenuItem>
-            )}
-            {isEnabled('messages') && (
-              <DropdownMenuItem
-                onClick={() => onTabChange('messages')}
-                className={cn('cursor-pointer', currentTab === 'messages' && 'bg-muted')}
-              >
-                <MessageSquare className="mr-2 h-4 w-4" />
-                Confirmações
-              </DropdownMenuItem>
-            )}
-            {isEnabled('maintenance') && (
-              <DropdownMenuItem
-                onClick={() => onTabChange('maintenance')}
-                className={cn('cursor-pointer', currentTab === 'maintenance' && 'bg-muted')}
-              >
-                <Database className="mr-2 h-4 w-4" />
-                Manutenção de Dados
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
+                {GroupIcon && <GroupIcon className="w-4 h-4 mr-2" />}
+                {group.label}
+                <ChevronDown className="ml-2 h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-[200px]">
+              {enabledModules.map(moduleKey => {
+                const Icon = ICON_MAP[moduleKey] || ICON_MAP.default
+                const label = MODULE_LABELS[moduleKey] || moduleKey
+                return (
+                  <DropdownMenuItem
+                    key={moduleKey}
+                    onClick={() => onTabChange(moduleKey)}
+                    className={cn('cursor-pointer', currentTab === moduleKey && 'bg-muted')}
+                  >
+                    <Icon className="mr-2 h-4 w-4" />
+                    {label}
+                  </DropdownMenuItem>
+                )
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )
+      })}
     </div>
   )
 }

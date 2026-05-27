@@ -1,4 +1,6 @@
 import { useState, useRef } from 'react'
+import { doc, updateDoc } from 'firebase/firestore'
+import { db } from '@/shared/lib/firebase'
 import { Upload, Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -67,18 +69,49 @@ export const BrandingTab = ({
   const handleSave = async () => {
     setSaving(true)
     const { error } = await updateCompanyBranding(company.id, branding)
+    
+    // Save slug directly
+    let slugError = null
+    try {
+      await updateDoc(doc(db, 'companies', company.id), {
+        slug: company.slug
+      })
+    } catch (e: any) {
+      slugError = e
+    }
+
     setSaving(false)
-    if (error) {
-      toast({ title: 'Erro ao salvar branding', variant: 'destructive' })
+    if (error || slugError) {
+      toast({ title: 'Erro ao salvar alterações', variant: 'destructive' })
     } else {
       onUpdate({ ...company, branding })
-      toast({ title: 'Branding salvo!' })
+      toast({ title: 'Branding e Slug salvos com sucesso!' })
     }
   }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div className="space-y-4">
+        <div className="space-y-2">
+          <Label>Slug (URL de Login)</Label>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground bg-muted px-3 py-2 rounded-md border border-r-0 rounded-r-none">
+              fpl-saude.com/
+            </span>
+            <Input 
+              value={company.slug} 
+              onChange={async (e) => {
+                const newSlug = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '')
+                onUpdate({ ...company, slug: newSlug })
+                // Nós salvamos o slug automaticamente? Não, vamos fazer junto com o Save.
+              }} 
+              placeholder="nome-da-clinica"
+              className="rounded-l-none"
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">Ex: /minha-clinica/login</p>
+        </div>
+
         <div className="space-y-2">
           <Label>Nome do App</Label>
           <Input value={branding.app_name} onChange={(e) => update('app_name', e.target.value)} />

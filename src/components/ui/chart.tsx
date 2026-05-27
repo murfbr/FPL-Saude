@@ -208,8 +208,8 @@ const ChartTooltipContent = React.forwardRef<
                       {itemConfig?.label || item.name}
                     </span>
                   </div>
-                  {item.value ? (
-                    <span className="font-medium">
+                  {item.value !== undefined ? (
+                    <span className="font-medium ml-6">
                       {formatter
                         ? formatter(item.value, item.name, item, i, payload)
                         : item.value.toString()}
