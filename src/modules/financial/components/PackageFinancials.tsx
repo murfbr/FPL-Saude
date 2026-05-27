@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Table,
   TableBody,
@@ -10,7 +11,7 @@ import {
 import { getAllActiveClientPackages, getPackagePayments, payPackage, deletePackagePayment } from '@/shared/services'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Progress } from '@/components/ui/progress'
-import { Ticket, DollarSign, RotateCcw, Loader2, CheckCircle, AlertTriangle } from 'lucide-react'
+import { Ticket, DollarSign, RotateCcw, Loader2, CheckCircle, AlertTriangle, MoreHorizontal, User } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { Badge } from '@/components/ui/badge'
@@ -28,10 +29,17 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 export const PackageFinancials = () => {
-  const { professionalId, user } = useAuth()
+  const { professionalId, user, role } = useAuth()
   const { toast } = useToast()
+  const navigate = useNavigate()
   const [packages, setPackages] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isProcessing, setIsProcessing] = useState<string | null>(null)
@@ -193,72 +201,80 @@ export const PackageFinancials = () => {
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      {pkg.payment_status === 'paid' ? (
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      <div className="flex justify-end items-center gap-2">
+                        {pkg.payment_status === 'paid' ? (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700 hover:bg-red-50 h-8">
+                                <RotateCcw className="mr-2 h-4 w-4" />
+                                Estornar
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Confirmar Estorno</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Deseja desfazer o pagamento de <strong>{pkg.clients?.name}</strong>?
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleReverse(pkg)}
+                                  disabled={isProcessing === pkg.id}
+                                  className="bg-red-600 hover:bg-red-700"
+                                >
+                                  {isProcessing === pkg.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirmar Estorno'}
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        ) : (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button size="sm" variant="outline" className="h-8">
+                                <DollarSign className="mr-2 h-4 w-4" />
+                                Quitar
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Confirmar Pagamento</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Registrar o pagamento do pacote <strong>{pkg.packages?.name}</strong> para o cliente <strong>{pkg.clients?.name}</strong>?
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handlePay(pkg)}
+                                  disabled={isProcessing === pkg.id}
+                                >
+                                  {isProcessing === pkg.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirmar'}
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
+
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                              <span className="sr-only">Abrir menu</span>
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => navigate(role === 'admin' ? `/admin/pacientes/${pkg.clients?.id}` : `/profissional/pacientes/${pkg.clients?.id}`)}
+                              className="cursor-pointer"
                             >
-                              <RotateCcw className="w-4 h-4 mr-1" />
-                              Estornar
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Confirmar Estorno</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Deseja desfazer o pagamento de <strong>{pkg.clients?.name}</strong>?
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => handleReverse(pkg)}
-                                disabled={isProcessing === pkg.id}
-                                className="bg-red-600 hover:bg-red-700"
-                              >
-                                {isProcessing === pkg.id ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                  'Confirmar Estorno'
-                                )}
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      ) : (
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button size="sm" variant="outline">
-                              <DollarSign className="w-4 h-4 mr-1" />
-                              Quitar
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Confirmar Pagamento</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Registrar o pagamento do pacote <strong>{pkg.packages?.name}</strong> para o cliente <strong>{pkg.clients?.name}</strong>?
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => handlePay(pkg)}
-                                disabled={isProcessing === pkg.id}
-                              >
-                                {isProcessing === pkg.id ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                  'Confirmar'
-                                )}
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      )}
+                              <User className="mr-2 h-4 w-4" />
+                              <span>Ver Perfil do Cliente</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </TableCell>
                   </TableRow>
                 )

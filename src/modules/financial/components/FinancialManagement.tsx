@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Card,
   CardContent,
@@ -20,6 +21,7 @@ import {
   paySubscription,
   deleteSubscriptionPayment,
 } from '@/shared/services'
+import { cancelClientSubscription } from '@/modules/clients/services/subscriptions'
 import { ClientSubscription } from '@/shared/types'
 import { useAuth } from '@/shared/providers/AuthProvider'
 import { useToast } from '@/shared/hooks/use-toast'
@@ -38,6 +40,9 @@ import {
   DollarSign,
   Loader2,
   RotateCcw,
+  MoreHorizontal,
+  User,
+  Ban,
 } from 'lucide-react'
 import {
   AlertDialog,
@@ -50,6 +55,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PackageFinancials } from './PackageFinancials'
 import {
@@ -78,8 +90,9 @@ const calculateSubscriptionAmount = (sub: ClientSubscription, forMonth: Date): n
 }
 
 export const FinancialManagement = () => {
-  const { professionalId, user } = useAuth()
+  const { professionalId, user, role } = useAuth()
   const { toast } = useToast()
+  const navigate = useNavigate()
   const [currentDate, setCurrentDate] = useState(new Date())
   const [isProcessing, setIsProcessing] = useState<string | null>(null)
   const invalidateFinancial = useInvalidateFinancial()
@@ -102,7 +115,7 @@ export const FinancialManagement = () => {
 
     return subs.map((sub) => {
       const paymentId = paidSubMap.get(sub.id)
-      let status: 'paid' | 'overdue' | 'pending' = 'pending'
+      let status: 'paid' | 'overdue' | 'pending' | 'cancelled' = 'pending'
 
       if (paymentId) {
         status = 'paid'
@@ -123,6 +136,17 @@ export const FinancialManagement = () => {
             status = 'overdue'
           }
         }
+        
+        // Se a assinatura internamente está cancelada, ou se ela terminou neste mês ou antes (end_date),
+        // e ainda não foi paga (estamos no bloco else), marcamos como 'cancelled' 
+        // para não gerar sensação de falsa pendência/valor dobrado.
+        const viewEndStr = new Date(viewYear, viewMonth + 1, 0, 23, 59, 59).toISOString()
+        const tEnd = sub.end_date || sub.cancelled_at
+        const endedThisMonthOrBefore = tEnd && tEnd <= viewEndStr
+
+        if (sub.status === 'cancelled' || endedThisMonthOrBefore) {
+          status = 'cancelled'
+        }
       }
 
       return {
@@ -133,12 +157,14 @@ export const FinancialManagement = () => {
     })
   }, [subs, payments, currentDate])
 
-  // Receita prevista calculada client-side (0 reads)
+  // Receita prevista calculada client-side (0 reads) usando `subscriptions` que já tem o status computado
   const expectedSubsRevenue = useMemo(() => {
-    return subs.reduce((acc, sub) => {
+    return subscriptions.reduce((acc, sub) => {
+      // Se a assinatura foi cancelada E não foi paga, não entra na previsão de receita nem é considerada devida
+      if (sub.payment_status === 'cancelled') return acc
       return acc + calculateSubscriptionAmount(sub, currentDate)
     }, 0)
-  }, [subs, currentDate])
+  }, [subscriptions, currentDate])
 
   const isLoading = summaryLoading || subsLoading
 
@@ -189,6 +215,19 @@ export const FinancialManagement = () => {
         title: 'Estorno Realizado',
         description: `Pagamento de ${sub.clients?.name} foi removido.`,
       })
+      invalidateFinancial()
+    }
+    setIsProcessing(null)
+  }
+
+  const handleCancelSub = async (sub: ClientSubscription) => {
+    setIsProcessing(sub.id)
+    const { error } = await cancelClientSubscription(sub.clients?.id as string, sub.id)
+
+    if (error) {
+      toast({ title: 'Erro', description: error.message, variant: 'destructive' })
+    } else {
+      toast({ title: 'Sucesso', description: 'Assinatura cancelada com sucesso.' })
       invalidateFinancial()
     }
     setIsProcessing(null)
@@ -321,6 +360,11 @@ export const FinancialManagement = () => {
                               <AlertTriangle className="w-3 h-3 mr-1" />
                               Em Atraso
                             </Badge>
+                          ) : sub.payment_status === 'cancelled' ? (
+                            <Badge variant="outline" className="text-muted-foreground">
+                              <Ban className="w-3 h-3 mr-1" />
+                              Cancelada
+                            </Badge>
                           ) : (
                             <Badge
                               variant="secondary"
@@ -331,88 +375,114 @@ export const FinancialManagement = () => {
                           )}
                         </TableCell>
                         <TableCell className="text-right">
-                          {sub.payment_status === 'paid' ? (
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          <div className="flex justify-end items-center gap-2">
+                            {sub.payment_status === 'paid' ? (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700 hover:bg-red-50 h-8">
+                                    <RotateCcw className="mr-2 h-4 w-4" />
+                                    Estornar
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Confirmar Estorno</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Deseja desfazer o pagamento de <strong>{sub.clients?.name}</strong>? O status voltará para pendente.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleReverse(sub)}
+                                      disabled={isProcessing === sub.id}
+                                      className="bg-red-600 hover:bg-red-700"
+                                    >
+                                      {isProcessing === sub.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirmar Estorno'}
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            ) : sub.payment_status !== 'cancelled' && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button size="sm" variant="outline" className="h-8">
+                                    <DollarSign className="mr-2 h-4 w-4" />
+                                    Quitar
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Confirmar Pagamento</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Deseja marcar a mensalidade de <strong>{sub.clients?.name}</strong> como paga referente a {format(currentDate, 'MMMM/yyyy', { locale: ptBR })}?
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handlePay(sub)}
+                                      disabled={isProcessing === sub.id}
+                                    >
+                                      {isProcessing === sub.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirmar'}
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
+
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" className="h-8 w-8 p-0">
+                                  <span className="sr-only">Abrir menu</span>
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  onClick={() => navigate(role === 'admin' ? `/admin/pacientes/${sub.clients?.id}` : `/profissional/pacientes/${sub.clients?.id}`)}
+                                  className="cursor-pointer"
                                 >
-                                  <RotateCcw className="w-4 h-4 mr-2" />
-                                  Estornar
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>
-                                    Confirmar Estorno
-                                  </AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Deseja desfazer o pagamento de{' '}
-                                    <strong>{sub.clients?.name}</strong>? O
-                                    status voltará para pendente.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>
-                                    Cancelar
-                                  </AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => handleReverse(sub)}
-                                    disabled={isProcessing === sub.id}
-                                    className="bg-red-600 hover:bg-red-700"
-                                  >
-                                    {isProcessing === sub.id ? (
-                                      <Loader2 className="w-4 h-4 animate-spin" />
-                                    ) : (
-                                      'Confirmar Estorno'
-                                    )}
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          ) : (
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button size="sm" variant="outline">
-                                  <DollarSign className="w-4 h-4 mr-2" />
-                                  Quitar
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>
-                                    Confirmar Pagamento
-                                  </AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Deseja marcar a mensalidade de{' '}
-                                    <strong>{sub.clients?.name}</strong> como
-                                    paga referente a{' '}
-                                    {format(currentDate, 'MMMM/yyyy', {
-                                      locale: ptBR,
-                                    })}
-                                    ?
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>
-                                    Cancelar
-                                  </AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => handlePay(sub)}
-                                    disabled={isProcessing === sub.id}
-                                  >
-                                    {isProcessing === sub.id ? (
-                                      <Loader2 className="w-4 h-4 animate-spin" />
-                                    ) : (
-                                      'Confirmar'
-                                    )}
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          )}
+                                  <User className="mr-2 h-4 w-4" />
+                                  <span>Ver Perfil do Cliente</span>
+                                </DropdownMenuItem>
+
+                                {sub.status === 'active' && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem asChild>
+                                      <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                          <button className="w-full flex items-center px-2 py-1.5 text-sm cursor-pointer text-red-600 focus:bg-red-50 hover:bg-red-50 hover:text-red-700 outline-none rounded-sm">
+                                            <Ban className="mr-2 h-4 w-4" />
+                                            <span>Cancelar Assinatura</span>
+                                          </button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                          <AlertDialogHeader>
+                                            <AlertDialogTitle>Cancelar Assinatura Definitivamente</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                              Tem certeza que deseja cancelar a assinatura de <strong>{sub.clients?.name}</strong>? Esta ação interromperá cobranças futuras.
+                                            </AlertDialogDescription>
+                                          </AlertDialogHeader>
+                                          <AlertDialogFooter>
+                                            <AlertDialogCancel>Manter Assinatura</AlertDialogCancel>
+                                            <AlertDialogAction
+                                              onClick={() => handleCancelSub(sub)}
+                                              disabled={isProcessing === sub.id}
+                                              className="bg-red-600 hover:bg-red-700"
+                                            >
+                                              {isProcessing === sub.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Sim, Cancelar'}
+                                            </AlertDialogAction>
+                                          </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                      </AlertDialog>
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}

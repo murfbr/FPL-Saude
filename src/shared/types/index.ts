@@ -150,7 +150,7 @@ export interface ClientSubscription {
   services?: Service
   subscription_plans?: SubscriptionPlan | null
   clients?: Client
-  payment_status?: 'paid' | 'overdue' | 'pending' // UI helper field
+  payment_status?: 'paid' | 'overdue' | 'pending' | 'cancelled' // UI helper field
   last_payment_date?: string | null // UI helper field
 }
 

@@ -23,7 +23,6 @@ exports.STATUS_FIELDS = {
     no_show: 'no_show_appointments',
 };
 function appointmentDelta(before, after) {
-    var _a, _b, _c, _d, _e, _f, _g, _h;
     const updates = {
         updated_at: (0, config_1.ServerTs)(),
     };
@@ -48,113 +47,109 @@ function appointmentDelta(before, after) {
         if (delta !== 0)
             updates[field] = (0, config_1.Inc)(delta);
     }
-    // ── Breakdowns (by_professional, by_service, by_partnership) ──────────
-    // Breakdowns contam apenas appointments COMPLETED.
-    const wasCompleted = bStatus === 'completed';
-    const isCompleted = aStatus === 'completed';
-    if (wasCompleted || isCompleted) {
-        // Acumula deltas numéricos por ID antes de converter em FieldValue
+    // ── Breakdowns (by_professional, by_service, by_partnership e matrizes cruzadas)
+    const isTrackedStatus = (s) => s === 'completed' || s === 'cancelled' || s === 'no_show';
+    const wasTracked = isTrackedStatus(bStatus);
+    const isTracked = isTrackedStatus(aStatus);
+    if (wasTracked || isTracked) {
         const profAcc = {};
         const svcAcc = {};
         const partAcc = {};
-        // Subtrair breakdown do estado anterior (se era completed)
-        if (wasCompleted && before) {
-            const pId = before.professional_id;
-            const sId = before.service_id;
-            const price = ((_a = before.services) === null || _a === void 0 ? void 0 : _a.price) || 0;
-            const partnId = before.partnership_id;
+        const profSvcAcc = {};
+        const profPartAcc = {};
+        const applyStats = (docData, status, multiplier) => {
+            var _a, _b, _c, _d, _e;
+            const pId = docData.professional_id;
+            const sId = docData.service_id;
+            const price = ((_a = docData.services) === null || _a === void 0 ? void 0 : _a.price) || 0;
+            const partnId = docData.partnership_id;
+            const isComp = status === 'completed' ? multiplier : 0;
+            const isCanc = status === 'cancelled' ? multiplier : 0;
+            const isNoSh = status === 'no_show' ? multiplier : 0;
+            const revDelta = status === 'completed' ? price * multiplier : 0;
             if (pId) {
-                profAcc[pId] = profAcc[pId] || {
-                    name: ((_b = before.professionals) === null || _b === void 0 ? void 0 : _b.name) || '',
-                    completed: 0,
-                    revenue: 0,
-                };
-                profAcc[pId].completed -= 1;
-                profAcc[pId].revenue -= price;
+                profAcc[pId] = profAcc[pId] || { name: ((_b = docData.professionals) === null || _b === void 0 ? void 0 : _b.name) || '', completed: 0, cancelled: 0, no_show: 0, revenue: 0 };
+                if (multiplier > 0)
+                    profAcc[pId].name = ((_c = docData.professionals) === null || _c === void 0 ? void 0 : _c.name) || profAcc[pId].name;
+                profAcc[pId].completed += isComp;
+                profAcc[pId].cancelled += isCanc;
+                profAcc[pId].no_show += isNoSh;
+                profAcc[pId].revenue += revDelta;
+                if (sId) {
+                    const crossId = `${pId}_${sId}`;
+                    profSvcAcc[crossId] = profSvcAcc[crossId] || { completed: 0, cancelled: 0, no_show: 0, revenue: 0 };
+                    profSvcAcc[crossId].completed += isComp;
+                    profSvcAcc[crossId].cancelled += isCanc;
+                    profSvcAcc[crossId].no_show += isNoSh;
+                    profSvcAcc[crossId].revenue += revDelta;
+                }
+                if (partnId) {
+                    const crossId = `${pId}_${partnId}`;
+                    profPartAcc[crossId] = profPartAcc[crossId] || { completed: 0, cancelled: 0, no_show: 0, revenue: 0 };
+                    profPartAcc[crossId].completed += isComp;
+                    profPartAcc[crossId].cancelled += isCanc;
+                    profPartAcc[crossId].no_show += isNoSh;
+                    profPartAcc[crossId].revenue += revDelta;
+                }
             }
             if (sId) {
-                svcAcc[sId] = svcAcc[sId] || {
-                    name: ((_c = before.services) === null || _c === void 0 ? void 0 : _c.name) || '',
-                    count: 0,
-                    revenue: 0,
-                };
-                svcAcc[sId].count -= 1;
-                svcAcc[sId].revenue -= price;
+                svcAcc[sId] = svcAcc[sId] || { name: ((_d = docData.services) === null || _d === void 0 ? void 0 : _d.name) || '', count: 0, cancelled: 0, no_show: 0, revenue: 0 };
+                if (multiplier > 0)
+                    svcAcc[sId].name = ((_e = docData.services) === null || _e === void 0 ? void 0 : _e.name) || svcAcc[sId].name;
+                svcAcc[sId].count += isComp;
+                svcAcc[sId].cancelled += isCanc;
+                svcAcc[sId].no_show += isNoSh;
+                svcAcc[sId].revenue += revDelta;
             }
             if (partnId) {
-                partAcc[partnId] = partAcc[partnId] || { sessionCount: 0 };
-                partAcc[partnId].sessionCount -= 1;
+                partAcc[partnId] = partAcc[partnId] || { sessionCount: 0, cancelled: 0, no_show: 0, revenue: 0 };
+                partAcc[partnId].sessionCount += isComp;
+                partAcc[partnId].cancelled += isCanc;
+                partAcc[partnId].no_show += isNoSh;
+                partAcc[partnId].revenue += revDelta;
             }
+        };
+        if (wasTracked && before) {
+            applyStats(before, bStatus, -1);
         }
-        // Adicionar breakdown do estado atual (se é completed)
-        if (isCompleted && after) {
-            const pId = after.professional_id;
-            const sId = after.service_id;
-            const price = ((_d = after.services) === null || _d === void 0 ? void 0 : _d.price) || 0;
-            const partnId = after.partnership_id;
-            if (pId) {
-                profAcc[pId] = profAcc[pId] || {
-                    name: ((_e = after.professionals) === null || _e === void 0 ? void 0 : _e.name) || '',
-                    completed: 0,
-                    revenue: 0,
-                };
-                // Prioriza o nome mais recente
-                profAcc[pId].name =
-                    ((_f = after.professionals) === null || _f === void 0 ? void 0 : _f.name) || profAcc[pId].name;
-                profAcc[pId].completed += 1;
-                profAcc[pId].revenue += price;
-            }
-            if (sId) {
-                svcAcc[sId] = svcAcc[sId] || {
-                    name: ((_g = after.services) === null || _g === void 0 ? void 0 : _g.name) || '',
-                    count: 0,
-                    revenue: 0,
-                };
-                svcAcc[sId].name =
-                    ((_h = after.services) === null || _h === void 0 ? void 0 : _h.name) || svcAcc[sId].name;
-                svcAcc[sId].count += 1;
-                svcAcc[sId].revenue += price;
-            }
-            if (partnId) {
-                partAcc[partnId] = partAcc[partnId] || { sessionCount: 0 };
-                partAcc[partnId].sessionCount += 1;
-            }
+        if (isTracked && after) {
+            applyStats(after, aStatus, 1);
         }
-        // Converter acumuladores em FieldValue.increment para o Firestore
-        const profObj = {};
-        for (const [id, d] of Object.entries(profAcc)) {
-            if (d.completed !== 0 || d.revenue !== 0) {
-                profObj[id] = { name: d.name };
-                if (d.completed !== 0)
-                    profObj[id].completed = (0, config_1.Inc)(d.completed);
-                if (d.revenue !== 0)
-                    profObj[id].revenue = (0, config_1.Inc)(d.revenue);
+        const buildUpdate = (acc, nameField = null, countField = 'completed') => {
+            const obj = {};
+            for (const [id, d] of Object.entries(acc)) {
+                if (d[countField] !== 0 || d.revenue !== 0 || d.cancelled !== 0 || d.no_show !== 0) {
+                    obj[id] = {};
+                    if (nameField && d[nameField])
+                        obj[id][nameField] = d[nameField];
+                    if (d[countField] !== 0)
+                        obj[id][countField] = (0, config_1.Inc)(d[countField]);
+                    if (d.cancelled !== 0)
+                        obj[id].cancelled = (0, config_1.Inc)(d.cancelled);
+                    if (d.no_show !== 0)
+                        obj[id].no_show = (0, config_1.Inc)(d.no_show);
+                    if (d.revenue !== 0)
+                        obj[id].revenue = (0, config_1.Inc)(d.revenue);
+                }
             }
-        }
+            return obj;
+        };
+        const profObj = buildUpdate(profAcc, 'name', 'completed');
         if (Object.keys(profObj).length > 0)
             updates.by_professional = profObj;
-        const svcObj = {};
-        for (const [id, d] of Object.entries(svcAcc)) {
-            if (d.count !== 0 || d.revenue !== 0) {
-                svcObj[id] = { name: d.name };
-                if (d.count !== 0)
-                    svcObj[id].count = (0, config_1.Inc)(d.count);
-                if (d.revenue !== 0)
-                    svcObj[id].revenue = (0, config_1.Inc)(d.revenue);
-            }
-        }
+        const svcObj = buildUpdate(svcAcc, 'name', 'count');
         if (Object.keys(svcObj).length > 0)
             updates.by_service = svcObj;
-        const partObj = {};
-        for (const [id, d] of Object.entries(partAcc)) {
-            if (d.sessionCount !== 0) {
-                partObj[id] = { sessionCount: (0, config_1.Inc)(d.sessionCount) };
-            }
-        }
+        const partObj = buildUpdate(partAcc, null, 'sessionCount');
         if (Object.keys(partObj).length > 0)
             updates.by_partnership = partObj;
+        const profSvcObj = buildUpdate(profSvcAcc, null, 'completed');
+        if (Object.keys(profSvcObj).length > 0)
+            updates.by_professional_service = profSvcObj;
+        const profPartObj = buildUpdate(profPartAcc, null, 'completed');
+        if (Object.keys(profPartObj).length > 0)
+            updates.by_professional_partnership = profPartObj;
     }
-    // Se o único campo é updated_at, não há mudança real → skip write
     const hasReal = Object.keys(updates).some((k) => k !== 'updated_at');
     return hasReal ? updates : null;
 }

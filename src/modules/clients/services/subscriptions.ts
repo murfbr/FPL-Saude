@@ -50,6 +50,22 @@ export async function getClientSubscriptions(clientId: string): Promise<{ data: 
 export async function createClientSubscription(data: any): Promise<{ data: any | null; error: any }> {
   try {
     const subsRef = collection(db, 'companies', getCompanyId(), 'clients', data.client_id, 'subscriptions')
+
+    // Trava de segurança: Verificar se já existe uma assinatura ativa para o mesmo serviço
+    const q = query(
+      subsRef, 
+      where('service_id', '==', data.service_id),
+      where('status', '==', 'active')
+    )
+    const existingDocs = await getDocs(q)
+    
+    if (!existingDocs.empty) {
+      return { 
+        data: null, 
+        error: new Error('Este cliente já possui uma assinatura ativa para este serviço. Cancele a atual primeiro.') 
+      }
+    }
+
     const newDoc = doc(subsRef)
     const docData = { ...data, id: newDoc.id, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
     await setDoc(newDoc, docData)

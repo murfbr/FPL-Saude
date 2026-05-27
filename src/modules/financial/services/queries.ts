@@ -86,6 +86,12 @@ export async function getActiveSubscriptions(options?: { limit?: number; targetD
           
           if (tStart && tStart > mEndStr) continue // Começou depois deste mês
           if (tEnd && tEnd < mStartStr) continue // Terminou antes deste mês
+          
+          // Tratamento de segurança: se o status não for 'active' e ela não tiver data de fim preenchida,
+          // consideramos dado sujo/antigo e ignoramos para não assombrar como ativa infinitamente.
+          if (!tEnd && sub.status && sub.status !== 'active') {
+             continue
+          }
         }
 
         sub.clients = { id: clientDoc.id, name: clientDoc.data()?.name, email: clientDoc.data()?.email }
