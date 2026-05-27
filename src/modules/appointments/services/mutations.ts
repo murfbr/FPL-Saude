@@ -338,6 +338,20 @@ export async function updateAppointmentStatus(appointmentId: string, status: str
        return { error: null }
     }
 
+    // OTIMIZAÇÃO E FIX: Buscar dados do serviço se for agendamento antigo (faltando desnormalização)
+    let serviceData = appData.services
+    if (!serviceData && appData.service_id) {
+      try {
+        const sRef = doc(db, 'companies', companyId, 'services', appData.service_id)
+        const sSnap = await getDoc(sRef)
+        if (sSnap.exists()) {
+          serviceData = { id: sSnap.id, ...sSnap.data() }
+        }
+      } catch (e) {
+        console.error("Erro ao buscar serviço legado", e)
+      }
+    }
+
     const batch = writeBatch(db)
 
     // Verificar se é evento flexível — lógica financeira separada
@@ -377,14 +391,18 @@ export async function updateAppointmentStatus(appointmentId: string, status: str
     }
 
     const isPackage = !!appData.client_package_id
-    let isMonthlySubscription = appData.services?.value_type === 'monthly'
+    let isMonthlySubscription = serviceData?.value_type === 'monthly'
 
-    if (!isPackage && !isMonthlySubscription) {
-      const subsRef = collection(db, 'companies', companyId, 'clients', appData.client_id, 'subscriptions')
-      const subsSnap = await getDocs(subsRef)
-      const serviceId = appData.service_id || appData.services?.id
-      if (subsSnap.docs.some(d => d.data().service_id === serviceId)) {
-        isMonthlySubscription = true
+    if (!isPackage && !isMonthlySubscription && appData.client_id) {
+      try {
+        const subsRef = collection(db, 'companies', companyId, 'clients', appData.client_id, 'subscriptions')
+        const subsSnap = await getDocs(subsRef)
+        const serviceId = appData.service_id || serviceData?.id
+        if (subsSnap.docs.some(d => d.data().service_id === serviceId)) {
+          isMonthlySubscription = true
+        }
+      } catch (e) {
+        console.error("Erro ao buscar subscriptions", e)
       }
     }
 
@@ -407,23 +425,27 @@ export async function updateAppointmentStatus(appointmentId: string, status: str
 
            // Admin Notification: Pacote Acabando
            if (newRemaining === 2 || newRemaining === 1) {
-             const usersRef = collection(db, 'users')
-             const adminsQuery = query(usersRef, where('companyId', '==', companyId), where('role', '==', 'admin'))
-             const adminsSnap = await getDocs(adminsQuery)
-             
-             adminsSnap.docs.forEach(adminDoc => {
-               const adminId = adminDoc.id
-               const notifRef = doc(collection(db, 'companies', companyId, 'admins', adminId, 'notifications'))
-               batch.set(notifRef, {
-                 id: notifRef.id,
-                 professional_id: adminId, 
-                 title: 'Aviso de Pacote',
-                 content: `Faltam ${newRemaining} sessões para o pacote de ${appData.clients?.name || 'um cliente'} acabar.`,
-                 is_read: false,
-                 link: `/admin/clientes/${appData.client_id}`,
-                 created_at: new Date().toISOString()
+             try {
+               const usersRef = collection(db, 'companies', companyId, 'users')
+               const adminsQuery = query(usersRef, where('role', '==', 'admin'))
+               const adminsSnap = await getDocs(adminsQuery)
+               
+               adminsSnap.docs.forEach(adminDoc => {
+                 const adminId = adminDoc.id
+                 const notifRef = doc(collection(db, 'companies', companyId, 'admins', adminId, 'notifications'))
+                 batch.set(notifRef, {
+                   id: notifRef.id,
+                   professional_id: adminId, 
+                   title: 'Aviso de Pacote',
+                   content: `Faltam ${newRemaining} sessões para o pacote de ${appData.clients?.name || 'um cliente'} acabar.`,
+                   is_read: false,
+                   link: `/admin/clientes/${appData.client_id}`,
+                   created_at: new Date().toISOString()
+                 })
                })
-             })
+             } catch (e) {
+               console.error("Erro ao buscar admins para notificação", e)
+             }
            }
         }
       } else if (wasConsumingStatus && !isConsumingStatus) {
@@ -442,32 +464,40 @@ export async function updateAppointmentStatus(appointmentId: string, status: str
       const finRef = collection(db, 'companies', companyId, 'financial_records')
       
       if (status === 'completed' && oldStatus !== 'completed') {
-        const price = appData.services?.price || 0
+        const price = serviceData?.price || 0
         const discount = appData.discount_amount || 0
         const finalPrice = Math.max(0, price - discount)
         
         if (finalPrice > 0) {
-          const q = query(finRef, where('appointment_id', '==', appointmentId))
-          const existingSnap = await getDocs(q)
-          
-          if (existingSnap.empty) {
-            const newDoc = doc(finRef)
-            batch.set(newDoc, {
-              id: newDoc.id,
-              client_id: appData.client_id,
-              professional_id: appData.professional_id,
-              appointment_id: appointmentId,
-              amount: finalPrice,
-              payment_date: new Date().toISOString(),
-              description: `Sessão Avulsa - ${appData.services?.name || 'Serviço'}`,
-              payment_method: 'manual'
-            })
+          try {
+            const q = query(finRef, where('appointment_id', '==', appointmentId))
+            const existingSnap = await getDocs(q)
+            
+            if (existingSnap.empty) {
+              const newDoc = doc(finRef)
+              batch.set(newDoc, {
+                id: newDoc.id,
+                client_id: appData.client_id,
+                professional_id: appData.professional_id,
+                appointment_id: appointmentId,
+                amount: finalPrice,
+                payment_date: new Date().toISOString(),
+                description: `Sessão Avulsa - ${serviceData?.name || 'Serviço'}`,
+                payment_method: 'manual'
+              })
+            }
+          } catch (e) {
+            console.error("Erro ao buscar/criar financial record (finalPrice > 0)", e)
           }
         }
       } else if (oldStatus === 'completed' && status !== 'completed') {
-        const q = query(finRef, where('appointment_id', '==', appointmentId))
-        const existingSnap = await getDocs(q)
-        existingSnap.docs.forEach(d => batch.delete(d.ref))
+        try {
+          const q = query(finRef, where('appointment_id', '==', appointmentId))
+          const existingSnap = await getDocs(q)
+          existingSnap.docs.forEach(d => batch.delete(d.ref))
+        } catch (e) {
+          console.error("Erro ao buscar/deletar financial record (oldStatus === completed)", e)
+        }
       }
     }
 
@@ -476,12 +506,7 @@ export async function updateAppointmentStatus(appointmentId: string, status: str
 
     // Professional Notification: Prontuário Pendente
     if (status === 'completed' && oldStatus !== 'completed' && !isEvent) {
-      let requiresObs = appData.services?.requires_observation
-      if (requiresObs === undefined && (appData.service_id || appData.services?.id)) {
-        const sRef = doc(db, 'companies', companyId, 'services', appData.service_id || appData.services?.id)
-        const sSnap = await getDoc(sRef)
-        requiresObs = sSnap.data()?.requires_observation
-      }
+      const requiresObs = serviceData?.requires_observation
       
       const hasNotes = appData.notes && appData.notes.length > 0
       
@@ -499,7 +524,12 @@ export async function updateAppointmentStatus(appointmentId: string, status: str
       }
     }
 
-    await batch.commit()
+    try {
+      await batch.commit()
+    } catch (e) {
+      console.error("Erro no batch.commit()", e)
+      throw e
+    }
     return { error: null }
   } catch (error) { 
     console.error("Erro ao atualizar status do agendamento: ", error)

@@ -14,7 +14,7 @@ import { LogOut, Briefcase, LayoutDashboard, Bell, ShieldHalf } from 'lucide-rea
 import { NotificationBell } from './NotificationBell'
 
 export const UserNav = () => {
-  const { user, signOut, role } = useAuth()
+  const { user, signOut, role, professionalId } = useAuth()
   const navigate = useNavigate()
 
   const handleSignOut = async () => {
@@ -94,7 +94,7 @@ export const UserNav = () => {
           {(role === 'admin' || role === 'professional') && (
             <DropdownMenuItem onClick={() => navigate('/profissional')}>
               <Briefcase className="mr-2 h-4 w-4" />
-              <span>Área do Profissional</span>
+              <span>{role === 'admin' && !professionalId ? 'Agenda Geral' : 'Área do Profissional'}</span>
             </DropdownMenuItem>
           )}
           {(role === 'professional' || role === 'admin') && (

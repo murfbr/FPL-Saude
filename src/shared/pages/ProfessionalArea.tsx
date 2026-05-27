@@ -33,9 +33,9 @@ const ProfessionalArea = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      // If professionalId is null, we can't fetch clients.
+      // If professionalId is null and role is not admin, we can't fetch clients.
       // But isLoading starts true. We need to stop loading if id is missing.
-      if (!user || !professionalId) {
+      if (!user || (!professionalId && role !== 'admin')) {
         setIsLoading(false)
         return
       }
@@ -45,9 +45,11 @@ const ProfessionalArea = () => {
         if (config?.roles?.[role || 'professional']?.features?.includes('view_all_clients')) {
           // Quando a flag global estiver ativa, busca todos os clientes ativos da clínica
           clientRes = await getAllClients({ status: 'active' })
-        } else {
+        } else if (professionalId) {
           // Comportamento padrão: busca apenas os clientes que o profissional atendeu
           clientRes = await getClientsByProfessional(professionalId)
+        } else {
+          clientRes = { data: [] }
         }
 
         if (clientRes.error) throw new Error('Erro ao buscar clientes.')
@@ -76,7 +78,7 @@ const ProfessionalArea = () => {
     )
   }
 
-  if (!professionalId) {
+  if (!professionalId && role !== 'admin') {
     return (
       <div className="container mx-auto py-8 px-4 text-center">
         <h2 className="text-2xl font-bold">
@@ -118,10 +120,10 @@ const ProfessionalArea = () => {
       <Tabs value={currentTab} onValueChange={handleTabChange}>
         <TabsList className="flex flex-wrap w-full mb-6 gap-1 h-auto">
           {hasAgenda && <TabsTrigger value="schedule" className="flex-1 min-w-[120px]">Agenda</TabsTrigger>}
-          {hasAgenda && <TabsTrigger value="availability" className="flex-1 min-w-[120px]">Disponibilidade</TabsTrigger>}
+          {hasAgenda && professionalId && <TabsTrigger value="availability" className="flex-1 min-w-[120px]">Disponibilidade</TabsTrigger>}
           {hasPatients && <TabsTrigger value="clients" className="flex-1 min-w-[120px]">Pacientes</TabsTrigger>}
           {hasGallery && <TabsTrigger value="gallery" className="flex-1 min-w-[120px]">Galeria</TabsTrigger>}
-          {hasTimesheets && <TabsTrigger value="time-tracking" className="flex-1 min-w-[120px]">Ponto</TabsTrigger>}
+          {hasTimesheets && professionalId && <TabsTrigger value="time-tracking" className="flex-1 min-w-[120px]">Ponto</TabsTrigger>}
         </TabsList>
 
         {hasAgenda && (
@@ -129,12 +131,14 @@ const ProfessionalArea = () => {
             <TabsContent value="schedule">
               <AgendaView 
                 mode="professional" 
-                preselectedProfessionalId={config?.roles?.[role || 'professional']?.features?.includes('view_all_schedules') ? 'all' : professionalId} 
+                preselectedProfessionalId={config?.roles?.[role || 'professional']?.features?.includes('view_all_schedules') ? 'all' : (professionalId || 'all')} 
               />
             </TabsContent>
-            <TabsContent value="availability">
-              <ReadOnlyAvailabilitySettings professionalId={professionalId} />
-            </TabsContent>
+            {professionalId && (
+              <TabsContent value="availability">
+                <ReadOnlyAvailabilitySettings professionalId={professionalId} />
+              </TabsContent>
+            )}
           </>
         )}
 
@@ -159,7 +163,7 @@ const ProfessionalArea = () => {
           </TabsContent>
         )}
 
-        {hasTimesheets && (
+        {hasTimesheets && professionalId && (
           <TabsContent value="time-tracking">
             <TimeTracker professionalId={professionalId} />
           </TabsContent>

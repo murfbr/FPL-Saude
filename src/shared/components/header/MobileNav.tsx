@@ -12,7 +12,7 @@ import { LogOut, Briefcase, LayoutDashboard, Menu, X, Bell, ShieldHalf } from 'l
 import { NotificationBell } from './NotificationBell'
 
 export const MobileNav = () => {
-  const { user, signOut, role } = useAuth()
+  const { user, signOut, role, professionalId } = useAuth()
   const { config } = useTenant()
   const navigate = useNavigate()
   
@@ -101,7 +101,7 @@ export const MobileNav = () => {
                           onClick={() => handleNavigate('/profissional')}
                         >
                           <Briefcase className="mr-2 h-4 w-4" />
-                          Área do Profissional
+                          {role === 'admin' && !professionalId ? 'Agenda Geral' : 'Área do Profissional'}
                         </Button>
                       </SheetClose>
                     )}
