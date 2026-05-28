@@ -71,6 +71,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { ClinicalDocumentsTab } from './ClinicalDocumentsTab'
 
 const assessmentSchema = z.object({
   mainComplaint: z.string().optional(),
@@ -108,9 +109,11 @@ export const GeneralAssessmentForm = ({
   const [isLoadingExams, setIsLoadingExams] = useState(false)
   const [newExamName, setNewExamName] = useState('')
   const [newExamType, setNewExamType] = useState<'exame' | 'laudo'>('exame')
+  const [newExamCategory, setNewExamCategory] = useState<string>('outro')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isExamDialogOpen, setIsExamDialogOpen] = useState(false)
   const [isDownloading, setIsDownloading] = useState<string | null>(null)
+  const [examCategoryFilter, setExamCategoryFilter] = useState<string>('all')
 
   // Data parsing — normaliza o general_assessment para os campos do formulário
   const assessmentData = useMemo(() => {
@@ -180,6 +183,7 @@ export const GeneralAssessmentForm = ({
       client_id: client.id,
       name: newExamName,
       type: newExamType,
+      category: newExamCategory,
       professional_name: user?.displayName || user?.email || (role === 'admin' ? 'Administrador' : 'Profissional')
     }
 
@@ -199,6 +203,7 @@ export const GeneralAssessmentForm = ({
        toast({ title: 'Arquivo enviado com sucesso!' })
        setIsExamDialogOpen(false)
        setNewExamName('')
+       setNewExamCategory('outro')
        setSelectedFile(null)
        fetchExams()
     }
@@ -358,11 +363,16 @@ export const GeneralAssessmentForm = ({
       </CardHeader>
       <CardContent className="pt-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 h-auto gap-2 mb-6 bg-muted/50 p-1">
+          <TabsList className="grid w-full grid-cols-1 sm:grid-cols-4 h-auto gap-2 mb-6 bg-muted/50 p-1">
             <TabsTrigger value="assessment" className="py-2.5">Ficha de Avaliação</TabsTrigger>
             <TabsTrigger value="history" className="py-2.5">Histórico Importado</TabsTrigger>
             <TabsTrigger value="exams" className="py-2.5">Laudos / Exames</TabsTrigger>
+            <TabsTrigger value="documents" className="py-2.5">Documentos Clínicos</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="documents">
+            <ClinicalDocumentsTab client={client} />
+          </TabsContent>
 
           <TabsContent value="assessment">
             <Accordion type="single" collapsible className="w-full">
@@ -660,13 +670,26 @@ export const GeneralAssessmentForm = ({
               <h3 className="font-semibold flex items-center gap-2">
                 <File className="w-4 h-4" /> Arquivos Anexados ({exams.length})
               </h3>
-              <AlertDialog open={isExamDialogOpen} onOpenChange={setIsExamDialogOpen}>
-                <AlertDialogTrigger asChild>
-                  <Button size="sm" className="w-full sm:w-auto gap-2">
-                    <Plus className="w-4 h-4" />
-                    Novo Anexo
-                  </Button>
-                </AlertDialogTrigger>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <UiSelect value={examCategoryFilter} onValueChange={setExamCategoryFilter}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <SelectValue placeholder="Todas as categorias" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as categorias</SelectItem>
+                    <SelectItem value="imagem">Exame de Imagem</SelectItem>
+                    <SelectItem value="laboratorial">Exame Laboratorial</SelectItem>
+                    <SelectItem value="termo">Termo de Consentimento</SelectItem>
+                    <SelectItem value="outro">Outro / Documento</SelectItem>
+                  </SelectContent>
+                </UiSelect>
+                <AlertDialog open={isExamDialogOpen} onOpenChange={setIsExamDialogOpen}>
+                  <AlertDialogTrigger asChild>
+                    <Button size="sm" className="w-full sm:w-auto gap-2">
+                      <Plus className="w-4 h-4" />
+                      Novo Anexo
+                    </Button>
+                  </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
                     <AlertDialogTitle>Anexar Documento</AlertDialogTitle>
@@ -696,6 +719,20 @@ export const GeneralAssessmentForm = ({
                       </UiSelect>
                     </div>
                     <div className="space-y-2">
+                      <Label>Categoria</Label>
+                      <UiSelect value={newExamCategory} onValueChange={(val: any) => setNewExamCategory(val)}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="imagem">Exame de Imagem</SelectItem>
+                          <SelectItem value="laboratorial">Exame Laboratorial</SelectItem>
+                          <SelectItem value="termo">Termo de Consentimento</SelectItem>
+                          <SelectItem value="outro">Outro / Documento</SelectItem>
+                        </SelectContent>
+                      </UiSelect>
+                    </div>
+                    <div className="space-y-2">
                       <Label>Arquivo</Label>
                       <Input 
                         type="file" 
@@ -716,8 +753,9 @@ export const GeneralAssessmentForm = ({
                 </AlertDialogContent>
               </AlertDialog>
             </div>
+          </div>
 
-            <ScrollArea className="h-[400px] w-full rounded-md border p-4 bg-background">
+          <ScrollArea className="h-[400px] w-full rounded-md border p-4 bg-background">
               {isLoadingExams ? (
                 <div className="flex justify-center py-12">
                   <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
@@ -729,7 +767,9 @@ export const GeneralAssessmentForm = ({
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-3">
-                  {exams.map((exam) => (
+                  {exams
+                    .filter((exam) => examCategoryFilter === 'all' || exam.category === examCategoryFilter)
+                    .map((exam) => (
                     <div 
                       key={exam.id} 
                       className="flex items-center justify-between p-4 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors"
@@ -741,7 +781,9 @@ export const GeneralAssessmentForm = ({
                         <div>
                           <p className="font-semibold text-sm">{exam.name}</p>
                           <p className="text-xs text-muted-foreground mt-0.5">
-                            {exam.type.charAt(0).toUpperCase() + exam.type.slice(1)} • {format(new Date(exam.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                            {exam.type.charAt(0).toUpperCase() + exam.type.slice(1)} 
+                            {exam.category && ` • ${exam.category.charAt(0).toUpperCase() + exam.category.slice(1)}`}
+                            {' '}• {format(new Date(exam.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                           </p>
                           <p className="text-[10px] text-muted-foreground mt-1">
                             Enviado por: {exam.professional_name || 'Desconhecido'}

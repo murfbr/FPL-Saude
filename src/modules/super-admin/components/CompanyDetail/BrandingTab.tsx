@@ -47,6 +47,8 @@ export const BrandingTab = ({
   const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [branding, setBranding] = useState<CompanyBranding>({ ...company.branding })
+  const [cnpj, setCnpj] = useState(company.cnpj || '')
+  const [subtitle, setSubtitle] = useState(company.subtitle || '')
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
 
@@ -70,22 +72,24 @@ export const BrandingTab = ({
     setSaving(true)
     const { error } = await updateCompanyBranding(company.id, branding)
     
-    // Save slug directly
-    let slugError = null
+    // Save slug, cnpj, and subtitle directly
+    let updateError = null
     try {
       await updateDoc(doc(db, 'companies', company.id), {
-        slug: company.slug
+        slug: company.slug,
+        cnpj,
+        subtitle
       })
     } catch (e: any) {
-      slugError = e
+      updateError = e
     }
 
     setSaving(false)
-    if (error || slugError) {
+    if (error || updateError) {
       toast({ title: 'Erro ao salvar alterações', variant: 'destructive' })
     } else {
-      onUpdate({ ...company, branding })
-      toast({ title: 'Branding e Slug salvos com sucesso!' })
+      onUpdate({ ...company, branding, cnpj, subtitle })
+      toast({ title: 'Dados salvos com sucesso!' })
     }
   }
 
@@ -115,6 +119,24 @@ export const BrandingTab = ({
         <div className="space-y-2">
           <Label>Nome do App</Label>
           <Input value={branding.app_name} onChange={(e) => update('app_name', e.target.value)} />
+        </div>
+
+        <div className="space-y-2">
+          <Label>Subtítulo (Aparece nos PDFs)</Label>
+          <Input 
+            value={subtitle} 
+            onChange={(e) => setSubtitle(e.target.value)} 
+            placeholder="Ex: Clínica de Especialidades" 
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label>CNPJ (Opcional)</Label>
+          <Input 
+            value={cnpj} 
+            onChange={(e) => setCnpj(e.target.value)} 
+            placeholder="00.000.000/0000-00" 
+          />
         </div>
 
         <div className="space-y-2">

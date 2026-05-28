@@ -106,6 +106,7 @@ export interface Appointment {
   event_description?: string
   event_price?: number
   event_duration_minutes?: number
+  client_package_id?: string | null
 }
 
 /** Helper de tipagem: retorna true se o agendamento for um evento flexível */
@@ -219,11 +220,26 @@ export interface ClientExam {
   client_id: string
   name: string
   type: 'exame' | 'laudo'
+  category?: string // e.g. 'imagem', 'laboratorial', 'termo', 'outro'
   file_url: string
   file_path: string
   created_at: string
   professional_id?: string
   professional_name?: string
+}
+
+export type ClinicalDocumentType = 'atestado' | 'receita' | 'encaminhamento' | 'outro'
+
+export interface ClinicalDocument {
+  id?: string
+  client_id: string
+  professional_id: string
+  professional_name: string
+  type: ClinicalDocumentType
+  content: string // O conteúdo principal do documento
+  file_url?: string // Link para o PDF estático no Storage
+  file_path?: string // Caminho no Storage para exclusão
+  created_at?: string
 }
 
 export interface BlockedDate {
@@ -232,6 +248,31 @@ export interface BlockedDate {
   type: 'single' | 'annual'
   reason: string | null
   created_at: string
+}
+
+export interface ReceiptItem {
+  id: string
+  type: 'avulso' | 'package' | 'subscription'
+  description: string
+  amount: number
+  date?: string
+  isPrePeriod?: boolean
+  isUnpaid?: boolean
+  subItems?: { date: string; description: string }[]
+}
+
+export interface Receipt {
+  id?: string
+  client_id: string
+  professional_id: string
+  professional_name: string
+  start_date: string
+  end_date: string
+  total_amount: number
+  items: ReceiptItem[]
+  file_url?: string
+  file_path?: string
+  created_at?: string
 }
 
 export * from './gallery'

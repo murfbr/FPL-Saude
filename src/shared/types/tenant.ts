@@ -84,6 +84,8 @@ export interface CompanyConfig {
   name: string
   slug: string
   is_active: boolean
+  cnpj?: string
+  subtitle?: string
   branding: CompanyBranding
   navbar_config?: NavbarGroup[]
   modules: Record<ModuleKey, ModuleConfig>
@@ -113,22 +115,22 @@ export const DEFAULT_BRANDING: CompanyBranding = {
 export const DEFAULT_FEATURES: CompanyFeatures = {}
 
 export const DEFAULT_MODULES: Record<ModuleKey, ModuleConfig> = {
-  overview:      { enabled: true,  label: 'Visão Geral' },
-  appointments:  { enabled: true,  label: 'Agenda' },
-  kpi:           { enabled: true,  label: 'Indicadores' },
-  financial:     { enabled: true,  label: 'Gestão Financeira' },
-  professionals: { enabled: true,  label: 'Profissionais' },
-  clients:       { enabled: true,  label: 'Pacientes' },
-  time_tracking: { enabled: true,  label: 'Ponto Eletrônico' },
-  notifications: { enabled: true,  label: 'Confirmações' },
-  services:      { enabled: true,  label: 'Serviços e Pacotes' },
-  partnerships:  { enabled: true,  label: 'Parcerias' },
-  maintenance:   { enabled: false, label: 'Manutenção' },
-  gallery:       { enabled: true,  label: 'Galeria Clínica' },
+  overview: { enabled: true, label: 'Visão Geral' },
+  appointments: { enabled: true, label: 'Agenda' },
+  kpi: { enabled: true, label: 'Indicadores' },
+  financial: { enabled: true, label: 'Gestão Financeira' },
+  professionals: { enabled: true, label: 'Profissionais' },
+  clients: { enabled: true, label: 'Pacientes' },
+  time_tracking: { enabled: true, label: 'Ponto Eletrônico' },
+  notifications: { enabled: true, label: 'Confirmações' },
+  services: { enabled: true, label: 'Serviços e Pacotes' },
+  partnerships: { enabled: true, label: 'Parcerias' },
+  maintenance: { enabled: false, label: 'Manutenção' },
+  gallery: { enabled: true, label: 'Galeria Clínica' },
 }
 
 export const DEFAULT_ROLES: Record<string, RolePermissions> = {
-  admin:        { can_view: ['*'], can_edit: ['*'], features: ['view_all_schedules', 'view_all_clients', 'manage_packages', 'reschedule', 'view_financials'] },
+  admin: { can_view: ['*'], can_edit: ['*'], features: ['view_all_schedules', 'view_all_clients', 'manage_packages', 'reschedule', 'view_financials'] },
   professional: { can_view: ['clients', 'appointments', 'time_tracking', 'notifications'], can_edit: ['appointments', 'time_tracking'], features: [] },
-  client:       { can_view: ['dashboard'], can_edit: [], features: [] },
+  client: { can_view: ['dashboard'], can_edit: [], features: [] },
 }

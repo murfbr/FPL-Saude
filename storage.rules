@@ -39,6 +39,26 @@ service firebase.storage {
           getUserData().companyId == companyId && 
           (getUserData().role == 'admin' || getUserData().role == 'professional');
       }
+
+      // Regra específica para Documentos Clínicos (Atestados, Receitas)
+      match /clients/{clientId}/clinical_documents/{fileName} {
+        allow read: if isAuthenticated() && (
+          isSuperAdmin() || (getUserData().companyId == companyId)
+        );
+        allow write: if isAuthenticated() && 
+          getUserData().companyId == companyId && 
+          (getUserData().role == 'admin' || getUserData().role == 'professional');
+      }
+
+      // Regra específica para Recibos Financeiros
+      match /financial/receipts/{fileName} {
+        allow read: if isAuthenticated() && (
+          isSuperAdmin() || (getUserData().companyId == companyId)
+        );
+        allow write: if isAuthenticated() && 
+          getUserData().companyId == companyId && 
+          (getUserData().role == 'admin' || getUserData().role == 'professional');
+      }
     }
 
     // Regras para Fotos de Profissionais (Perfil)

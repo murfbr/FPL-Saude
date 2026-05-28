@@ -64,6 +64,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PackageFinancials } from './PackageFinancials'
+import { ReceiptsTab } from './ReceiptsTab'
 import {
   useMonthlySummary,
   useActiveSubscriptions,
@@ -303,9 +304,10 @@ export const FinancialManagement = () => {
       </div>
 
       <Tabs defaultValue="subscriptions" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 mb-4">
+        <TabsList className="grid w-full grid-cols-3 mb-4">
           <TabsTrigger value="subscriptions">Assinaturas Mensais</TabsTrigger>
           <TabsTrigger value="packages">Gestão de Pacotes</TabsTrigger>
+          <TabsTrigger value="receipts">Emissão de Recibos</TabsTrigger>
         </TabsList>
 
         <TabsContent value="subscriptions">
@@ -499,6 +501,10 @@ export const FinancialManagement = () => {
               <PackageFinancials />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="receipts">
+          <ReceiptsTab />
         </TabsContent>
       </Tabs>
     </div>
