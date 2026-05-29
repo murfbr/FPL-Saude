@@ -39,6 +39,7 @@ export type RoleFeatureKey =
   | 'manage_packages'
   | 'reschedule'
   | 'view_financials'
+  | 'update_all_statuses'
 
 export const ROLE_FEATURE_DEFINITIONS: { key: RoleFeatureKey; label: string; description: string }[] = [
   {
@@ -65,6 +66,11 @@ export const ROLE_FEATURE_DEFINITIONS: { key: RoleFeatureKey; label: string; des
     key: 'view_financials',
     label: 'Ver valores financeiros',
     description: 'Permite ver o valor dos atendimentos.',
+  },
+  {
+    key: 'update_all_statuses',
+    label: 'Atualizar qualquer status',
+    description: 'Permite atualizar o status de agendamentos de outros profissionais.',
   },
 ]
 
@@ -130,7 +136,7 @@ export const DEFAULT_MODULES: Record<ModuleKey, ModuleConfig> = {
 }
 
 export const DEFAULT_ROLES: Record<string, RolePermissions> = {
-  admin: { can_view: ['*'], can_edit: ['*'], features: ['view_all_schedules', 'view_all_clients', 'manage_packages', 'reschedule', 'view_financials'] },
+  admin: { can_view: ['*'], can_edit: ['*'], features: ['view_all_schedules', 'view_all_clients', 'manage_packages', 'reschedule', 'view_financials', 'update_all_statuses'] },
   professional: { can_view: ['clients', 'appointments', 'time_tracking', 'notifications'], can_edit: ['appointments', 'time_tracking'], features: [] },
   client: { can_view: ['dashboard'], can_edit: [], features: [] },
 }

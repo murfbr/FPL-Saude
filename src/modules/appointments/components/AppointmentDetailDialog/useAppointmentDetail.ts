@@ -303,7 +303,9 @@ export function useAppointmentDetail({
   const displayStatus = localStatus || appointment?.status || 'scheduled'
   const canEdit = ['scheduled'].includes(displayStatus)
   const isAdmin = role === 'admin'
-  const canChangeStatus = isAdmin || role === 'professional'
+  const isOwnAppointment = appointment?.professional_id === professionalId
+  const canUpdateAllStatuses = config?.roles?.[role || 'professional']?.features?.includes('update_all_statuses')
+  const canChangeStatus = isAdmin || isOwnAppointment || !!canUpdateAllStatuses
   const canReschedule = isAdmin || config?.roles?.[role || 'professional']?.features?.includes('reschedule')
   const canViewFinancials = isAdmin || config?.roles?.[role || 'professional']?.features?.includes('view_financials')
 
