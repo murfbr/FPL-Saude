@@ -137,7 +137,7 @@ export const FinancialManagement = () => {
             status = 'overdue'
           }
         }
-        
+
         // Se a assinatura internamente está cancelada, ou se ela terminou neste mês ou antes (end_date),
         // e ainda não foi paga (estamos no bloco else), marcamos como 'cancelled' 
         // para não gerar sensação de falsa pendência/valor dobrado.
@@ -178,7 +178,7 @@ export const FinancialManagement = () => {
     }
     setIsProcessing(sub.id)
 
-    const { error } = await paySubscription(sub, actorId)
+    const { error } = await paySubscription(sub, actorId, currentDate)
 
     if (error) {
       toast({
@@ -348,7 +348,7 @@ export const FinancialManagement = () => {
                         <TableCell>
                           {formatCurrency(
                             sub.amount || sub.subscription_plans?.price ||
-                              sub.services?.price,
+                            sub.services?.price,
                           )}
                         </TableCell>
                         <TableCell>
