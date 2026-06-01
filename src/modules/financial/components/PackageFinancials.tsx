@@ -8,10 +8,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getAllActiveClientPackages, getPackagePayments, payPackage, deletePackagePayment } from '@/shared/services'
+import { getAllActiveClientPackages, getPackagePayments, payPackage, deletePackagePayment, terminateClientPackage } from '@/shared/services'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Progress } from '@/components/ui/progress'
-import { Ticket, DollarSign, RotateCcw, Loader2, CheckCircle, AlertTriangle, MoreHorizontal, User } from 'lucide-react'
+import { Ticket, DollarSign, RotateCcw, Loader2, CheckCircle, AlertTriangle, MoreHorizontal, User, Ban } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { Badge } from '@/components/ui/badge'
@@ -116,6 +116,27 @@ export const PackageFinancials = () => {
       toast({
         title: 'Estorno Realizado',
         description: `Pagamento de ${pkg.clients?.name} foi removido.`,
+      })
+      fetchPackages()
+    }
+    setIsProcessing(null)
+  }
+
+  const handleTerminate = async (pkg: any) => {
+    setIsProcessing(pkg.id)
+
+    const { error } = await terminateClientPackage(pkg.clients?.id, pkg.id)
+
+    if (error) {
+      toast({
+        title: 'Erro ao terminar pacote',
+        description: error.message,
+        variant: 'destructive',
+      })
+    } else {
+      toast({
+        title: 'Pacote Encerrado',
+        description: `O pacote de ${pkg.clients?.name} foi forçado ao término.`,
       })
       fetchPackages()
     }
@@ -272,6 +293,38 @@ export const PackageFinancials = () => {
                               <User className="mr-2 h-4 w-4" />
                               <span>Ver Perfil do Cliente</span>
                             </DropdownMenuItem>
+                            
+                            {role === 'admin' && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <DropdownMenuItem
+                                    onSelect={(e) => e.preventDefault()}
+                                    className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer"
+                                  >
+                                    <Ban className="mr-2 h-4 w-4" />
+                                    <span>Forçar Término</span>
+                                  </DropdownMenuItem>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Forçar Término do Pacote?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Tem certeza que deseja encerrar este pacote? As sessões restantes não poderão ser utilizadas para novos agendamentos e o pacote sairá da lista de ativos.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleTerminate(pkg)}
+                                      disabled={isProcessing === pkg.id}
+                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    >
+                                      {isProcessing === pkg.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirmar'}
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>

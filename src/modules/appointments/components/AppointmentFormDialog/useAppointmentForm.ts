@@ -224,7 +224,7 @@ export function useAppointmentForm({
       const { data: pkgs } = await getClientPackages(clientId)
       const matchingPackages = pkgs?.filter((pkg) => pkg.packages.service_id === serviceId) || []
       
-      const validPackages = matchingPackages.filter(p => (p.sessions_remaining || 0) > 0)
+      const validPackages = matchingPackages.filter(p => (p.sessions_remaining || 0) > 0 && p.status !== 'cancelled' && p.status !== 'terminated')
       const exhausted = matchingPackages.filter(p => (p.sessions_remaining || 0) <= 0)
 
       setAvailablePackages(validPackages)

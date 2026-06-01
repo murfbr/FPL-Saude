@@ -62,8 +62,9 @@ export async function getAllActiveClientPackages(options?: { limit?: number }): 
       const clientPkgs = []
       for (const d of pkgsSnap.docs) {
         const data = d.data()
-        // Filter: only packages with sessions remaining
+        // Filter: only packages with sessions remaining and not cancelled/terminated
         if ((data.sessions_remaining || 0) <= 0) continue
+        if (data.status === 'cancelled' || data.status === 'terminated') continue
 
         const cp = { id: d.id, ...data } as any
         cp.clients = { id: clientDoc.id, ...clientDoc.data() }
@@ -119,3 +120,10 @@ export async function cancelClientPackage(clientId: string, clientPackageId: str
   } catch (error) { return { error } }
 }
 
+export async function terminateClientPackage(clientId: string, clientPackageId: string): Promise<{ error: any }> {
+  try {
+    const docRef = doc(db, 'companies', getCompanyId(), 'clients', clientId, 'packages', clientPackageId)
+    await updateDoc(docRef, { status: 'terminated', terminated_at: new Date().toISOString() })
+    return { error: null }
+  } catch (error) { return { error } }
+}

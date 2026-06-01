@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import {
   Table,
@@ -34,6 +35,7 @@ import { useTenant } from '@/shared/contexts/TenantContext'
 
 export const TimeSheetReport = () => {
   const [professionals, setProfessionals] = useState<Professional[]>([])
+  const [showInactives, setShowInactives] = useState(false)
   const [selectedProfessional, setSelectedProfessional] = useState<string>('')
   const [selectedMonth, setSelectedMonth] = useState<string>(
     String(new Date().getMonth() + 1),
@@ -98,10 +100,27 @@ export const TimeSheetReport = () => {
 
       <Card className="print:hidden">
         <CardHeader>
-          <CardTitle>Relatório de Ponto</CardTitle>
-          <CardDescription>
-            Gere relatórios de horas trabalhadas para a folha de pagamento.
-          </CardDescription>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="space-y-1.5">
+              <CardTitle>Relatório de Ponto</CardTitle>
+              <CardDescription>
+                Gere relatórios de horas trabalhadas para a folha de pagamento.
+              </CardDescription>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="show-inactives"
+                checked={showInactives}
+                onCheckedChange={setShowInactives}
+              />
+              <label
+                htmlFor="show-inactives"
+                className="text-sm font-medium leading-none cursor-pointer"
+              >
+                Mostrar inativos
+              </label>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
@@ -115,7 +134,9 @@ export const TimeSheetReport = () => {
                   <SelectValue placeholder="Selecione..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {professionals.map((p) => (
+                  {professionals
+                    .filter((p) => showInactives || p.is_active !== false)
+                    .map((p) => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.name}
                     </SelectItem>
