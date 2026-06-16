@@ -439,7 +439,7 @@ export async function updateAppointmentStatus(appointmentId: string, status: str
                    title: 'Aviso de Pacote',
                    content: `Faltam ${newRemaining} sessões para o pacote de ${appData.clients?.name || 'um cliente'} acabar.`,
                    is_read: false,
-                   link: `/admin/clientes/${appData.client_id}`,
+                   link: `/admin/pacientes/${appData.client_id}`,
                    created_at: new Date().toISOString()
                  })
                })
