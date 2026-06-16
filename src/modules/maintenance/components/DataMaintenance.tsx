@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { db } from '@/shared/lib/firebase'
-import { collection, getDocs, doc, getDoc, writeBatch } from 'firebase/firestore'
+import { collection, getDocs, doc, getDoc, writeBatch, query, where } from 'firebase/firestore'
 import { useToast } from '@/shared/hooks/use-toast'
 import { Loader2, RefreshCw, AlertTriangle } from 'lucide-react'
 import { getCompanyId } from '@/shared/lib/tenantStore'
@@ -11,6 +11,93 @@ export const DataMaintenance = () => {
   const { toast } = useToast()
   const [isRunning, setIsRunning] = useState(false)
   const [progress, setProgress] = useState('')
+
+  const fixPackageCounts = async () => {
+    setIsRunning(true)
+    setProgress('Lendo pacotes e agendamentos...')
+    try {
+      const clientsRef = collection(db, 'companies', getCompanyId(), 'clients')
+      const clientsSnap = await getDocs(clientsRef)
+      
+      let processedPkgs = 0
+      let fixedPkgs = 0
+      let batch = writeBatch(db)
+      let batchCount = 0
+      const parentPackagesCache: Record<string, number> = {}
+
+      for (const clientDoc of clientsSnap.docs) {
+        const pkgsRef = collection(db, 'companies', getCompanyId(), 'clients', clientDoc.id, 'packages')
+        const pkgsSnap = await getDocs(pkgsRef)
+
+        if (pkgsSnap.empty) continue
+
+        const apptsRef = collection(db, 'companies', getCompanyId(), 'appointments')
+        const apptsQuery = query(apptsRef, where('client_id', '==', clientDoc.id))
+        const apptsSnap = await getDocs(apptsQuery)
+        const appts = apptsSnap.docs.map(d => d.data() as any)
+
+        for (const pkgDoc of pkgsSnap.docs) {
+          const pkgData = pkgDoc.data()
+          if (!pkgData.package_id) continue
+
+          let totalSessions = parentPackagesCache[pkgData.package_id]
+          if (totalSessions === undefined) {
+             const parentSnap = await getDoc(doc(db, 'companies', getCompanyId(), 'packages', pkgData.package_id))
+             if (parentSnap.exists()) {
+                totalSessions = parentSnap.data().session_count || 0
+             } else {
+                totalSessions = 0
+             }
+             parentPackagesCache[pkgData.package_id] = totalSessions
+          }
+
+          if (totalSessions === 0) continue
+
+          const consumedAppts = appts.filter(a => 
+             a.client_package_id === pkgDoc.id && 
+             (a.status === 'completed' || a.status === 'no_show')
+          )
+          const consumedCount = consumedAppts.length
+          const correctRemaining = totalSessions - consumedCount
+          const currentRemaining = pkgData.sessions_remaining || 0
+
+          if (currentRemaining !== correctRemaining) {
+            batch.update(pkgDoc.ref, { sessions_remaining: correctRemaining })
+            batchCount++
+            fixedPkgs++
+          }
+
+          processedPkgs++
+          setProgress(`Analisados ${processedPkgs} pacotes... Corrigidos: ${fixedPkgs}`)
+
+          if (batchCount >= 50) {
+            await batch.commit()
+            batch = writeBatch(db)
+            batchCount = 0
+          }
+        }
+      }
+
+      if (batchCount > 0) {
+        await batch.commit()
+      }
+
+      toast({
+        title: 'Auditoria Concluída',
+        description: `Foram analisados ${processedPkgs} pacotes. ${fixedPkgs} pacotes tinham erros e foram corrigidos.`
+      })
+    } catch (error: any) {
+      console.error(error)
+      toast({
+        title: 'Erro na auditoria',
+        description: error.message,
+        variant: 'destructive'
+      })
+    } finally {
+      setIsRunning(false)
+      setProgress('')
+    }
+  }
 
   const migrateAppointments = async () => {
     setIsRunning(true)
@@ -224,6 +311,34 @@ export const DataMaintenance = () => {
               )}
             </Button>
           </div>
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 border rounded-lg bg-green-50 border-green-100 gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-green-800 font-medium">
+                <AlertTriangle className="h-4 w-4" />
+                <span>Auditar e Corrigir Pacotes</span>
+              </div>
+              <p className="text-sm text-green-700">
+                Varre todos os pacotes dos pacientes, compara com as sessões concluídas no histórico e corrige automaticamente a contagem de sessões restantes (corrige saldos negativos ou estornos errados).
+              </p>
+            </div>
+            <Button 
+              onClick={fixPackageCounts} 
+              disabled={isRunning}
+              variant="outline"
+              className="bg-white hover:bg-green-100 shrink-0"
+            >
+              {isRunning ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Auditando...
+                </>
+              ) : (
+                'Corrigir Pacotes'
+              )}
+            </Button>
+          </div>
+
           {isRunning && (
             <p className="text-xs font-mono text-muted-foreground animate-pulse">
               {progress}

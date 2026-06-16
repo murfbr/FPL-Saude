@@ -1,5 +1,5 @@
 import { db } from '@/shared/lib/firebase'
-import { collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, query, orderBy, where, limit as fbLimit, arrayUnion, writeBatch, startAfter } from 'firebase/firestore'
+import { collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, query, orderBy, where, limit as fbLimit, arrayUnion, writeBatch, startAfter, increment } from 'firebase/firestore'
 import { Appointment, NoteEntry, Client, Professional, Service } from '@/shared/types'
 import { getCompanyId } from '@/shared/lib/tenantStore'
 
@@ -420,8 +420,8 @@ export async function updateAppointmentStatus(appointmentId: string, status: str
         const pkgSnap = await getDoc(packageRef)
         if (pkgSnap.exists()) {
            const pkgData = pkgSnap.data()
-           const newRemaining = Math.max(0, (pkgData.sessions_remaining || 0) - 1)
-           batch.update(packageRef, { sessions_remaining: newRemaining })
+           const newRemaining = (pkgData.sessions_remaining || 0) - 1
+           batch.update(packageRef, { sessions_remaining: increment(-1) })
 
            // Admin Notification: Pacote Acabando
            if (newRemaining === 2 || newRemaining === 1) {
@@ -450,12 +450,7 @@ export async function updateAppointmentStatus(appointmentId: string, status: str
         }
       } else if (wasConsumingStatus && !isConsumingStatus) {
         // Estornar devolução da sessão
-        const pkgSnap = await getDoc(packageRef)
-        if (pkgSnap.exists()) {
-           const pkgData = pkgSnap.data()
-           const newRemaining = (pkgData.sessions_remaining || 0) + 1
-           batch.update(packageRef, { sessions_remaining: newRemaining })
-        }
+        batch.update(packageRef, { sessions_remaining: increment(1) })
       }
     }
 
@@ -585,12 +580,7 @@ export async function deleteAppointment(appointmentId: string): Promise<{ delete
 
          if (isPackage && wasConsumingStatus && appData.client_id) {
            const packageRef = doc(db, 'companies', companyId, 'clients', appData.client_id, 'packages', appData.client_package_id)
-           const pkgSnap = await getDoc(packageRef)
-           if (pkgSnap.exists()) {
-             const pkgData = pkgSnap.data()
-             const newRemaining = (pkgData.sessions_remaining || 0) + 1
-             await updateDoc(packageRef, { sessions_remaining: newRemaining })
-           }
+           await updateDoc(packageRef, { sessions_remaining: increment(1) })
          }
 
          if (isAvulsa && appData.status === 'completed') {
@@ -725,13 +715,8 @@ export async function deleteFutureAppointments(appointmentId: string): Promise<{
     // Aplicar devoluções de pacotes
     for (const [pkgPath, refundsCount] of packageRefunds.entries()) {
       const pkgRef = doc(db, pkgPath)
-      const pkgSnap = await getDoc(pkgRef)
-      if (pkgSnap.exists()) {
-        const pkgData = pkgSnap.data()
-        const newRemaining = (pkgData.sessions_remaining || 0) + refundsCount
-        batch.update(pkgRef, { sessions_remaining: newRemaining })
-        commitOperation()
-      }
+      batch.update(pkgRef, { sessions_remaining: increment(refundsCount) })
+      commitOperation()
     }
     
     // Deletar registros financeiros associados
