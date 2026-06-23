@@ -244,6 +244,35 @@ export const DataMaintenance = () => {
     }
   }
 
+  const fixNotesDatesHandler = async () => {
+    setIsRunning(true)
+    setProgress('Corrigindo datas do histórico de prontuários...')
+    try {
+      const { fixNotesDates } = await import('@/shared/services')
+      const companyId = getCompanyId()
+      const result = await fixNotesDates(companyId)
+      
+      if (result.success) {
+        toast({
+          title: 'Correção concluída',
+          description: `${result.fixed} anotações foram corrigidas e reordenadas.`
+        })
+      } else {
+        throw result.error
+      }
+    } catch (error: any) {
+      console.error(error)
+      toast({
+        title: 'Erro na correção',
+        description: error.message,
+        variant: 'destructive'
+      })
+    } finally {
+      setIsRunning(false)
+      setProgress('')
+    }
+  }
+
   return (
     <div className="space-y-6">
       <Card>
@@ -335,6 +364,33 @@ export const DataMaintenance = () => {
                 </>
               ) : (
                 'Corrigir Pacotes'
+              )}
+            </Button>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 border rounded-lg bg-purple-50 border-purple-100 gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-purple-800 font-medium">
+                <AlertTriangle className="h-4 w-4" />
+                <span>Fix Notes Dates (Prontuário)</span>
+              </div>
+              <p className="text-sm text-purple-700">
+                Corrige e reordena o histórico de evolução clínica dos pacientes para a data oficial do agendamento, inserindo a data da sessão na mensagem.
+              </p>
+            </div>
+            <Button 
+              onClick={fixNotesDatesHandler} 
+              disabled={isRunning}
+              variant="outline"
+              className="bg-white hover:bg-purple-100 shrink-0"
+            >
+              {isRunning ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Corrigindo...
+                </>
+              ) : (
+                'Corrigir Prontuários'
               )}
             </Button>
           </div>
