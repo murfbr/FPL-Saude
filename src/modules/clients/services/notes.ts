@@ -18,23 +18,44 @@ import {
 import { Client, ClientPackageWithDetails, ClientSubscription, Appointment, NoteEntry, ClientExam } from '@/shared/types'
 import { getCompanyId } from '@/shared/lib/tenantStore'
 
-export async function addClientNote(clientId: string, note: Omit<NoteEntry, 'id' | 'date'>): Promise<{ data: NoteEntry | null; error: any }> {
+export async function addClientNote(clientId: string, note: Omit<NoteEntry, 'id'> & { date?: string }): Promise<{ data: NoteEntry | null; error: any }> {
   try {
     const notesRef = collection(db, 'companies', getCompanyId(), 'clients', clientId, 'notes')
     const newDoc = doc(notesRef)
+    
+    let finalContent = note.content
+    const noteDate = note.date || new Date().toISOString()
+    
+    if (note.type === 'evolution' && note.date) {
+      const dateObj = new Date(note.date)
+      const formattedDate = `${String(dateObj.getDate()).padStart(2, '0')}/${String(dateObj.getMonth() + 1).padStart(2, '0')}/${dateObj.getFullYear()}`
+      
+      if (!finalContent.startsWith(`[Data do Atendimento:`)) {
+        finalContent = `[Data do Atendimento: ${formattedDate}]\n\n${finalContent}`
+      }
+    }
+
     const newNote = {
       id: newDoc.id,
       client_id: clientId,
-      date: new Date().toISOString(),
-      ...note
+      ...note,
+      date: noteDate,
+      content: finalContent
     }
+    
     await setDoc(newDoc, newNote)
 
     if (note.appointment_id) {
       const apptRef = doc(db, 'companies', getCompanyId(), 'appointments', note.appointment_id)
-      updateDoc(apptRef, { has_clinical_notes: true }).catch(() => {
-        // Fire-and-forget: falha silenciosa, não bloqueia o fluxo principal
-      })
+      updateDoc(apptRef, { has_clinical_notes: true }).catch(() => {})
+      
+      getDoc(apptRef).then(snap => {
+         const appData = snap.data()
+         if (appData && appData.professional_id) {
+             const notifRef = doc(db, 'companies', getCompanyId(), 'professionals', appData.professional_id, 'notifications', `missing_note_${note.appointment_id}`)
+             updateDoc(notifRef, { is_read: true }).catch(() => {})
+         }
+      }).catch(() => {})
     }
 
     return { data: newNote as NoteEntry, error: null }
@@ -281,6 +302,61 @@ export async function getClientNotesWithFallback(
     return { data: null, totalCount: 0, hasMore: false, error }
   }
 }
+
+
+export async function fixNotesDates(companyIdToUse: string): Promise<{ success: boolean; fixed: number; error: any }> {
+  try {
+    let count = 0
+    const clientsRef = collection(db, 'companies', companyIdToUse, 'clients')
+    const clientsSnap = await getDocs(clientsRef)
+    const batch = writeBatch(db)
+
+    for (const clientDoc of clientsSnap.docs) {
+      const notesRef = collection(db, 'companies', companyIdToUse, 'clients', clientDoc.id, 'notes')
+      const notesSnap = await getDocs(notesRef)
+
+      for (const noteDoc of notesSnap.docs) {
+        const noteData = noteDoc.data()
+        
+        if (noteData.appointment_id && noteData.type === 'evolution') {
+          // Fetch appointment to get real date
+          const apptRef = doc(db, 'companies', companyIdToUse, 'appointments', noteData.appointment_id)
+          const apptSnap = await getDoc(apptRef)
+          
+          if (apptSnap.exists()) {
+            const apptData = apptSnap.data()
+            const realDate = apptData.schedules?.start_time
+            
+            if (realDate) {
+              let finalContent = noteData.content || ''
+              const dateObj = new Date(realDate)
+              const formattedDate = `${String(dateObj.getDate()).padStart(2, '0')}/${String(dateObj.getMonth() + 1).padStart(2, '0')}/${dateObj.getFullYear()}`
+              
+              if (!finalContent.startsWith(`[Data do Atendimento:`)) {
+                finalContent = `[Data do Atendimento: ${formattedDate}]\n\n${finalContent}`
+              }
+
+              batch.update(noteDoc.ref, {
+                date: realDate,
+                content: finalContent
+              })
+              count++
+            }
+          }
+        }
+      }
+    }
+    
+    if (count > 0) {
+      await batch.commit()
+    }
+    return { success: true, fixed: count, error: null }
+  } catch (error) {
+    console.error("Migration error:", error)
+    return { success: false, fixed: 0, error }
+  }
+}
+
 
 
 

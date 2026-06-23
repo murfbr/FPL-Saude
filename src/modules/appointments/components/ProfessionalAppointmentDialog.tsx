@@ -160,12 +160,13 @@ export const ProfessionalAppointmentDialog = ({
     if (!newNote.trim()) return
     setIsSavingNote(true)
 
-    const noteEntry: Omit<NoteEntry, 'id' | 'date'> = {
+    const noteEntry: Omit<NoteEntry, 'id'> & { date?: string } = {
       professional_id: professionalId || user?.id || undefined,
       professional_name: professionalName || user?.displayName || user?.email || 'Profissional',
       content: newNote,
       type: 'evolution',
-      appointment_id: appointment.id
+      appointment_id: appointment.id,
+      date: appointment.schedules?.start_time
     }
 
     const { data, error } = await addClientNote(appointment.client_id, noteEntry)
@@ -199,12 +200,13 @@ export const ProfessionalAppointmentDialog = ({
     setIsCompleting(true)
 
     if (hasNewNote) {
-      const noteEntry: Omit<NoteEntry, 'id' | 'date'> = {
+      const noteEntry: Omit<NoteEntry, 'id'> & { date?: string } = {
         professional_id: professionalId || user?.id || undefined,
         professional_name: professionalName || user?.displayName || user?.email || 'Profissional',
         content: newNote,
         type: 'evolution',
-        appointment_id: appointment.id
+        appointment_id: appointment.id,
+        date: appointment.schedules?.start_time
       }
       const { error: noteError } = await addClientNote(
         appointment.client_id,

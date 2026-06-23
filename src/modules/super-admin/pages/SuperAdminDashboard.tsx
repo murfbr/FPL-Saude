@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { getAllCompanies, getUsersByCompany } from '@/modules/super-admin/service'
-import { migrateAllClientNotes } from '@/shared/services'
+import { migrateAllClientNotes, fixNotesDates } from '@/shared/services'
 import type { CompanyConfig } from '@/shared/types/tenant'
 
 const SuperAdminDashboard = () => {
@@ -52,6 +52,16 @@ const SuperAdminDashboard = () => {
             Empresas
           </CardTitle>
           <div className="flex gap-2">
+             <Button variant="outline" onClick={async () => {
+                let total = 0
+                for (const c of companies) {
+                   const res = await fixNotesDates(c.id)
+                   if (res.success) total += res.fixed
+                }
+                alert(`Correção concluída em todas as empresas: ${total} anotações corrigidas.`)
+             }}>
+                Corrigir Datas de Anotações Antigas
+             </Button>
              <Button variant="outline" onClick={async () => {
                 let total = 0
                 for (const c of companies) {

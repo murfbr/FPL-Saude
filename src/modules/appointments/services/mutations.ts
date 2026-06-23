@@ -506,7 +506,7 @@ export async function updateAppointmentStatus(appointmentId: string, status: str
       const hasNotes = appData.notes && appData.notes.length > 0
       
       if (requiresObs && !hasNotes) {
-        const notifRef = doc(collection(db, 'companies', companyId, 'professionals', appData.professional_id, 'notifications'))
+        const notifRef = doc(db, 'companies', companyId, 'professionals', appData.professional_id, 'notifications', `missing_note_${appointmentId}`)
         batch.set(notifRef, {
           id: notifRef.id,
           professional_id: appData.professional_id,
