@@ -20,7 +20,20 @@ import { applyBranding } from '@/shared/lib/utils'
 import type { CompanyBranding } from '@/shared/types/tenant'
 
 const Login = () => {
-  const { companySlug } = useParams()
+  let { companySlug } = useParams()
+  
+  if (!companySlug) {
+    const hostname = window.location.hostname
+    const parts = hostname.split('.')
+    if (parts.length >= 3 && parts[1] === 'clinicaespecialista') {
+      companySlug = parts[0]
+    } else if (parts.length >= 2 && parts[1] === 'localhost') {
+      companySlug = parts[0]
+    } else if (hostname === 'fpl-saude.vercel.app') {
+      companySlug = 'fpl'
+    }
+  }
+
   const [tenantBranding, setTenantBranding] = useState<CompanyBranding | null>(null)
   const [loadingBranding, setLoadingBranding] = useState(!!companySlug)
   const [email, setEmail] = useState('')

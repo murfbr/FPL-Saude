@@ -14,7 +14,7 @@ import { ReloadPrompt } from '@/shared/components/ReloadPrompt'
 import { Analytics } from '@vercel/analytics/react'
 import Layout from '@/shared/components/Layout'
 import PublicLayout from '@/shared/components/PublicLayout'
-import Landing from '@/modules/landing/pages/Landing'
+import { DomainRouter } from '@/shared/components/DomainRouter'
 import Index from '@/shared/pages/Index'
 import Login from '@/modules/auth/pages/Login'
 import Register from '@/modules/auth/pages/Register'
@@ -76,7 +76,7 @@ const App = () => (
               <Sonner />
               <Routes>
                 {/* Landing Page */}
-                <Route path="/" element={<Landing />} />
+                <Route path="/" element={<DomainRouter />} />
 
                 {/* Public Routes */}
                 <Route element={<PublicLayout />}>
