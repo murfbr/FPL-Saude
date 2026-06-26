@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -20,17 +20,36 @@ import {
 export default function SaaSLanding() {
   const [activeTab, setActiveTab] = useState('agenda')
 
+  useEffect(() => {
+    document.title = 'Clínica Especialista';
+    
+    // Update Favicon
+    let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.head.appendChild(link);
+    }
+    link.href = '/favicon_clinica.ico';
+
+    // Try updating OG tags (Note: WhatsApp may still rely on index.html depending on how the site is hosted)
+    const ogImage = document.querySelector('meta[property="og:image"]');
+    if (ogImage) {
+      ogImage.setAttribute('content', '/logo_clinica_pq.png');
+    }
+    const ogTitle = document.querySelector('meta[property="og:title"]');
+    if (ogTitle) {
+      ogTitle.setAttribute('content', 'Clínica Especialista');
+    }
+  }, [])
+
   return (
     <div className="flex flex-col min-h-screen bg-[#F8FAFC] dark:bg-[#0B1120] font-sans selection:bg-teal-500/30">
       {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b border-slate-200/50 dark:border-slate-800/50 bg-white/80 dark:bg-[#0B1120]/80 backdrop-blur-xl">
         <div className="container flex h-16 max-w-screen-2xl items-center justify-between px-4 md:px-8">
           <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-teal-400 to-blue-600 p-[1px] shadow-sm">
-              <div className="h-full w-full rounded-[11px] bg-white dark:bg-slate-900 flex items-center justify-center">
-                <Building2 className="text-teal-600 dark:text-teal-400 h-4 w-4" />
-              </div>
-            </div>
+            <img src="/logo_clinica_pq.png" alt="Clínica Especialista" className="h-10 w-auto object-contain" />
             <span className="font-extrabold text-xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-300">
               Clínica Especialista
             </span>
@@ -368,7 +387,7 @@ export default function SaaSLanding() {
               <div className="absolute bottom-0 left-0 -mb-20 -ml-20 w-80 h-80 bg-blue-500/30 rounded-full blur-3xl"></div>
               
               <div className="relative z-10">
-                <Building2 className="w-16 h-16 mx-auto text-teal-400 mb-8" />
+                <img src="/logo_clinica_pq.png" alt="Clínica Especialista" className="h-20 w-auto mx-auto mb-8" />
                 <h2 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">
                   Leve sua clínica para o próximo nível.
                 </h2>
@@ -390,9 +409,7 @@ export default function SaaSLanding() {
       <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0B1120] py-12">
         <div className="container px-4 md:px-8 flex flex-col items-center justify-between gap-6 md:flex-row">
           <div className="flex items-center gap-2">
-            <div className="h-6 w-6 rounded bg-teal-600 flex items-center justify-center">
-              <Building2 className="text-white h-3 w-3" />
-            </div>
+            <img src="/logo_clinica_pq.png" alt="Logo" className="h-6 w-auto object-contain grayscale opacity-70" />
             <span className="font-bold text-lg text-slate-900 dark:text-white tracking-tight">Clínica Especialista</span>
           </div>
           <p className="text-sm text-slate-500 dark:text-slate-400 text-center md:text-left">
