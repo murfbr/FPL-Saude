@@ -55,12 +55,19 @@ export default function SaaSLanding() {
             </span>
           </div>
           <nav className="flex items-center gap-6">
-            <Link to="/login" className="text-sm font-semibold text-slate-600 hover:text-teal-600 dark:text-slate-300 dark:hover:text-teal-400 transition-colors hidden sm:block">
+            <Link to="/login" className="hidden sm:block text-sm font-semibold text-slate-600 hover:text-teal-600 dark:text-slate-300 dark:hover:text-teal-400 transition-colors">
               Acesso Clínicas
             </Link>
-            <Link to="#contato">
+            <Link to="#contato" className="hidden sm:block">
               <Button className="bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 rounded-full px-6 shadow-md hover:shadow-lg transition-all">
                 Falar com Especialista
+              </Button>
+            </Link>
+            
+            {/* Mobile Only: Acesso Clínicas Button */}
+            <Link to="/login" className="sm:hidden">
+              <Button size="sm" className="bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 rounded-full px-4 shadow-md transition-all">
+                Acesso Clínicas
               </Button>
             </Link>
           </nav>
