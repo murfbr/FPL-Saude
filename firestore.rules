@@ -87,14 +87,6 @@ service cloud.firestore {
       );
     }
 
-    // collectionGroup queries para subcoleções que cruzam empresas
-    match /{path=**}/subscriptions/{subscriptionId} {
-      allow read, write: if request.auth != null && isUserInCompany(path[1]);
-    }
-    match /{path=**}/packages/{packageId} {
-      allow read, write: if request.auth != null && isUserInCompany(path[1]);
-    }
-
     // Escopo das empresas (SaaS multi-tenant)
     match /companies/{companyId} {
       allow read: if true;
@@ -106,6 +98,41 @@ service cloud.firestore {
           isUserInCompany(companyId)
           || isSuperAdmin()
         );
+      }
+
+      // Entitlements do paciente (pacotes/assinaturas) — apenas staff da empresa.
+      // Substituem as antigas regras de collectionGroup, que davam escrita a
+      // qualquer usuário do tenant (inclusive role client).
+      match /clients/{clientId}/packages/{packageId} {
+        allow read, write: if request.auth != null && (
+          isSuperAdmin()
+          || (isUserInCompany(companyId) && getUserRole() != 'client')
+        );
+      }
+      match /clients/{clientId}/subscriptions/{subscriptionId} {
+        allow read, write: if request.auth != null && (
+          isSuperAdmin()
+          || (isUserInCompany(companyId) && getUserRole() != 'client')
+        );
+      }
+
+      // Agregados mantidos pelas Cloud Functions (Admin SDK ignora rules):
+      // nunca graváveis pelo app; leitura para staff da empresa
+      match /monthly_summaries/{monthId} {
+        allow read: if request.auth != null && (
+          isSuperAdmin()
+          || (isUserInCompany(companyId) && getUserRole() != 'client')
+        );
+        allow write: if false;
+      }
+
+      // Trilha de auditoria financeira — append-only: cria, nunca edita/apaga
+      match /financial_audit/{auditId} {
+        allow read: if request.auth != null && isAdmin(companyId);
+        allow create: if request.auth != null
+          && isUserInCompany(companyId)
+          && getUserRole() != 'client';
+        allow update, delete: if false;
       }
 
       // Ponto eletrônico — o próprio profissional ou admins da empresa
@@ -135,7 +162,8 @@ service cloud.firestore {
       // Demais coleções da empresa
       match /{module}/{document=**} {
         // Leitura — RBAC com fallback permissivo para empresas sem config
-        allow read: if module != 'users' && request.auth != null && (
+        allow read: if module != 'users' && module != 'monthly_summaries' && module != 'financial_audit'
+          && request.auth != null && (
           isAdmin(companyId)
           || (isUserInCompany(companyId) && canViewModule(companyId, module))
           // Profissional sempre lê o próprio perfil (necessário no login)
@@ -148,9 +176,12 @@ service cloud.firestore {
 
         // Escrita — RBAC estrito: 'client' nunca escreve, config da empresa é respeitada,
         // fallback para empresas sem config (DEFAULT_ROLES: professional pode editar)
-        allow write: if module != 'users' && request.auth != null
-          && isUserInCompany(companyId)
-          && canEditModule(companyId, module);
+        allow write: if module != 'users' && module != 'monthly_summaries' && module != 'financial_audit'
+          && request.auth != null
+          && (
+            isSuperAdmin()
+            || (isUserInCompany(companyId) && canEditModule(companyId, module))
+          );
       }
     }
 
