@@ -61,7 +61,7 @@ Every tenant (clinic) is a document in the root `companies` collection, and **al
 - `src/shared/types/tenant.ts` — `CompanyConfig`, `ModuleKey`, `RolePermissions`, defaults.
 - Root collections: `users/{uid}` (profile + `companyId` + `role`), `super_admins/{uid}`, `companies/{id}`.
 - Auth custom claims (`companyId`, `role`) are set by the `onUserWrite` Cloud Function watching the root `users` collection; `firestore.rules` validates by claim with a document fallback, and enforces per-module RBAC (`roles.<role>.can_view` / `can_edit` on the company doc).
-- Users are never hard-deleted: soft delete sets `is_active: false` and the Cloud Function suspends the Auth account.
+- Users are never hard-deleted in Firestore: soft delete sets `is_active: false` on the root `users` doc and the Cloud Function then **deletes the Auth account** (`onUserWrite` calls `auth().deleteUser`) and anonymizes the professional doc — reactivation does not restore login.
 
 ### Module structure (`src/modules/`)
 
