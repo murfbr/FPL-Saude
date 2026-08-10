@@ -54,6 +54,15 @@ export const AdminTimeEntry = ({ onSuccess }: AdminTimeEntryProps) => {
       return
     }
 
+    if (clockOut && clockOut <= clockIn) {
+      toast({
+        title: 'Horário inválido',
+        description: 'O horário de saída deve ser depois do horário de entrada.',
+        variant: 'destructive',
+      })
+      return
+    }
+
     setIsSubmitting(true)
     try {
       // Append :00 for seconds to match TIME format in Supabase

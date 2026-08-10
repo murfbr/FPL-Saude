@@ -130,6 +130,15 @@ export const TimeTracker = ({ professionalId }: TimeTrackerProps) => {
       return
     }
 
+    if (clockOut && clockOut <= clockIn) {
+      toast({
+        title: 'Horário inválido',
+        description: 'O horário de saída deve ser depois do horário de entrada.',
+        variant: 'destructive',
+      })
+      return
+    }
+
     setIsProcessing(true)
     const today = format(new Date(), 'yyyy-MM-dd')
     const { error } = await upsertTimeRecord(

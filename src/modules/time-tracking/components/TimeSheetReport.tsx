@@ -75,12 +75,14 @@ export const TimeSheetReport = () => {
     setIsLoading(false)
   }
 
-  const calculateHours = (inTime: string, outTime: string | null) => {
+  // Saída anterior/igual à entrada = registro inválido (provável erro de digitação):
+  // retorna null para a linha ser sinalizada, em vez de somar 0h em silêncio na folha
+  const calculateHours = (inTime: string, outTime: string | null): number | null => {
     if (!outTime) return 0
     const d1 = parseISO(`2000-01-01T${inTime}`)
     const d2 = parseISO(`2000-01-01T${outTime}`)
     const diff = differenceInMinutes(d2, d1)
-    return diff > 0 ? diff / 60 : 0
+    return diff > 0 ? diff / 60 : null
   }
 
   const formatHours = (hours: number) => {
@@ -90,8 +92,12 @@ export const TimeSheetReport = () => {
   }
 
   const totalHours = records.reduce((acc, r) => {
-    return acc + calculateHours(r.clock_in, r.clock_out)
+    return acc + (calculateHours(r.clock_in, r.clock_out) ?? 0)
   }, 0)
+
+  const invalidCount = records.filter(
+    (r) => calculateHours(r.clock_in, r.clock_out) === null,
+  ).length
 
   const handlePrint = () => {
     window.print()
@@ -175,7 +181,10 @@ export const TimeSheetReport = () => {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {[2024, 2025, 2026].map((y) => (
+                  {Array.from(
+                    { length: new Date().getFullYear() - 2023 },
+                    (_, i) => 2024 + i,
+                  ).map((y) => (
                     <SelectItem key={y} value={String(y)}>
                       {y}
                     </SelectItem>
@@ -281,7 +290,13 @@ export const TimeSheetReport = () => {
                             {record.clock_out || '-'}
                           </TableCell>
                           <TableCell className="text-right font-mono print:text-black">
-                            {formatHours(hours)}
+                            {hours === null ? (
+                              <span className="text-destructive font-semibold">
+                                Inválido
+                              </span>
+                            ) : (
+                              formatHours(hours)
+                            )}
                           </TableCell>
                         </TableRow>
                       )
@@ -299,6 +314,14 @@ export const TimeSheetReport = () => {
                     </TableRow>
                   </TableBody>
                 </Table>
+
+                {invalidCount > 0 && (
+                  <p className="text-sm text-destructive font-medium">
+                    {invalidCount} registro(s) com horário inválido (saída
+                    anterior à entrada) não entram no total. Corrija pelo
+                    lançamento manual acima antes de fechar a folha.
+                  </p>
+                )}
 
                 <div className="hidden print:block pt-16 mt-8 border-t print:border-transparent">
                   <div className="grid grid-cols-2 gap-12">
