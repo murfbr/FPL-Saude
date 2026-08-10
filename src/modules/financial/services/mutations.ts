@@ -36,7 +36,9 @@ export async function paySubscription(subscription: ClientSubscription, professi
       return { error: new Error('Esta mensalidade já foi quitada para o mês selecionado.') }
     }
 
-    const fullPrice = subscription.subscription_plans?.price || subscription.services?.price || 0
+    // Mesma cascata exibida na tela (FinancialManagement): o valor negociado da
+    // assinatura (com desconto de parceria) prevalece sobre o preço de tabela
+    const fullPrice = subscription.amount || subscription.subscription_plans?.price || subscription.services?.price || 0
     const planName = subscription.subscription_plans?.name || subscription.services?.name || ''
 
     let amount = fullPrice
