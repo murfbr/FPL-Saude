@@ -78,8 +78,8 @@ export function useBookAppointmentMutation() {
 export function useUpdateAppointmentStatusMutation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (params: { appointmentId: string; status: string }) => {
-      const { error } = await appointmentService.updateAppointmentStatus(params.appointmentId, params.status)
+    mutationFn: async (params: { appointmentId: string; status: string; options?: { allowExhaustedPackageUse?: boolean } }) => {
+      const { error } = await appointmentService.updateAppointmentStatus(params.appointmentId, params.status, params.options)
       if (error) throw error
       return params
     },

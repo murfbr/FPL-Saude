@@ -322,7 +322,11 @@ export async function rescheduleFutureAppointments(
 }
 
 
-export async function updateAppointmentStatus(appointmentId: string, status: string): Promise<{ error: any }> {
+export async function updateAppointmentStatus(
+  appointmentId: string,
+  status: string,
+  options?: { allowExhaustedPackageUse?: boolean },
+): Promise<{ error: any }> {
   try {
     const companyId = getCompanyId()
     const docRef = doc(db, 'companies', companyId, 'appointments', appointmentId)
@@ -410,6 +414,7 @@ export async function updateAppointmentStatus(appointmentId: string, status: str
     }
 
     const isAvulsa = !isPackage && !isMonthlySubscription
+    let packageSessionConsumed: boolean | undefined
 
     // 1. Pacotes: Consumir ou estornar sessão
     if (isPackage) {
@@ -419,12 +424,33 @@ export async function updateAppointmentStatus(appointmentId: string, status: str
       const wasConsumingStatus = oldStatus === 'completed' || oldStatus === 'no_show'
 
       if (isConsumingStatus && !wasConsumingStatus) {
-        // Consumir sessão
+        // Consumir sessão — nunca debita abaixo de zero nem de pacote cancelado;
+        // pacote indisponível exige escolha ativa (cortesia) de quem conclui
         const pkgSnap = await getDoc(packageRef)
-        if (pkgSnap.exists()) {
+        if (!pkgSnap.exists()) {
+          packageSessionConsumed = false
+        } else {
            const pkgData = pkgSnap.data()
+           const pkgUnavailable =
+             pkgData.status === 'cancelled' ||
+             pkgData.status === 'terminated' ||
+             (pkgData.sessions_remaining || 0) <= 0
+
+           if (pkgUnavailable && !options?.allowExhaustedPackageUse) {
+             const err = new Error(
+               'Pacote esgotado ou cancelado. Confirme a cortesia para concluir sem debitar sessão.',
+             ) as Error & { code?: string }
+             err.code = 'PACKAGE_UNAVAILABLE'
+             return { error: err }
+           }
+
+           if (pkgUnavailable) {
+             // Cortesia confirmada: conclui sem debitar
+             packageSessionConsumed = false
+           } else {
            const newRemaining = (pkgData.sessions_remaining || 0) - 1
            batch.update(packageRef, { sessions_remaining: increment(-1) })
+           packageSessionConsumed = true
 
            // Admin Notification: Pacote Acabando
            if (newRemaining === 2 || newRemaining === 1) {
@@ -432,13 +458,13 @@ export async function updateAppointmentStatus(appointmentId: string, status: str
                const usersRef = collection(db, 'companies', companyId, 'users')
                const adminsQuery = query(usersRef, where('role', '==', 'admin'))
                const adminsSnap = await getDocs(adminsQuery)
-               
+
                adminsSnap.docs.forEach(adminDoc => {
                  const adminId = adminDoc.id
                  const notifRef = doc(collection(db, 'companies', companyId, 'admins', adminId, 'notifications'))
                  batch.set(notifRef, {
                    id: notifRef.id,
-                   professional_id: adminId, 
+                   professional_id: adminId,
                    title: 'Aviso de Pacote',
                    content: `Faltam ${newRemaining} sessões para o pacote de ${appData.clients?.name || 'um cliente'} acabar.`,
                    is_read: false,
@@ -450,10 +476,14 @@ export async function updateAppointmentStatus(appointmentId: string, status: str
                console.error("Erro ao buscar admins para notificação", e)
              }
            }
+           }
         }
       } else if (wasConsumingStatus && !isConsumingStatus) {
-        // Estornar devolução da sessão
-        batch.update(packageRef, { sessions_remaining: increment(1) })
+        // Devolver sessão — apenas se ela foi de fato debitada na conclusão
+        // (docs legados sem a marca mantêm o comportamento antigo de devolver)
+        if (appData.package_session_consumed !== false) {
+          batch.update(packageRef, { sessions_remaining: increment(1) })
+        }
       }
     }
 
@@ -499,8 +529,14 @@ export async function updateAppointmentStatus(appointmentId: string, status: str
       }
     }
 
-    // Atualiza o status do agendamento ao final
-    batch.update(docRef, { status })
+    // Atualiza o status do agendamento ao final (com a marca de consumo do pacote,
+    // para o estorno devolver sessão apenas quando ela foi de fato debitada)
+    batch.update(
+      docRef,
+      packageSessionConsumed === undefined
+        ? { status }
+        : { status, package_session_consumed: packageSessionConsumed },
+    )
 
     // Professional Notification: Prontuário Pendente
     if (status === 'completed' && oldStatus !== 'completed' && !isEvent) {
@@ -571,7 +607,7 @@ export async function deleteAppointment(appointmentId: string): Promise<{ delete
          const isPackage = !!appData.client_package_id
          const wasConsumingStatus = appData.status === 'completed' || appData.status === 'no_show'
 
-         if (isPackage && wasConsumingStatus && appData.client_id) {
+         if (isPackage && wasConsumingStatus && appData.client_id && appData.package_session_consumed !== false) {
            const packageRef = doc(db, 'companies', companyId, 'clients', appData.client_id, 'packages', appData.client_package_id)
            await updateDoc(packageRef, { sessions_remaining: increment(1) })
          }
@@ -671,7 +707,7 @@ export async function deleteFutureAppointments(appointmentId: string): Promise<{
       const isPackage = !!appData.client_package_id
       const wasConsumingStatus = appData.status === 'completed' || appData.status === 'no_show'
 
-      if (isPackage && wasConsumingStatus) {
+      if (isPackage && wasConsumingStatus && appData.package_session_consumed !== false) {
         if (appData.client_id && appData.client_package_id) {
           const pkgPath = `companies/${companyId}/clients/${appData.client_id}/packages/${appData.client_package_id}`
           const currentRefunds = packageRefunds.get(pkgPath) || 0
@@ -725,13 +761,19 @@ export async function deleteFutureAppointments(appointmentId: string): Promise<{
 }
 
 
-export async function completeAppointment(appointmentId: string): Promise<{ error: any }> {
-  return updateAppointmentStatus(appointmentId, 'completed')
+export async function completeAppointment(
+  appointmentId: string,
+  options?: { allowExhaustedPackageUse?: boolean },
+): Promise<{ error: any }> {
+  return updateAppointmentStatus(appointmentId, 'completed', options)
 }
 
 
-export async function markAppointmentAsNoShow(appointmentId: string): Promise<{ error: any }> {
-  return updateAppointmentStatus(appointmentId, 'no_show')
+export async function markAppointmentAsNoShow(
+  appointmentId: string,
+  options?: { allowExhaustedPackageUse?: boolean },
+): Promise<{ error: any }> {
+  return updateAppointmentStatus(appointmentId, 'no_show', options)
 }
 
 

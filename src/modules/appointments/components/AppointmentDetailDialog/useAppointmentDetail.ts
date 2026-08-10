@@ -209,12 +209,12 @@ export function useAppointmentDetail({
     setIsDeleting(false)
   }
 
-  const handleStatusChange = (newStatus: string) => {
+  const handleStatusChange = (newStatus: string, statusOptions?: { allowExhaustedPackageUse?: boolean }) => {
     if (!appointment) return
     setIsUpdatingStatus(true)
     setLocalStatus(newStatus)
 
-    statusMutation.mutate({ appointmentId: appointment.id, status: newStatus }, {
+    statusMutation.mutate({ appointmentId: appointment.id, status: newStatus, options: statusOptions }, {
       onSuccess: () => {
         toast({ title: 'Status atualizado com sucesso.' })
         updateAppointmentCache(appointment.id, (old) => ({ ...old, status: newStatus }))
@@ -223,6 +223,16 @@ export function useAppointmentDetail({
         setIsUpdatingStatus(false)
       },
       onError: (error) => {
+        // Pacote esgotado/cancelado: a bonificação é permitida, mas como escolha ativa
+        if ((error as { code?: string })?.code === 'PACKAGE_UNAVAILABLE') {
+          const courtesy = window.confirm(
+            'Pacote esgotado ou cancelado. Concluir como cortesia, sem debitar sessão do pacote?',
+          )
+          if (courtesy) {
+            handleStatusChange(newStatus, { allowExhaustedPackageUse: true })
+            return
+          }
+        }
         setLocalStatus(appointment.status)
         toast({ title: 'Erro ao atualizar status', description: getFriendlyErrorMessage(error), variant: 'destructive' })
         setIsUpdatingStatus(false)

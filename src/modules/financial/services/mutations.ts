@@ -62,7 +62,9 @@ export async function paySubscription(subscription: ClientSubscription, professi
       }
     }
 
-    const newDoc = doc(finRef)
+    // ID determinístico por assinatura+mês: mesmo numa corrida de dois cliques,
+    // o segundo write sobrescreve o mesmo doc — duplicata é fisicamente impossível
+    const newDoc = doc(finRef, `${subscription.id}_${format(reference, 'yyyy-MM')}`)
     await setDoc(newDoc, {
       id: newDoc.id,
       client_id: subscription.client_id,
@@ -86,13 +88,22 @@ export async function deleteSubscriptionPayment(recordId: string): Promise<{ err
 
 export async function payPackage(clientPackage: any, professionalId: string): Promise<{ error: any }> {
   try {
-    console.log('[payPackage] Input:', { clientPackage, professionalId })
+    const finRef = collection(db, 'companies', getCompanyId(), 'financial_records')
+
+    // Pagamentos legados têm IDs aleatórios — a checagem por query cobre esses casos
+    const duplicateQuery = query(finRef, where('client_package_id', '==', clientPackage.id))
+    const duplicateSnap = await getDocs(duplicateQuery)
+    if (!duplicateSnap.empty) {
+      return { error: new Error('Este pacote já possui um pagamento registrado.') }
+    }
+
     const amount = (clientPackage.packages?.price || 0) - (clientPackage.discount_amount || 0)
     const description = `Pacote ${clientPackage.packages?.name || ''}`
 
-    const finRef = collection(db, 'companies', getCompanyId(), 'financial_records')
-    const newDoc = doc(finRef)
-    const payload = {
+    // ID determinístico = client_package_id: corrida de dois cliques sobrescreve
+    // o mesmo doc em vez de duplicar
+    const newDoc = doc(finRef, clientPackage.id)
+    await setDoc(newDoc, {
       id: newDoc.id,
       client_id: clientPackage.client_id,
       professional_id: professionalId,
@@ -101,10 +112,7 @@ export async function payPackage(clientPackage: any, professionalId: string): Pr
       payment_date: new Date().toISOString(),
       description: description,
       payment_method: 'manual',
-    }
-    console.log('[payPackage] Writing payload:', payload)
-    await setDoc(newDoc, payload)
-    console.log('[payPackage] Success!')
+    })
     return { error: null }
   } catch (error) {
     console.error('[payPackage] Error:', error)

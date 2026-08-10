@@ -220,7 +220,16 @@ export const ProfessionalAppointmentDialog = ({
       setNewNote('')
     }
 
-    const { error } = await completeAppointment(appointment.id)
+    let { error } = await completeAppointment(appointment.id)
+    if (error?.code === 'PACKAGE_UNAVAILABLE') {
+      // Bonificação permitida, mas como escolha ativa de quem conclui
+      const courtesy = window.confirm(
+        'Pacote esgotado ou cancelado. Concluir como cortesia, sem debitar sessão do pacote?',
+      )
+      if (courtesy) {
+        ;({ error } = await completeAppointment(appointment.id, { allowExhaustedPackageUse: true }))
+      }
+    }
     if (error) {
       toast({
         title: 'Erro ao finalizar atendimento',
@@ -237,7 +246,15 @@ export const ProfessionalAppointmentDialog = ({
 
   const handleNoShow = async () => {
     setIsMarkingNoShow(true)
-    const { error } = await markAppointmentAsNoShow(appointment.id)
+    let { error } = await markAppointmentAsNoShow(appointment.id)
+    if (error?.code === 'PACKAGE_UNAVAILABLE') {
+      const courtesy = window.confirm(
+        'Pacote esgotado ou cancelado. Registrar a falta como cortesia, sem debitar sessão do pacote?',
+      )
+      if (courtesy) {
+        ;({ error } = await markAppointmentAsNoShow(appointment.id, { allowExhaustedPackageUse: true }))
+      }
+    }
     if (error) {
       toast({
         title: 'Erro ao registrar falta',
