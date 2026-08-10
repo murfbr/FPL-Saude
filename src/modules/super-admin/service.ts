@@ -119,6 +119,13 @@ export async function createCompany(
   slug: string,
 ): Promise<{ data: CompanyConfig | null; error: any }> {
   try {
+    // O slug é o ID do documento: sem esta checagem, um slug repetido
+    // sobrescreveria a empresa existente (roles, branding, módulos)
+    const existing = await getDoc(doc(db, 'companies', slug))
+    if (existing.exists()) {
+      return { data: null, error: new Error(`Já existe uma empresa com o slug "${slug}".`) }
+    }
+
     const modules = Object.fromEntries(
       MODULE_REGISTRY.map(({ key, label, defaultEnabled }) => [
         key,
