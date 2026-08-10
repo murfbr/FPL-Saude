@@ -381,6 +381,7 @@ export async function updateAppointmentStatus(
               payment_date: new Date().toISOString(),
               description: `Evento — ${appData.event_title || 'Sem título'}`,
               payment_method: 'manual',
+              created_at: new Date().toISOString(),
             })
           }
         }
@@ -512,7 +513,8 @@ export async function updateAppointmentStatus(
               amount: finalPrice,
               payment_date: new Date().toISOString(),
               description: `Sessão Avulsa - ${serviceData?.name || 'Serviço'}`,
-              payment_method: 'manual'
+              payment_method: 'manual',
+              created_at: new Date().toISOString()
             })
           }
         } catch (e) {

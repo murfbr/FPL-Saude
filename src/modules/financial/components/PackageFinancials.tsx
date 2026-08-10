@@ -104,7 +104,7 @@ export const PackageFinancials = () => {
     if (!pkg.financial_record_id) return
     setIsProcessing(pkg.id)
 
-    const { error } = await deletePackagePayment(pkg.financial_record_id)
+    const { error } = await deletePackagePayment(pkg.financial_record_id, professionalId || user?.id)
 
     if (error) {
       toast({

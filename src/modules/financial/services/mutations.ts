@@ -2,6 +2,7 @@ import { db } from '@/shared/lib/firebase'
 import {
   collection,
   doc,
+  getDoc,
   setDoc,
   deleteDoc,
   query,
@@ -74,16 +75,45 @@ export async function paySubscription(subscription: ClientSubscription, professi
       payment_date: reference.toISOString(),
       description: description,
       payment_method: 'manual',
+      created_at: new Date().toISOString(),
+      created_by: professionalId || null,
     })
     return { error: null }
   } catch (error) { return { error } }
 }
 
-export async function deleteSubscriptionPayment(recordId: string): Promise<{ error: any }> {
+/**
+ * Estorno com trilha de auditoria: grava um snapshot completo do registro em
+ * financial_audit (append-only) antes de removê-lo. A remoção física é mantida
+ * porque o trigger onFinancialRecordWrite entende deleção e decrementa o
+ * monthly_summary corretamente.
+ */
+async function archiveAndDeleteFinancialRecord(recordId: string, reversedBy?: string): Promise<{ error: any }> {
   try {
-    await deleteDoc(doc(db, 'companies', getCompanyId(), 'financial_records', recordId))
+    const companyId = getCompanyId()
+    const recordRef = doc(db, 'companies', companyId, 'financial_records', recordId)
+    const snap = await getDoc(recordRef)
+    if (!snap.exists()) {
+      return { error: new Error('Registro financeiro não encontrado.') }
+    }
+
+    const auditRef = doc(collection(db, 'companies', companyId, 'financial_audit'))
+    await setDoc(auditRef, {
+      id: auditRef.id,
+      action: 'reversal',
+      record_id: recordId,
+      record: snap.data(),
+      reversed_by: reversedBy || null,
+      reversed_at: new Date().toISOString(),
+    })
+
+    await deleteDoc(recordRef)
     return { error: null }
   } catch (error) { return { error } }
+}
+
+export async function deleteSubscriptionPayment(recordId: string, reversedBy?: string): Promise<{ error: any }> {
+  return archiveAndDeleteFinancialRecord(recordId, reversedBy)
 }
 
 export async function payPackage(clientPackage: any, professionalId: string): Promise<{ error: any }> {
@@ -112,6 +142,8 @@ export async function payPackage(clientPackage: any, professionalId: string): Pr
       payment_date: new Date().toISOString(),
       description: description,
       payment_method: 'manual',
+      created_at: new Date().toISOString(),
+      created_by: professionalId || null,
     })
     return { error: null }
   } catch (error) {
@@ -120,9 +152,6 @@ export async function payPackage(clientPackage: any, professionalId: string): Pr
   }
 }
 
-export async function deletePackagePayment(recordId: string): Promise<{ error: any }> {
-  try {
-    await deleteDoc(doc(db, 'companies', getCompanyId(), 'financial_records', recordId))
-    return { error: null }
-  } catch (error) { return { error } }
+export async function deletePackagePayment(recordId: string, reversedBy?: string): Promise<{ error: any }> {
+  return archiveAndDeleteFinancialRecord(recordId, reversedBy)
 }

@@ -203,7 +203,7 @@ export const FinancialManagement = () => {
     setIsProcessing(sub.id)
 
 
-    const { error } = await deleteSubscriptionPayment(sub.financial_record_id)
+    const { error } = await deleteSubscriptionPayment(sub.financial_record_id, professionalId || user?.id)
 
     if (error) {
       toast({
