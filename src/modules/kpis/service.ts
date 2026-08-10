@@ -27,6 +27,10 @@ function filterSummary(summary: any, filters?: KpiFilters) {
       cancelled_appointments: data.cancelled || 0,
       no_show_appointments: data.no_show || 0,
       total_appointments: data.completed + (data.cancelled || 0) + (data.no_show || 0),
+      package_sessions: data.package_sessions || 0,
+      subscription_sessions: data.subscription_sessions || 0,
+      independent_sessions: data.independent_sessions || 0,
+      independent_revenue: data.independent_revenue || 0,
     }
   }
 
@@ -39,6 +43,10 @@ function filterSummary(summary: any, filters?: KpiFilters) {
       cancelled_appointments: data.cancelled || 0,
       no_show_appointments: data.no_show || 0,
       total_appointments: data.completed + (data.cancelled || 0) + (data.no_show || 0),
+      package_sessions: data.package_sessions || 0,
+      subscription_sessions: data.subscription_sessions || 0,
+      independent_sessions: data.independent_sessions || 0,
+      independent_revenue: data.independent_revenue || 0,
     }
   }
 
@@ -51,6 +59,10 @@ function filterSummary(summary: any, filters?: KpiFilters) {
       cancelled_appointments: data.cancelled || 0,
       no_show_appointments: data.no_show || 0,
       total_appointments: data.completed + (data.cancelled || 0) + (data.no_show || 0),
+      package_sessions: data.package_sessions || 0,
+      subscription_sessions: data.subscription_sessions || 0,
+      independent_sessions: data.independent_sessions || 0,
+      independent_revenue: data.independent_revenue || 0,
     }
   }
 
@@ -63,6 +75,10 @@ function filterSummary(summary: any, filters?: KpiFilters) {
       cancelled_appointments: data.cancelled || 0,
       no_show_appointments: data.no_show || 0,
       total_appointments: data.count + (data.cancelled || 0) + (data.no_show || 0),
+      package_sessions: data.package_sessions || 0,
+      subscription_sessions: data.subscription_sessions || 0,
+      independent_sessions: data.independent_sessions || 0,
+      independent_revenue: data.independent_revenue || 0,
     }
   }
 
@@ -75,6 +91,10 @@ function filterSummary(summary: any, filters?: KpiFilters) {
       cancelled_appointments: data.cancelled || 0,
       no_show_appointments: data.no_show || 0,
       total_appointments: data.sessionCount + (data.cancelled || 0) + (data.no_show || 0),
+      package_sessions: 0,
+      subscription_sessions: 0,
+      independent_sessions: 0,
+      independent_revenue: 0,
     }
   }
 
@@ -84,6 +104,10 @@ function filterSummary(summary: any, filters?: KpiFilters) {
     cancelled_appointments: summary.cancelled_appointments || 0,
     no_show_appointments: summary.no_show_appointments || 0,
     total_appointments: summary.total_appointments || 0,
+    package_sessions: 0,
+    subscription_sessions: 0,
+    independent_sessions: 0,
+    independent_revenue: 0,
   }
 }
 
@@ -128,6 +152,10 @@ export async function getKpiMetrics(startDate: Date, endDate: Date, filters?: Kp
           : 0,
         cancellation_rate: (currCancels / totalCurr) * 100,
         prev_cancellation_rate: (prevCancels / totalPrev) * 100,
+        package_sessions: curr.package_sessions || 0,
+        subscription_sessions: curr.subscription_sessions || 0,
+        independent_sessions: curr.independent_sessions || 0,
+        independent_revenue: curr.independent_revenue || 0,
       },
       error: null,
     }

@@ -14,7 +14,7 @@ import {
   getLastClientNotes,
   getClientNotesByAppointment,
 } from '@/shared/services'
-import { getClientSubscriptions } from '@/modules/clients/service'
+import { getClientSubscriptions, findActiveSubscriptionForService } from '@/modules/clients/service'
 import { useUpdateAppointmentCache } from '@/modules/appointments/queries'
 import { useDeleteAppointmentMutation, useUpdateAppointmentStatusMutation } from '@/modules/appointments/hooks/useAppointments'
 import { deleteFutureAppointments, updateAppointment } from '@/shared/services' // Note: these are not in TanStack yet or we can use the ones we have
@@ -136,7 +136,7 @@ export function useAppointmentDetail({
         if (clientId && serviceId) {
           getClientSubscriptions(clientId)
             .then(({ data: subs }) => {
-              const matchingSub = subs?.find((sub: any) => sub.service_id === serviceId)
+              const matchingSub = findActiveSubscriptionForService(subs, serviceId)
               if (matchingSub) {
                 setSubscriptionDetails({
                   plan_name: matchingSub.subscription_plans?.name || appointment.services?.name || 'Assinatura Mensal',

@@ -330,9 +330,9 @@ export const KpiDashboard = () => {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <div className="xl:col-span-2">
           <KpiCard
-            title="Faturamento"
-            value={formatCurrency(kpis?.total_revenue)}
-            comparison={revenueComparison}
+            title={selectedProfessional !== 'all' ? "Faturamento Avulso" : "Faturamento"}
+            value={formatCurrency(selectedProfessional !== 'all' ? kpis?.independent_revenue : kpis?.total_revenue)}
+            comparison={selectedProfessional !== 'all' ? undefined : revenueComparison}
             icon={DollarSign}
             isLoading={isLoading}
           />
@@ -358,9 +358,15 @@ export const KpiDashboard = () => {
 
         <div className="xl:col-span-2">
           <KpiCard
-            title="Ticket Médio"
-            value={formatCurrency(kpis?.average_ticket)}
-            comparison={ticketComparison}
+            title={selectedProfessional !== 'all' ? "Ticket Médio (Avulso)" : "Ticket Médio"}
+            value={formatCurrency(
+              selectedProfessional !== 'all'
+                ? kpis?.independent_sessions > 0
+                  ? kpis.independent_revenue / kpis.independent_sessions
+                  : 0
+                : kpis?.average_ticket
+            )}
+            comparison={selectedProfessional !== 'all' ? undefined : ticketComparison}
             icon={Ticket}
             isLoading={isLoading}
           />
@@ -379,9 +385,49 @@ export const KpiDashboard = () => {
             invertColors
           />
         </div>
-        <div className="xl:col-span-2">
-          {/* Card vazio ou espaço reservado, podemos usar no futuro */}
-        </div>
+        
+        {selectedProfessional !== 'all' ? (
+          <div className="xl:col-span-2">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Perfil de Atendimento</CardTitle>
+                <BarChart className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <div className="space-y-2 mt-2">
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-full" />
+                  </div>
+                ) : (
+                  <div className="space-y-2 mt-2 text-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-blue-500"></div> Pacotes
+                      </span>
+                      <span className="font-medium">{kpis?.package_sessions || 0}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-purple-500"></div> Assinaturas
+                      </span>
+                      <span className="font-medium">{kpis?.subscription_sessions || 0}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-green-500"></div> Avulsos
+                      </span>
+                      <span className="font-medium">{kpis?.independent_sessions || 0}</span>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        ) : (
+          <div className="xl:col-span-2"></div>
+        )}
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">

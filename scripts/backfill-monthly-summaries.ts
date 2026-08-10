@@ -40,6 +40,19 @@ async function recalculateMonth(companyId: string, month: Date) {
   const startStr = startOfMonth(month).toISOString()
   const endStr = endOfMonth(month).toISOString()
 
+  // 1. Preparar Subscrições para identificar agendamentos
+  const activeSubs = new Set<string>()
+  const clientsSnap = await db.collection('companies').doc(companyId).collection('clients').get()
+  for (const clientDoc of clientsSnap.docs) {
+    const subsSnap = await db.collection('companies').doc(companyId).collection('clients').doc(clientDoc.id).collection('subscriptions').get()
+    for (const subDoc of subsSnap.docs) {
+      const sub = subDoc.data()
+      if (sub.service_id) {
+        activeSubs.add(`${clientDoc.id}_${sub.service_id}`)
+      }
+    }
+  }
+
   const apptsSnap = await db
     .collection('companies').doc(companyId).collection('appointments')
     .where('schedules.start_time', '>=', startStr)
@@ -52,12 +65,33 @@ async function recalculateMonth(companyId: string, month: Date) {
     .where('payment_date', '<=', endStr)
     .get()
 
-  let totalRevenue = 0, completedAppointments = 0, cancelledAppointments = 0
-  let noShowAppointments = 0, totalAppointments = 0
+  // 2. Receita Real e Avulsa
+  let totalRevenue = 0, subscriptionsRevenue = 0, subscriptionsPaidCount = 0
+  const professionalIndependentRevenue: Record<string, number> = {}
 
+  finSnap.forEach((docSnap) => {
+    const f = docSnap.data()
+    const amount = (f.amount as number) || 0
+    totalRevenue += amount
+    if (f.client_subscription_id) {
+      subscriptionsRevenue += amount
+      subscriptionsPaidCount++
+    }
+
+    if (!f.client_package_id && !f.client_subscription_id) {
+       const profId = f.professional_id as string
+       if (profId) {
+          professionalIndependentRevenue[profId] = (professionalIndependentRevenue[profId] || 0) + amount
+       }
+    }
+  })
+
+  // 3. Métricas Operacionais (Appointments)
+  let completedAppointments = 0, cancelledAppointments = 0, noShowAppointments = 0, totalAppointments = 0
+  
   const byProfessional: Record<string, any> = {}
   const byService: Record<string, any> = {}
-  const byPartnership: Record<string, { name: string; clientIds: Set<string>; sessionCount: number; cancelled: number; no_show: number; revenue: number }> = {}
+  const byPartnership: Record<string, any> = {}
   const byProfessionalService: Record<string, any> = {}
   const byProfessionalPartnership: Record<string, any> = {}
 
@@ -69,40 +103,69 @@ async function recalculateMonth(companyId: string, month: Date) {
     const profName = a.professionals?.name || 'Desconhecido'
     const serviceId = a.service_id as string
     const serviceName = a.services?.name || 'Serviço Removido'
-    const price = a.services?.price || 0
     const partnershipId = a.partnership_id as string | null
+    const clientId = a.client_id as string
 
-    if (!byProfessional[profId]) byProfessional[profId] = { name: profName, completed: 0, cancelled: 0, no_show: 0, revenue: 0 }
-    if (!byService[serviceId]) byService[serviceId] = { name: serviceName, count: 0, cancelled: 0, no_show: 0, revenue: 0 }
+    const isPackage = !!a.client_package_id
+    const isMonthlySubscription = (a.services?.value_type === 'monthly') || activeSubs.has(`${clientId}_${serviceId}`)
+    const isAvulsa = !isPackage && !isMonthlySubscription
+
+    if (!byProfessional[profId]) {
+      const indRev = professionalIndependentRevenue[profId] || 0
+      byProfessional[profId] = { 
+        name: profName, completed: 0, cancelled: 0, no_show: 0, 
+        package_sessions: 0, subscription_sessions: 0, independent_sessions: 0,
+        independent_revenue: indRev, revenue: indRev 
+      }
+    }
+    if (!byService[serviceId]) {
+      byService[serviceId] = { name: serviceName, count: 0, cancelled: 0, no_show: 0, revenue: 0, package_sessions: 0, subscription_sessions: 0, independent_sessions: 0 }
+    }
     if (partnershipId && !byPartnership[partnershipId]) {
-      byPartnership[partnershipId] = { name: '', clientIds: new Set(), sessionCount: 0, cancelled: 0, no_show: 0, revenue: 0 }
+      byPartnership[partnershipId] = { name: '', clientIds: new Set(), sessionCount: 0, cancelled: 0, no_show: 0 }
     }
 
     const profSvcId = `${profId}_${serviceId}`
-    if (!byProfessionalService[profSvcId]) byProfessionalService[profSvcId] = { completed: 0, cancelled: 0, no_show: 0, revenue: 0 }
+    if (!byProfessionalService[profSvcId]) {
+      byProfessionalService[profSvcId] = { completed: 0, cancelled: 0, no_show: 0, package_sessions: 0, subscription_sessions: 0, independent_sessions: 0, revenue: 0 }
+    }
 
     if (partnershipId) {
       const profPartId = `${profId}_${partnershipId}`
-      if (!byProfessionalPartnership[profPartId]) byProfessionalPartnership[profPartId] = { completed: 0, cancelled: 0, no_show: 0, revenue: 0 }
+      if (!byProfessionalPartnership[profPartId]) {
+        byProfessionalPartnership[profPartId] = { completed: 0, cancelled: 0, no_show: 0 }
+      }
     }
 
     if (a.status === 'completed') {
       completedAppointments++
-      totalRevenue += price
       byProfessional[profId].completed++
-      byProfessional[profId].revenue += price
       byService[serviceId].count++
-      byService[serviceId].revenue += price
       byProfessionalService[profSvcId].completed++
-      byProfessionalService[profSvcId].revenue += price
+
+      if (isPackage) {
+        byProfessional[profId].package_sessions++
+        byService[serviceId].package_sessions++
+        byProfessionalService[profSvcId].package_sessions++
+      } else if (isMonthlySubscription) {
+        byProfessional[profId].subscription_sessions++
+        byService[serviceId].subscription_sessions++
+        byProfessionalService[profSvcId].subscription_sessions++
+      } else {
+        byProfessional[profId].independent_sessions++
+        byService[serviceId].independent_sessions++
+        byProfessionalService[profSvcId].independent_sessions++
+        
+        const price = a.services?.price || 0
+        byService[serviceId].revenue += price
+        byProfessionalService[profSvcId].revenue += price
+      }
 
       if (partnershipId) {
-        byPartnership[partnershipId].clientIds.add(a.client_id)
+        byPartnership[partnershipId].clientIds.add(clientId)
         byPartnership[partnershipId].sessionCount++
-        byPartnership[partnershipId].revenue += price
         const profPartId = `${profId}_${partnershipId}`
         byProfessionalPartnership[profPartId].completed++
-        byProfessionalPartnership[profPartId].revenue += price
       }
     } else if (a.status === 'cancelled') {
       cancelledAppointments++
@@ -111,8 +174,7 @@ async function recalculateMonth(companyId: string, month: Date) {
       byProfessionalService[profSvcId].cancelled++
       if (partnershipId) {
         byPartnership[partnershipId].cancelled++
-        const profPartId = `${profId}_${partnershipId}`
-        byProfessionalPartnership[profPartId].cancelled++
+        byProfessionalPartnership[`${profId}_${partnershipId}`].cancelled++
       }
     } else if (a.status === 'no_show') {
       noShowAppointments++
@@ -121,20 +183,21 @@ async function recalculateMonth(companyId: string, month: Date) {
       byProfessionalService[profSvcId].no_show++
       if (partnershipId) {
         byPartnership[partnershipId].no_show++
-        const profPartId = `${profId}_${partnershipId}`
-        byProfessionalPartnership[profPartId].no_show++
+        byProfessionalPartnership[`${profId}_${partnershipId}`].no_show++
       }
     }
   })
 
-  let subscriptionsRevenue = 0, subscriptionsPaidCount = 0
-  finSnap.forEach((docSnap) => {
-    const f = docSnap.data()
-    if (f.client_subscription_id) {
-      subscriptionsRevenue += f.amount || 0
-      subscriptionsPaidCount++
+  // Garantir profissionais apenas com receita avulsa
+  for (const [profId, rev] of Object.entries(professionalIndependentRevenue)) {
+    if (!byProfessional[profId]) {
+      byProfessional[profId] = {
+        name: 'Profissional', completed: 0, cancelled: 0, no_show: 0,
+        package_sessions: 0, subscription_sessions: 0, independent_sessions: 0,
+        independent_revenue: rev, revenue: rev
+      }
     }
-  })
+  }
 
   const byPartnershipSerialized: Record<string, any> = {}
   for (const [id, data] of Object.entries(byPartnership)) {
@@ -144,7 +207,6 @@ async function recalculateMonth(companyId: string, month: Date) {
       sessionCount: data.sessionCount,
       cancelled: data.cancelled,
       no_show: data.no_show,
-      revenue: data.revenue,
     }
   }
 

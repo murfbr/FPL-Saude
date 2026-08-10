@@ -55,7 +55,7 @@ export const MessageConfirmation = () => {
       dayRef = `dia ${dateStr}`
     }
 
-    const message = `Olá *${clientName}*, tudo bem? Confirmado nosso atendimento de *${serviceName}*, ${dayRef}, dia ${dateStr} às *${timeStr}*?`
+    const message = `Olá *${clientName}*, tudo bem? Confirmado nosso atendimento de *${serviceName}, ${dayRef}, dia ${dateStr} às ${timeStr}*?`
 
     
     // Normalize phone number:

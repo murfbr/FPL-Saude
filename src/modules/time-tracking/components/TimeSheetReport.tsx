@@ -32,6 +32,7 @@ import { Printer, Search } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AdminTimeEntry } from './AdminTimeEntry'
 import { useTenant } from '@/shared/contexts/TenantContext'
+import { useToast } from '@/shared/hooks/use-toast'
 
 export const TimeSheetReport = () => {
   const [professionals, setProfessionals] = useState<Professional[]>([])
@@ -47,6 +48,7 @@ export const TimeSheetReport = () => {
   const [isLoading, setIsLoading] = useState(false)
   const { config } = useTenant()
   const appName = config?.branding?.app_name || 'Sistema'
+  const { toast } = useToast()
 
   useEffect(() => {
     getAllProfessionals().then(({ data }) => {
@@ -57,11 +59,18 @@ export const TimeSheetReport = () => {
   const handleGenerate = async () => {
     if (!selectedProfessional) return
     setIsLoading(true)
-    const { data } = await getMonthlyTimeRecords(
+    const { data, error } = await getMonthlyTimeRecords(
       selectedProfessional,
       parseInt(selectedYear),
       parseInt(selectedMonth),
     )
+    if (error) {
+      toast({
+        title: 'Erro ao buscar registros de ponto',
+        description: error.message || 'Não foi possível carregar o relatório.',
+        variant: 'destructive',
+      })
+    }
     setRecords(data || [])
     setIsLoading(false)
   }

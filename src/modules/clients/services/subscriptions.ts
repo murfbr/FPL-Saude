@@ -75,8 +75,20 @@ export async function createClientSubscription(data: any): Promise<{ data: any |
   }
 }
 
-export async function updateClientSubscription(subId: string, updates: any): Promise<{ error: any }> {
-  return { error: null }
+/**
+ * Assinatura ativa do cliente para um serviço.
+ * Status ausente conta como ativa (mesma regra da listagem do cadastro) e,
+ * havendo mais de uma, vale a criada mais recentemente.
+ */
+export function findActiveSubscriptionForService(
+  subs: ClientSubscription[] | null | undefined,
+  serviceId: string,
+): ClientSubscription | null {
+  const active = (subs || []).filter(
+    (s) => s.service_id === serviceId && (!s.status || s.status === 'active'),
+  )
+  active.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
+  return active[0] || null
 }
 
 export async function cancelClientSubscription(clientId: string, subId: string): Promise<{ error: any }> {

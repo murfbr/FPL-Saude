@@ -166,7 +166,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             where('user_id', '==', currentUser.id)
           )
           const profDocs = await getDocs(profQuery)
-          if (!profDocs.empty) profId = profDocs.docs[0].id
+          if (!profDocs.empty) {
+            // Prefere o cadastro ativo quando o mesmo usuário tem docs duplicados
+            const activeDoc = profDocs.docs.find((d) => d.data().is_active !== false)
+            profId = (activeDoc || profDocs.docs[0]).id
+          }
         }
 
         if (isMounted.current) {

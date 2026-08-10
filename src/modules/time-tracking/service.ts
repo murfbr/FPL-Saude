@@ -24,10 +24,22 @@ export async function getTodayRecord(
   }
 }
 
+/** Bloqueia registro de ponto para profissional inexistente ou inativo. */
+async function checkProfessionalCanTrackTime(professionalId: string): Promise<Error | null> {
+  const snap = await getDoc(doc(db, 'companies', getCompanyId(), 'professionals', professionalId))
+  if (!snap.exists()) return new Error('Profissional não encontrado.')
+  const data = snap.data()
+  const isActive = data.is_active !== false && data.is_active !== 'false' && data.is_active !== 0
+  return isActive ? null : new Error('Profissional inativo não pode registrar ponto.')
+}
+
 export async function clockIn(
   professionalId: string,
 ): Promise<{ data: TimeRecord | null; error: any }> {
   try {
+    const inactiveError = await checkProfessionalCanTrackTime(professionalId)
+    if (inactiveError) return { data: null, error: inactiveError }
+
     const now = new Date()
     const today = format(now, 'yyyy-MM-dd')
     const time = format(now, 'HH:mm:ss')
@@ -75,6 +87,9 @@ export async function upsertTimeRecord(
   clockOutTime: string | null,
 ): Promise<{ data: TimeRecord | null; error: any }> {
   try {
+    const inactiveError = await checkProfessionalCanTrackTime(professionalId)
+    if (inactiveError) return { data: null, error: inactiveError }
+
     const refCol = collection(db, 'companies', getCompanyId(), 'professionals', professionalId, 'time_tracking')
     const q = query(refCol, where('date', '==', date))
     const snapshot = await getDocs(q)

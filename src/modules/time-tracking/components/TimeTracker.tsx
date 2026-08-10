@@ -143,7 +143,7 @@ export const TimeTracker = ({ professionalId }: TimeTrackerProps) => {
       console.error('Time record save error:', error)
       toast({
         title: 'Erro ao salvar registro',
-        description: 'Não foi possível salvar o ponto. Verifique sua conexão.',
+        description: error.message || 'Não foi possível salvar o ponto. Verifique sua conexão.',
         variant: 'destructive',
       })
     } else {

@@ -19,6 +19,7 @@ import {
   getAllClients,
   getClientPackages,
   getClientSubscriptions,
+  findActiveSubscriptionForService,
   getProfessionalsByService,
   getAllServices,
   getDiscountsForPartnership,
@@ -218,7 +219,7 @@ export function useAppointmentForm({
       setCheckingEntitlements(true)
 
       const { data: subs } = await getClientSubscriptions(clientId)
-      const matchingSub = subs?.find((sub) => sub.service_id === serviceId) || null
+      const matchingSub = findActiveSubscriptionForService(subs, serviceId)
       setActiveSubscription(matchingSub)
 
       const { data: pkgs } = await getClientPackages(clientId)
