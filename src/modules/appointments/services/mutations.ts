@@ -1,7 +1,8 @@
 import { db } from '@/shared/lib/firebase'
 import { collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, query, orderBy, where, limit as fbLimit, arrayUnion, writeBatch, startAfter, increment } from 'firebase/firestore'
-import { Appointment, NoteEntry, Client, Professional, Service } from '@/shared/types'
+import { Appointment, NoteEntry, Client, ClientSubscription, Professional, Service } from '@/shared/types'
 import { getCompanyId } from '@/shared/lib/tenantStore'
+import { findActiveSubscriptionForService } from '@/modules/clients/services/subscriptions'
 
 export async function bookAppointment(
   professionalId: string,
@@ -398,7 +399,9 @@ export async function updateAppointmentStatus(appointmentId: string, status: str
         const subsRef = collection(db, 'companies', companyId, 'clients', appData.client_id, 'subscriptions')
         const subsSnap = await getDocs(subsRef)
         const serviceId = appData.service_id || serviceData?.id
-        if (subsSnap.docs.some(d => d.data().service_id === serviceId)) {
+        const subs = subsSnap.docs.map(d => ({ id: d.id, ...d.data() })) as ClientSubscription[]
+        // Mesma regra do formulário: só assinatura ATIVA cobre a sessão (cancelada não conta)
+        if (findActiveSubscriptionForService(subs, serviceId)) {
           isMonthlySubscription = true
         }
       } catch (e) {
@@ -454,45 +457,45 @@ export async function updateAppointmentStatus(appointmentId: string, status: str
       }
     }
 
-    // 2. Avulsas: Criar ou remover registro financeiro
-    if (isAvulsa) {
-      const finRef = collection(db, 'companies', companyId, 'financial_records')
-      
-      if (status === 'completed' && oldStatus !== 'completed') {
-        const price = serviceData?.price || 0
-        const discount = appData.discount_amount || 0
-        const finalPrice = Math.max(0, price - discount)
-        
-        if (finalPrice > 0) {
-          try {
-            const q = query(finRef, where('appointment_id', '==', appointmentId))
-            const existingSnap = await getDocs(q)
-            
-            if (existingSnap.empty) {
-              const newDoc = doc(finRef)
-              batch.set(newDoc, {
-                id: newDoc.id,
-                client_id: appData.client_id,
-                professional_id: appData.professional_id,
-                appointment_id: appointmentId,
-                amount: finalPrice,
-                payment_date: new Date().toISOString(),
-                description: `Sessão Avulsa - ${serviceData?.name || 'Serviço'}`,
-                payment_method: 'manual'
-              })
-            }
-          } catch (e) {
-            console.error("Erro ao buscar/criar financial record (finalPrice > 0)", e)
-          }
-        }
-      } else if (oldStatus === 'completed' && status !== 'completed') {
+    // 2. Registro financeiro: criar (avulsa) ao concluir; ao des-concluir, remover o que
+    // existir para este atendimento — independente da classificação atual, que pode ter
+    // mudado desde a conclusão (ex.: assinatura cancelada depois da sessão)
+    const finRef = collection(db, 'companies', companyId, 'financial_records')
+
+    if (isAvulsa && status === 'completed' && oldStatus !== 'completed') {
+      const price = serviceData?.price || 0
+      const discount = appData.discount_amount || 0
+      const finalPrice = Math.max(0, price - discount)
+
+      if (finalPrice > 0) {
         try {
           const q = query(finRef, where('appointment_id', '==', appointmentId))
           const existingSnap = await getDocs(q)
-          existingSnap.docs.forEach(d => batch.delete(d.ref))
+
+          if (existingSnap.empty) {
+            const newDoc = doc(finRef)
+            batch.set(newDoc, {
+              id: newDoc.id,
+              client_id: appData.client_id,
+              professional_id: appData.professional_id,
+              appointment_id: appointmentId,
+              amount: finalPrice,
+              payment_date: new Date().toISOString(),
+              description: `Sessão Avulsa - ${serviceData?.name || 'Serviço'}`,
+              payment_method: 'manual'
+            })
+          }
         } catch (e) {
-          console.error("Erro ao buscar/deletar financial record (oldStatus === completed)", e)
+          console.error("Erro ao buscar/criar financial record (finalPrice > 0)", e)
         }
+      }
+    } else if (oldStatus === 'completed' && status !== 'completed') {
+      try {
+        const q = query(finRef, where('appointment_id', '==', appointmentId))
+        const existingSnap = await getDocs(q)
+        existingSnap.docs.forEach(d => batch.delete(d.ref))
+      } catch (e) {
+        console.error("Erro ao buscar/deletar financial record (oldStatus === completed)", e)
       }
     }
 
@@ -562,20 +565,10 @@ export async function deleteAppointment(appointmentId: string): Promise<{ delete
            await Promise.all(existingSnap.docs.map(d => deleteDoc(d.ref)))
          }
        } else {
-         // Agendamentos normais: lógica de pacote / assinatura / financeiro
+         // Agendamentos normais: devolver sessão de pacote e remover registro financeiro.
+         // O registro é removido por existência (query por appointment_id) — não se adivinha
+         // pela assinatura, que pode ter mudado de status desde a conclusão.
          const isPackage = !!appData.client_package_id
-         let isMonthlySubscription = appData.services?.value_type === 'monthly'
-
-         if (!isPackage && !isMonthlySubscription && appData.client_id) {
-           const subsRef = collection(db, 'companies', companyId, 'clients', appData.client_id, 'subscriptions')
-           const subsSnap = await getDocs(subsRef)
-           const serviceId = appData.service_id || appData.services?.id
-           if (subsSnap.docs.some(d => d.data().service_id === serviceId)) {
-             isMonthlySubscription = true
-           }
-         }
-
-         const isAvulsa = !isPackage && !isMonthlySubscription
          const wasConsumingStatus = appData.status === 'completed' || appData.status === 'no_show'
 
          if (isPackage && wasConsumingStatus && appData.client_id) {
@@ -583,7 +576,7 @@ export async function deleteAppointment(appointmentId: string): Promise<{ delete
            await updateDoc(packageRef, { sessions_remaining: increment(1) })
          }
 
-         if (isAvulsa && appData.status === 'completed') {
+         if (appData.status === 'completed') {
            const finRef = collection(db, 'companies', companyId, 'financial_records')
            const q = query(finRef, where('appointment_id', '==', appointmentId))
            const existingSnap = await getDocs(q)
@@ -656,13 +649,6 @@ export async function deleteFutureAppointments(appointmentId: string): Promise<{
       }
     }
 
-    let clientSubs: any[] = []
-    if (sourceData.client_id) {
-      const subsRef = collection(db, 'companies', companyId, 'clients', sourceData.client_id, 'subscriptions')
-      const subsSnap = await getDocs(subsRef)
-      clientSubs = subsSnap.docs.map(d => d.data())
-    }
-    
     const packageRefunds = new Map<string, number>()
     const finAppointmentsToDelete: string[] = []
     const deletedIds: string[] = []
@@ -683,18 +669,8 @@ export async function deleteFutureAppointments(appointmentId: string): Promise<{
       if (appStartTimeMs < sourceStartTimeMs) return;
 
       const isPackage = !!appData.client_package_id
-      let isMonthlySubscription = appData.services?.value_type === 'monthly'
-      
-      if (!isPackage && !isMonthlySubscription) {
-        const serviceId = appData.service_id || appData.services?.id
-        if (clientSubs.some(sub => sub.service_id === serviceId)) {
-          isMonthlySubscription = true
-        }
-      }
-
-      const isAvulsa = !isPackage && !isMonthlySubscription
       const wasConsumingStatus = appData.status === 'completed' || appData.status === 'no_show'
-      
+
       if (isPackage && wasConsumingStatus) {
         if (appData.client_id && appData.client_package_id) {
           const pkgPath = `companies/${companyId}/clients/${appData.client_id}/packages/${appData.client_package_id}`
@@ -702,8 +678,10 @@ export async function deleteFutureAppointments(appointmentId: string): Promise<{
           packageRefunds.set(pkgPath, currentRefunds + 1)
         }
       }
-      
-      if (isAvulsa && appData.status === 'completed') {
+
+      // Registros financeiros são removidos por existência: a busca posterior só encontra
+      // o que de fato foi faturado (avulsas) — assinaturas nunca tiveram registro
+      if (appData.status === 'completed') {
         finAppointmentsToDelete.push(d.id)
       }
 
