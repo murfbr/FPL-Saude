@@ -30,9 +30,21 @@ service cloud.firestore {
       return isSuperAdmin() || (isUserInCompany(companyId) && getUserRole() == 'admin');
     }
 
+    // Traduz nome de coleção → ModuleKey da matriz de permissões.
+    // A matriz (roles.<role>.can_view/can_edit) guarda ModuleKeys da UI
+    // (fonte: src/modules/registry.ts); as rules recebem nomes de coleção.
+    // Sem esta tradução, 'financial_records' nunca casaria com 'financial'.
+    function moduleKeyOf(collectionName) {
+      return collectionName == 'financial_records' ? 'financial'
+        : collectionName == 'subscription_plans' ? 'services'
+        : collectionName == 'packages' ? 'services'
+        : collectionName == 'blocked_dates' ? 'appointments'
+        : collectionName;
+    }
+
     // RBAC de LEITURA por módulo.
-    // Fallback: se a empresa não tiver 'roles' configurado no Firestore, libera para qualquer
-    // usuário da empresa (exceto client, que é bloqueado explicitamente no allow read).
+    // Client nunca lê módulos (a área do paciente ainda não existe).
+    // Fallback: empresa sem 'roles' configurado libera para qualquer não-client.
     function canViewModule(companyId, moduleName) {
       let companyDoc = get(/databases/$(database)/documents/companies/$(companyId));
       let companyRoles = companyDoc.data.get('roles', {});
@@ -40,13 +52,16 @@ service cloud.firestore {
       let rolePerms = companyRoles.get(userRole, null);
       let allowedArray = rolePerms != null ? rolePerms.get('can_view', []) : [];
 
-      return !('roles' in companyDoc.data)   // Sem campo roles → libera (empresa legada)
-        || companyRoles.size() == 0          // Campo roles vazio → libera
-        || rolePerms == null                 // Role não mapeado na empresa → libera
-        || allowedArray.size() == 0          // can_view não configurado → libera
-        || userRole == 'admin'               // Admin sempre passa
-        || moduleName in allowedArray        // Módulo explicitamente permitido
-        || '*' in allowedArray;              // Wildcard — acesso total
+      return userRole != 'client'
+        && (
+          !('roles' in companyDoc.data)               // Sem campo roles → libera (empresa legada)
+          || companyRoles.size() == 0                 // Campo roles vazio → libera
+          || rolePerms == null                        // Role não mapeado na empresa → libera
+          || allowedArray.size() == 0                 // can_view não configurado → libera
+          || userRole == 'admin'                      // Admin sempre passa
+          || moduleKeyOf(moduleName) in allowedArray  // Módulo explicitamente permitido
+          || '*' in allowedArray                      // Wildcard — acesso total
+        );
     }
 
     // RBAC de ESCRITA por módulo.
@@ -69,7 +84,7 @@ service cloud.firestore {
           userRole == 'admin'                                              // Admin sempre passa
           || (!hasRolesConfig && userRole != 'client')                    // Sem config → não-client escreve
           || (hasRolesConfig && rolePerms != null                         // Com config → verifica can_edit
-              && (moduleName in allowedArray || '*' in allowedArray))
+              && (moduleKeyOf(moduleName) in allowedArray || '*' in allowedArray))
         );
     }
 
@@ -135,6 +150,45 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // Registros financeiros — criar faz parte de concluir atendimento
+      // (o profissional gera o registro da sessão avulsa); editar/estornar é admin
+      match /financial_records/{recordId} {
+        allow read: if request.auth != null && (
+          isAdmin(companyId)
+          || (isUserInCompany(companyId) && canViewModule(companyId, 'financial_records'))
+        );
+        allow create: if request.auth != null
+          && isUserInCompany(companyId)
+          && getUserRole() != 'client';
+        allow update, delete: if request.auth != null && isAdmin(companyId);
+      }
+
+      // Disponibilidade — a montagem de slots da agenda lê a grade de qualquer
+      // profissional; edição é do admin (o portal do profissional é read-only)
+      match /professionals/{professionalId}/recurring_availability/{docId} {
+        allow read: if request.auth != null && (
+          isSuperAdmin()
+          || (isUserInCompany(companyId) && getUserRole() != 'client')
+        );
+        allow write: if request.auth != null && isAdmin(companyId);
+      }
+      match /professionals/{professionalId}/availability_overrides/{docId} {
+        allow read: if request.auth != null && (
+          isSuperAdmin()
+          || (isUserInCompany(companyId) && getUserRole() != 'client')
+        );
+        allow write: if request.auth != null && isAdmin(companyId);
+      }
+
+      // Prontuário (evoluções) — o profissional escreve a evolução dos
+      // atendimentos sem precisar de can_edit no cadastro do paciente
+      match /clients/{clientId}/notes/{noteId} {
+        allow read, write: if request.auth != null && (
+          isSuperAdmin()
+          || (isUserInCompany(companyId) && getUserRole() != 'client')
+        );
+      }
+
       // Ponto eletrônico — o próprio profissional ou admins da empresa
       match /professionals/{professionalId}/time_tracking/{recordId} {
         allow read: if request.auth != null && (
@@ -151,32 +205,47 @@ service cloud.firestore {
         );
       }
 
-      // Notificações
+      // Notificações — cada um lê/gerencia as próprias; criação por staff
+      // (ex.: "Prontuário Pendente" criado por quem conclui o atendimento)
       match /admins/{adminId}/notifications/{notifId} {
-        allow read, write: if request.auth != null && isUserInCompany(companyId);
+        allow read, update, delete: if request.auth != null
+          && isUserInCompany(companyId)
+          && request.auth.uid == adminId;
+        allow create: if request.auth != null
+          && isUserInCompany(companyId)
+          && getUserRole() != 'client';
       }
       match /professionals/{professionalId}/notifications/{notifId} {
-        allow read, write: if request.auth != null && isUserInCompany(companyId);
+        allow read, update, delete: if request.auth != null && (
+          isAdmin(companyId)
+          || (isUserInCompany(companyId)
+              && get(/databases/$(database)/documents/companies/$(companyId)/professionals/$(professionalId)).data.user_id == request.auth.uid)
+        );
+        allow create: if request.auth != null
+          && isUserInCompany(companyId)
+          && getUserRole() != 'client';
       }
 
       // Demais coleções da empresa
       match /{module}/{document=**} {
         // Leitura — RBAC com fallback permissivo para empresas sem config
         allow read: if module != 'users' && module != 'monthly_summaries' && module != 'financial_audit'
+          && module != 'financial_records'
           && request.auth != null && (
           isAdmin(companyId)
           || (isUserInCompany(companyId) && canViewModule(companyId, module))
           // Profissional sempre lê o próprio perfil (necessário no login)
           || (module == 'professionals' && isUserInCompany(companyId)
               && resource.data.user_id == request.auth.uid)
-          // Catálogo público: serviços e planos para dropdowns
+          // Catálogo para dropdowns — staff apenas (não há área do paciente)
           || ((module == 'services' || module == 'subscription_plans' || module == 'packages')
-              && isUserInCompany(companyId))
+              && isUserInCompany(companyId) && getUserRole() != 'client')
         );
 
         // Escrita — RBAC estrito: 'client' nunca escreve, config da empresa é respeitada,
         // fallback para empresas sem config (DEFAULT_ROLES: professional pode editar)
         allow write: if module != 'users' && module != 'monthly_summaries' && module != 'financial_audit'
+          && module != 'financial_records'
           && request.auth != null
           && (
             isSuperAdmin()
