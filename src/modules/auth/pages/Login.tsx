@@ -15,7 +15,7 @@ import { useToast } from '@/shared/hooks/use-toast'
 import { LogIn, Loader2, AlertTriangle } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { db } from '@/shared/lib/firebase'
-import { collection, query, where, getDocs } from 'firebase/firestore'
+import { doc, getDoc } from 'firebase/firestore'
 import { applyBranding } from '@/shared/lib/utils'
 import type { CompanyBranding } from '@/shared/types/tenant'
 
@@ -50,13 +50,10 @@ const Login = () => {
     if (!companySlug) return
     const fetchBranding = async () => {
       try {
-        const q = query(collection(db, 'companies'), where('slug', '==', companySlug))
-        const snap = await getDocs(q)
-        if (!snap.empty) {
-          const company = snap.docs[0].data()
-          if (company.branding) {
-            setTenantBranding(company.branding)
-          }
+        // Vitrine pública por slug — companies/{id} exige auth
+        const snap = await getDoc(doc(db, 'public_branding', companySlug))
+        if (snap.exists() && snap.data().branding) {
+          setTenantBranding(snap.data().branding)
         }
       } catch (err) {
         console.error('Error fetching tenant branding', err)

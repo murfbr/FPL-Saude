@@ -145,6 +145,7 @@ export async function createCompany(
     }
 
     await setDoc(doc(db, 'companies', slug), company)
+    await syncPublicBranding(company)
     return { data: company, error: null }
   } catch (error) {
     return { data: null, error }
@@ -163,12 +164,45 @@ export async function updateCompanyModules(
   }
 }
 
+/**
+ * Espelho público do branding em public_branding/{slug} — a tela de login
+ * precisa de logo/cores por slug ANTES da autenticação, e o doc da empresa
+ * (companies/{id}) exige auth. Aqui vai apenas dado de vitrine.
+ * Não-fatal: falha aqui não pode derrubar o save principal.
+ */
+async function syncPublicBranding(company: {
+  id: string
+  slug: string
+  name: string
+  is_active?: boolean
+  branding: CompanyConfig['branding']
+}): Promise<void> {
+  try {
+    await setDoc(doc(db, 'public_branding', company.slug), {
+      company_id: company.id,
+      slug: company.slug,
+      name: company.name,
+      is_active: company.is_active !== false,
+      branding: company.branding,
+      updated_at: new Date().toISOString(),
+    })
+  } catch (e) {
+    console.error('Falha ao sincronizar public_branding', e)
+  }
+}
+
 export async function updateCompanyBranding(
   companyId: string,
   branding: CompanyConfig['branding'],
 ): Promise<{ error: any }> {
   try {
     await updateDoc(doc(db, 'companies', companyId), { branding })
+
+    const snap = await getDoc(doc(db, 'companies', companyId))
+    if (snap.exists()) {
+      const data = snap.data() as CompanyConfig
+      await syncPublicBranding({ id: companyId, slug: data.slug, name: data.name, is_active: data.is_active, branding })
+    }
     return { error: null }
   } catch (error) {
     return { error }
