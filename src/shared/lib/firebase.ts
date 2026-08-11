@@ -12,14 +12,8 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 }
 
-const app = initializeApp(firebaseConfig)
+export const app = initializeApp(firebaseConfig)
 
 export const auth = getAuth(app)
 export const db = getFirestore(app)
 export const storage = getStorage(app)
-
-// Secondary app used exclusively for creating new user accounts (Admin flow)
-// This prevents the current Admin user from being logged out when creating a Professional
-export const secondaryApp = initializeApp(firebaseConfig, 'Secondary')
-export const secondaryAuth = getAuth(secondaryApp)
-export const secondaryDb = getFirestore(secondaryApp)

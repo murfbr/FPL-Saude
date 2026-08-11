@@ -33,15 +33,17 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onUserWrite = exports.dailyReconciliation = exports.onSubscriptionWrite = exports.onFinancialRecordWrite = exports.onAppointmentWrite = void 0;
+exports.setStaffActive = exports.createStaffUser = exports.onUserWrite = exports.dailyReconciliation = exports.onSubscriptionWrite = exports.onFinancialRecordWrite = exports.onAppointmentWrite = void 0;
 const appointmentFunctions = __importStar(require("./appointments/onAppointmentWrite"));
 const financialFunctions = __importStar(require("./financial/onFinancialRecordWrite"));
 const subscriptionFunctions = __importStar(require("./subscriptions/onSubscriptionWrite"));
 const cronFunctions = __importStar(require("./cron/dailyReconciliation"));
 const authFunctions = __importStar(require("./auth/onUserWrite"));
+const staffFunctions = __importStar(require("./auth/staffLifecycle"));
 exports.onAppointmentWrite = appointmentFunctions.onAppointmentWrite;
 exports.onFinancialRecordWrite = financialFunctions.onFinancialRecordWrite;
 exports.onSubscriptionWrite = subscriptionFunctions.onSubscriptionWrite;
 exports.dailyReconciliation = cronFunctions.dailyReconciliation;
 exports.onUserWrite = authFunctions.onUserWrite;
+exports.createStaffUser = staffFunctions.createStaffUser, exports.setStaffActive = staffFunctions.setStaffActive;
 //# sourceMappingURL=index.js.map

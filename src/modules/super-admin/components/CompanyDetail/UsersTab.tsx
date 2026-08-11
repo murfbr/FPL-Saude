@@ -25,7 +25,7 @@ import {
   getUsersByCompany,
   updateUserRole,
   createCompanyUser,
-  deleteCompanyUser,
+  deactivateCompanyUser,
   type CompanyUser,
 } from '@/modules/super-admin/service'
 import type { CompanyConfig } from '@/shared/types/tenant'
@@ -61,13 +61,12 @@ export const UsersTab = ({ company }: { company: CompanyConfig }) => {
   }
 
   const handleDeleteUser = async (uid: string) => {
-    if (!confirm('Tem certeza que deseja remover este usuário?')) return
-    const { error } = await deleteCompanyUser(uid)
+    if (!confirm('Desativar o acesso deste usuário? A conta é congelada (nada é apagado) e pode ser reativada depois.')) return
+    const { error } = await deactivateCompanyUser(company.id, uid)
     if (error) {
-      toast({ title: 'Erro ao remover usuário', variant: 'destructive' })
+      toast({ title: 'Erro ao desativar usuário', description: error.message, variant: 'destructive' })
     } else {
-      setUsers((prev) => prev.filter((u) => u.uid !== uid))
-      toast({ title: 'Usuário removido!' })
+      toast({ title: 'Acesso desativado', description: 'Conta congelada — histórico preservado.' })
     }
   }
 

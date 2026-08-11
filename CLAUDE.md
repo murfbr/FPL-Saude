@@ -61,7 +61,7 @@ Every tenant (clinic) is a document in the root `companies` collection, and **al
 - `src/shared/types/tenant.ts` — `CompanyConfig`, `ModuleKey`, `RolePermissions`, defaults.
 - Root collections: `users/{uid}` (profile + `companyId` + `role`), `super_admins/{uid}`, `companies/{id}`.
 - Auth custom claims (`companyId`, `role`) are set by the `onUserWrite` Cloud Function watching the root `users` collection; `firestore.rules` validates by claim with a document fallback, and enforces per-module RBAC (`roles.<role>.can_view` / `can_edit` on the company doc).
-- Users are never hard-deleted in Firestore: soft delete sets `is_active: false` on the root `users` doc and the Cloud Function then **deletes the Auth account** (`onUserWrite` calls `auth().deleteUser`) and anonymizes the professional doc — reactivation does not restore login.
+- Staff lifecycle runs through callable Cloud Functions (`createStaffUser`, `setStaffActive` in `functions/src/auth/staffLifecycle.ts`): creation is atomic (Auth + root `users` + `professionals`) with rollback; deactivation **disables** the Auth account (`disabled: true`, sessions revoked) and flips `is_active` flags — nothing is deleted or anonymized, and reactivation restores the same login. `onUserWrite` only syncs custom claims. Never write account-creation/deactivation flows client-side.
 
 ### Module structure (`src/modules/`)
 
@@ -83,7 +83,7 @@ Conventions:
 
 - `components/` — `Layout`, `ProtectedRoute`, `RoleGuard`, `DomainRouter` (chooses landing page by hostname: `fpl.*` → FPL landing, otherwise SaaS landing), `ErrorBoundary`, header/nav
 - `providers/` — `AuthProvider` (Firebase Auth; exposes `useAuth()` with `user`, `session`, `role`, `professionalId`), `TenantProvider`
-- `lib/` — `firebase.ts` (also exports `secondaryApp`/`secondaryAuth`, used to create user accounts without logging the admin out), `tenantStore.ts`, `utils.ts`, availability/event-layout logic
+- `lib/` — `firebase.ts`, `functions.ts` (callable Cloud Functions wrappers, region `southamerica-east1`), `tenantStore.ts`, `utils.ts`, availability/event-layout logic
 - `hooks/` — `usePermission` (role feature checks), `use-toast`, `use-mobile`
 - `pages/` — role dashboards (`AdminDashboard`, `ProfessionalArea`, `Index`)
 - `src/components/ui/` — Shadcn primitives only (do not modify directly)

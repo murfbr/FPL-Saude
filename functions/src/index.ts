@@ -3,6 +3,7 @@ import * as financialFunctions from './financial/onFinancialRecordWrite';
 import * as subscriptionFunctions from './subscriptions/onSubscriptionWrite';
 import * as cronFunctions from './cron/dailyReconciliation';
 import * as authFunctions from './auth/onUserWrite';
+import * as staffFunctions from './auth/staffLifecycle';
 
 export const {
     onAppointmentWrite
@@ -23,3 +24,8 @@ export const {
 export const {
     onUserWrite
 } = authFunctions;
+
+export const {
+    createStaffUser,
+    setStaffActive
+} = staffFunctions;

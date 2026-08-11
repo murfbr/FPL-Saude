@@ -84,19 +84,6 @@ export function useUpdateProfessionalMutation() {
   })
 }
 
-export function useDeleteProfessionalMutation() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await professionalService.deleteProfessional(id)
-      if (error) throw error
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: professionalKeys.all })
-    },
-  })
-}
-
 export function useAddServiceToProfessionalMutation() {
   const queryClient = useQueryClient()
   return useMutation({

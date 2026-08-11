@@ -10,8 +10,9 @@ import {
   where,
 } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { db, storage, secondaryAuth } from '@/shared/lib/firebase'
-import { createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth'
+import { db, storage, auth } from '@/shared/lib/firebase'
+import { sendPasswordResetEmail } from 'firebase/auth'
+import { callCreateStaffUser, callSetStaffActive } from '@/shared/lib/functions'
 import type { CompanyConfig, CompanyFeatures } from '@/shared/types/tenant'
 import { DEFAULT_BRANDING, DEFAULT_ROLES, DEFAULT_FEATURES } from '@/shared/types/tenant'
 import { MODULE_REGISTRY } from '@/modules/registry'
@@ -300,11 +301,9 @@ export async function updateUserRole(
 }
 
 /**
- * Creates a Firebase Auth user WITHOUT signing out the current super-admin.
- * The standard SDK createUserWithEmailAndPassword would sign in the new user,
- * destroying the super-admin session. We use the Identity Toolkit REST API instead.
- * After creation, we write the users/{uid} Firestore doc and send a password-reset
- * email so the new user sets their own password.
+ * Cria usuário para uma empresa via Cloud Function (Admin SDK): Auth + perfis
+ * atomicamente, com rollback — sem deslogar o super-admin e sem esbarrar nas
+ * rules. Depois envia o convite de senha (falha aparece, não é engolida).
  */
 export async function createCompanyUser(
   companyId: string,
@@ -314,80 +313,49 @@ export async function createCompanyUser(
   password?: string,
 ): Promise<{ error: any }> {
   try {
-    // Step 1: Create Auth user via Secondary SDK (does NOT affect current session)
-    // Use provided password or generate a safe temporary one
-    const finalPassword = password || (Math.random().toString(36).slice(-10) + 'A1!')
-    
-    let uid: string
-    try {
-      const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, finalPassword)
-      uid = userCredential.user.uid
-    } catch (authError: any) {
-      if (authError.code === 'auth/email-already-in-set' || authError.code === 'auth/email-already-exists') {
-        throw new Error('Este e-mail já está sendo usado por outro usuário.')
-      }
-      throw authError
-    }
+    await callCreateStaffUser({
+      companyId,
+      name,
+      email,
+      password: password || null,
+      role,
+    })
 
-    // Step 2: Write Firestore user doc
-    try {
-      await setDoc(doc(db, 'users', uid), {
-        name,
-        email,
-        role,
-        companyId,
-        created_at: new Date().toISOString(),
-      })
-
-      if (role === 'professional' || role === 'admin') {
-        await setDoc(doc(db, 'companies', companyId, 'professionals', uid), {
-          user_id: uid,
-          name,
-          email,
-          specialty: '',
-          bio: '',
-          avatar_url: '',
-          is_active: true,
-          service_ids: [],
-          created_at: new Date().toISOString(),
-        })
-      }
-    } catch (dbError) {
-      console.error('Error writing to Firestore:', dbError)
-      throw new Error('Usuário criado no Auth, mas falhou ao salvar perfil no banco de dados.')
-    }
-
-    // Step 3: Send password-reset email so user sets their own password
-    // ONLY if a manual password was NOT provided
+    // Convite para definir senha — apenas quando não houve senha manual
     if (!password) {
       try {
         const actionCodeSettings = {
           url: `${window.location.origin}/reset-password`,
           handleCodeInApp: false,
         }
-        await sendPasswordResetEmail(secondaryAuth, email, actionCodeSettings)
+        await sendPasswordResetEmail(auth, email, actionCodeSettings)
       } catch (emailError: any) {
         console.error('Error sending reset email:', emailError)
-        // Custom message for critical failures
-        if (emailError.code === 'auth/unauthorized-continue-uri') {
-          throw new Error('Usuário criado, mas o domínio não está autorizado para enviar e-mails.')
-        }
-        throw new Error(`Usuário criado, mas falhou ao enviar e-mail de convite: ${emailError.message}`)
+        throw new Error(
+          'Usuário criado, mas o e-mail de convite falhou. Peça para usar "Esqueci minha senha" na tela de login.',
+        )
       }
     }
 
     return { error: null }
   } catch (error: any) {
     console.error('createCompanyUser error:', error)
-    return { error: error.message || error }
+    return { error: error?.message || error }
   }
 }
 
-export async function deleteCompanyUser(uid: string): Promise<{ error: any }> {
+/**
+ * Desativa o ACESSO de um usuário da empresa (congela a conta — nada é apagado).
+ * Substitui o antigo deleteCompanyUser, que removia o perfil e deixava o login vivo.
+ */
+export async function deactivateCompanyUser(
+  companyId: string,
+  uid: string,
+): Promise<{ error: any }> {
   try {
-    await deleteDoc(doc(db, 'users', uid))
+    await callSetStaffActive({ companyId, userId: uid, active: false })
     return { error: null }
-  } catch (error) {
-    return { error }
+  } catch (error: any) {
+    return { error: new Error(error?.message || 'Falha ao desativar o usuário.') }
   }
 }

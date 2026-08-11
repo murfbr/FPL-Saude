@@ -41,44 +41,12 @@ exports.onUserWrite = (0, firestore_1.onDocumentWritten)({
     document: 'users/{uid}',
     region: config_1.REGION,
 }, async (event) => {
-    var _a, _b, _c, _d;
+    var _a, _b;
     const uid = event.params.uid;
     const after = (_b = (_a = event.data) === null || _a === void 0 ? void 0 : _a.after) === null || _b === void 0 ? void 0 : _b.data();
-    const before = (_d = (_c = event.data) === null || _c === void 0 ? void 0 : _c.before) === null || _d === void 0 ? void 0 : _d.data();
-    const isSoftDeleted = after && after.is_active === false && before && before.is_active !== false;
-    const isHardDeleted = !after && before;
-    if (isSoftDeleted || isHardDeleted) {
-        // Document deleted (hard or soft), we must delete the Auth user and clean up subcollections
-        const userRef = isSoftDeleted ? after : before;
-        const { companyId, role, name } = userRef;
-        try {
-            await admin.auth().deleteUser(uid);
-            console.log(`Successfully deleted auth user ${uid}`);
-            if (companyId && (role === 'professional' || role === 'admin')) {
-                await admin.firestore()
-                    .collection('companies')
-                    .doc(companyId)
-                    .collection('professionals')
-                    .doc(uid)
-                    .set({
-                    is_active: false,
-                    name: name ? `${name} (Excluído)` : 'Usuário Excluído',
-                    email: '',
-                    avatar_url: ''
-                }, { merge: true });
-                console.log(`Cleaned up professional doc for ${uid}`);
-            }
-        }
-        catch (error) {
-            if (error.code === 'auth/user-not-found') {
-                console.log(`Auth user ${uid} already deleted or not found.`);
-            }
-            else {
-                console.error(`Error deleting auth user ${uid}:`, error);
-            }
-        }
-        return;
-    }
+    // O ciclo de vida do acesso (congelar/reativar conta) é responsabilidade da
+    // callable setStaffActive — este trigger NÃO deleta mais contas de Auth nem
+    // anonimiza o cadastro do profissional. Histórico é sempre preservado.
     if (!after)
         return;
     const { companyId, role } = after;

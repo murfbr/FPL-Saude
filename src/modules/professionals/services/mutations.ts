@@ -1,9 +1,9 @@
-import { db } from '@/shared/lib/firebase'
-import { collection, doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore'
+import { db, auth } from '@/shared/lib/firebase'
+import { doc, getDoc, updateDoc } from 'firebase/firestore'
 import { Professional } from '@/shared/types'
 import { getCompanyId } from '@/shared/lib/tenantStore'
-import { secondaryAuth, secondaryDb } from '@/shared/lib/firebase'
-import { createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail } from 'firebase/auth'
+import { sendPasswordResetEmail } from 'firebase/auth'
+import { callCreateStaffUser, callSetStaffActive } from '@/shared/lib/functions'
 
 export async function updateProfessional(
   id: string,
@@ -20,13 +20,27 @@ export async function updateProfessional(
   }
 }
 
-export async function deleteProfessional(id: string): Promise<{ error: any }> {
+/**
+ * Ativa/desativa o ACESSO do profissional via Cloud Function:
+ * desativar congela a conta (disabled) e revoga sessões — nada é apagado,
+ * histórico intacto; reativar religa a mesma conta.
+ * Retorna a contagem de agendamentos futuros para a UI avisar o admin.
+ */
+export async function setProfessionalActive(
+  professionalId: string,
+  active: boolean,
+): Promise<{ futureAppointments: number | null; error: any }> {
   try {
-    const docRef = doc(db, 'users', id)
-    await updateDoc(docRef, { is_active: false, deleted_at: new Date().toISOString() })
-    return { error: null }
-  } catch (error) {
-    return { error }
+    const companyId = getCompanyId()
+    const result = await callSetStaffActive({ companyId, professionalId, active })
+    const data = result.data as { futureAppointments?: number | null }
+    return { futureAppointments: data?.futureAppointments ?? null, error: null }
+  } catch (error: any) {
+    console.error('Erro ao atualizar acesso do profissional:', error)
+    return {
+      futureAppointments: null,
+      error: new Error(error?.message || 'Falha ao atualizar o acesso do profissional.'),
+    }
   }
 }
 
@@ -72,58 +86,44 @@ export async function createProfessionalUser(
 ): Promise<{ data: any; error: any }> {
   try {
     const companyId = getCompanyId()
-    
-    // 1. Criar usuário no Firebase Auth usando o app secundário (não desloga o admin atual)
-    const finalPassword = data.password || (Math.random().toString(36).slice(-10) + 'A1!')
-    
-    const userCredential = await createUserWithEmailAndPassword(secondaryAuth, data.email, finalPassword)
-    const user = userCredential.user
 
-    await updateProfile(user, { displayName: data.name })
-
-    // 2. Criar registro na coleção raiz `users` para roteamento e permissionamento
-    const userDocRef = doc(secondaryDb, 'users', user.uid)
-    await setDoc(userDocRef, {
+    // Criação atômica no servidor (Admin SDK): Auth + users raiz + professionals,
+    // com rollback — sem conta órfã nem e-mail preso se um passo falhar, e sem
+    // esbarrar nas rules (o antigo fluxo gravava autenticado como o usuário novo)
+    const result = await callCreateStaffUser({
+      companyId,
       name: data.name,
       email: data.email,
+      password: data.password || null,
       role: 'professional',
-      companyId: companyId,
-      created_at: new Date().toISOString(),
-    })
-
-    // 3. Criar registro na subcoleção `professionals` da empresa logada
-    const professionalDocRef = doc(secondaryDb, 'companies', companyId, 'professionals', user.uid)
-    const profData = {
-      id: user.uid,
-      user_id: user.uid,
-      name: data.name,
-      email: data.email,
       specialty: data.specialty || '',
       bio: data.bio || '',
-      avatar_url: data.avatar_url || '',
-      is_active: true,
-      service_ids: [],
-      created_at: new Date().toISOString(),
-    }
-    await setDoc(professionalDocRef, profData)
+      avatarUrl: data.avatar_url || '',
+    })
+    const profData = (result.data as { professional?: unknown })?.professional
 
-    // O secondaryAuth não precisa de signOut explícito.
-    
+    // Convite para definir senha — a falha aparece para o admin, não é engolida
     if (!data.password) {
       try {
         const actionCodeSettings = {
           url: `${window.location.origin}/reset-password`,
           handleCodeInApp: false,
         }
-        await sendPasswordResetEmail(secondaryAuth, data.email, actionCodeSettings)
-      } catch (emailError: any) {
+        await sendPasswordResetEmail(auth, data.email, actionCodeSettings)
+      } catch (emailError) {
         console.error('Error sending reset email:', emailError)
+        return {
+          data: profData,
+          error: new Error(
+            'Profissional criado, mas o e-mail de convite falhou. Peça para usar "Esqueci minha senha" na tela de login.',
+          ),
+        }
       }
     }
 
     return { data: profData, error: null }
-  } catch (error) {
-    console.error("Erro ao criar usuário profissional:", error)
-    return { data: null, error }
+  } catch (error: any) {
+    console.error('Erro ao criar usuário profissional:', error)
+    return { data: null, error: new Error(error?.message || 'Falha ao criar profissional.') }
   }
 }

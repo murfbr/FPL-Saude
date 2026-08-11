@@ -37,7 +37,7 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/shared/hooks/use-toast'
-import { updateProfessional } from '@/shared/services'
+import { updateProfessional, setProfessionalActive } from '@/shared/services'
 import { uploadFile, getPublicUrl } from '@/shared/lib/storage'
 import { useAuth } from '@/shared/providers/AuthProvider'
 import { Ban, CheckCircle, Loader2 } from 'lucide-react'
@@ -121,9 +121,8 @@ export const ProfessionalEditDialog = ({
     setIsProcessingStatus(true)
     const newStatus = !professional.is_active
 
-    const { data, error } = await updateProfessional(professional.id, {
-      is_active: newStatus,
-    })
+    // Cloud Function: congela/religa a conta de acesso junto com a marca do cadastro
+    const { futureAppointments, error } = await setProfessionalActive(professional.id, newStatus)
 
     if (error) {
       toast({
@@ -131,14 +130,16 @@ export const ProfessionalEditDialog = ({
         description: error.message,
         variant: 'destructive',
       })
-    } else if (data) {
+    } else {
       toast({
         title: `Profissional ${newStatus ? 'ativado' : 'inativado'} com sucesso`,
         description: newStatus
-          ? 'O profissional agora tem acesso ao sistema.'
-          : 'O profissional não aparecerá para novos agendamentos.',
+          ? 'O acesso ao sistema foi reativado (mesma conta e senha).'
+          : futureAppointments
+            ? `O acesso foi revogado. Atenção: há ${futureAppointments} agendamento(s) futuro(s) deste profissional — remaneje ou cancele na agenda.`
+            : 'O acesso ao sistema foi revogado e o profissional não aparece para novos agendamentos. Histórico preservado.',
       })
-      onProfessionalUpdate(data)
+      onProfessionalUpdate({ ...professional, is_active: newStatus })
       setShowInactivateAlert(false)
       onOpenChange(false)
     }
