@@ -131,7 +131,7 @@ const PatientDetail = () => {
 
   const handleBack = () => {
     if (location.key === 'default') {
-      navigate('/admin?tab=patients')
+      navigate('/admin?tab=clients')
     } else {
       navigate(-1)
     }
@@ -248,7 +248,7 @@ const PatientDetail = () => {
       toast({ title: 'Erro ao excluir paciente', variant: 'destructive' })
     } else {
       toast({ title: 'Paciente excluído com sucesso!' })
-      navigate('/?tab=patients')
+      navigate('/admin?tab=clients')
     }
   }
 

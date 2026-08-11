@@ -48,13 +48,19 @@ export const ModulesTab = ({
       </div>
       
       <div className="space-y-1 border rounded-md p-4 bg-card">
-        {MODULE_REGISTRY.map(({ key, label }) => {
+        {MODULE_REGISTRY.map(({ key, label, alwaysEnabled }) => {
           const mod = localModules[key as keyof typeof localModules]
           return (
             <div key={key} className="flex items-center justify-between py-3 border-b last:border-0 border-border/50">
-              <span className="text-sm font-medium">{label}</span>
+              <span className="text-sm font-medium">
+                {label}
+                {alwaysEnabled && (
+                  <span className="ml-2 text-xs text-muted-foreground">(módulo-base, sempre ativo)</span>
+                )}
+              </span>
               <Switch
-                checked={mod?.enabled ?? false}
+                checked={alwaysEnabled || (mod?.enabled ?? false)}
+                disabled={alwaysEnabled}
                 onCheckedChange={(v) => handleToggle(key, v)}
               />
             </div>

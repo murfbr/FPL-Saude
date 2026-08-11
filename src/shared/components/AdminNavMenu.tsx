@@ -25,6 +25,7 @@ import {
 
 import { cn } from '@/shared/lib/utils'
 import { useTenant } from '@/shared/contexts/TenantContext'
+import { MODULE_REGISTRY, isModuleEnabled } from '@/modules/registry'
 import type { ModuleKey, NavbarGroup } from '@/shared/types/tenant'
 
 interface AdminNavMenuProps {
@@ -32,69 +33,49 @@ interface AdminNavMenuProps {
   onTabChange: (value: string) => void
 }
 
+// Chaves canônicas do registry — o valor navegado é o mesmo ModuleKey das abas
 const ICON_MAP: Record<string, React.ElementType> = {
-  agenda: Calendar,
   overview: BarChart,
   kpi: LayoutDashboard,
+  appointments: Calendar,
   financial: CreditCard,
-  financials: CreditCard,
-  gallery: Camera,
-  patients: Users,
   clients: Users,
   professionals: Briefcase,
   partnerships: Handshake,
   services: Stethoscope,
   time_tracking: Clock,
-  messages: MessageSquare,
   notifications: MessageSquare,
+  gallery: Camera,
   maintenance: Database,
   default: FolderTree
 }
 
-const MODULE_LABELS: Record<string, string> = {
-  agenda: 'Agenda',
-  overview: 'Visão Geral',
-  kpi: 'Indicadores',
-  financial: 'Gestão Financeira',
-  financials: 'Gestão Financeira',
-  gallery: 'Galeria Clínica',
-  patients: 'Pacientes',
-  clients: 'Pacientes',
-  professionals: 'Profissionais',
-  partnerships: 'Parcerias',
-  services: 'Serviços e Pacotes',
-  time_tracking: 'Ponto Eletrônico',
-  messages: 'Confirmações',
-  notifications: 'Confirmações',
-  maintenance: 'Manutenção de Dados',
-}
+const MODULE_LABELS: Record<string, string> = Object.fromEntries(
+  MODULE_REGISTRY.map((m) => [m.key, m.label]),
+)
 
 const DEFAULT_NAVBAR: NavbarGroup[] = [
   {
-    modules: ['agenda'] as unknown as ModuleKey[]
+    modules: ['appointments']
   },
   {
     label: 'Gestão',
-    modules: ['overview', 'kpi', 'financials', 'gallery'] as unknown as ModuleKey[]
+    modules: ['overview', 'kpi', 'financial', 'gallery']
   },
   {
     label: 'Cadastros',
-    modules: ['patients', 'professionals', 'partnerships'] as unknown as ModuleKey[]
+    modules: ['clients', 'professionals', 'partnerships']
   },
   {
     label: 'Administrativo',
-    modules: ['services', 'time_tracking', 'messages', 'maintenance'] as unknown as ModuleKey[]
+    modules: ['services', 'time_tracking', 'notifications', 'maintenance']
   }
 ]
 
 export function AdminNavMenu({ currentTab, onTabChange }: AdminNavMenuProps) {
   const { config } = useTenant()
 
-  const isEnabled = (key: string) => {
-    // Agenda is always enabled as it's the core module
-    if (key === 'agenda') return true;
-    return config?.modules ? config.modules[key as keyof typeof config.modules]?.enabled !== false : true
-  }
+  const isEnabled = (key: string) => isModuleEnabled(config?.modules, key as ModuleKey)
 
   // Fallback to default if no navbar_config exists
   const navbarConfig = config?.navbar_config && config.navbar_config.length > 0 

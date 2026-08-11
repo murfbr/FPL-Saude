@@ -33,7 +33,7 @@ export const MobileNav = () => {
 
   return (
     <div className="flex items-center gap-2">
-      {user && role === 'professional' && <NotificationBell />}
+      {user && (role === 'professional' || role === 'admin') && <NotificationBell />}
       <Sheet>
         <SheetTrigger asChild>
           <Button variant="ghost" size="icon">
@@ -74,7 +74,7 @@ export const MobileNav = () => {
                         <Button
                           variant="ghost"
                           className="w-full justify-start"
-                          onClick={() => handleNavigate('/')}
+                          onClick={() => handleNavigate('/admin')}
                         >
                           <LayoutDashboard className="mr-2 h-4 w-4" />
                           Dashboard Admin
@@ -105,7 +105,7 @@ export const MobileNav = () => {
                         </Button>
                       </SheetClose>
                     )}
-                    {role === 'professional' && (
+                    {(role === 'professional' || role === 'admin') && (
                       <SheetClose asChild>
                         <Button
                           variant="ghost"

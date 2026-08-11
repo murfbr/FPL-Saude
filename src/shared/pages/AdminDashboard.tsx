@@ -23,6 +23,8 @@ import {
 import { useAuth } from '@/shared/providers/AuthProvider'
 import { Professional, Client, Service } from '@/shared/types'
 import { useTenant } from '@/shared/contexts/TenantContext'
+import { isModuleEnabled } from '@/modules/registry'
+import type { ModuleKey } from '@/shared/types/tenant'
 import { useProfessionalsQuery, useProfessionalDetailQuery, useProfessionalsCountQuery } from '@/modules/professionals/hooks/useProfessionals'
 import { getAllClients, getClientsCount } from '@/modules/clients/service'
 import { getAllServices } from '@/modules/services-catalog/service'
@@ -114,14 +116,14 @@ const AdminDashboard = () => {
     }
   }, [])
 
-  // Module enforcement
+  // Module enforcement: aba de módulo desabilitado redireciona para a primeira habilitada
   useEffect(() => {
     if (config?.modules && currentTab) {
-      if (config.modules[currentTab as keyof typeof config.modules]?.enabled === false) {
+      if (!isModuleEnabled(config.modules, currentTab as ModuleKey)) {
         const firstEnabled = [
-          'overview', 'kpi', 'agenda', 'financials', 'professionals', 'patients', 
-          'time_tracking', 'messages', 'services', 'gallery', 'partnerships', 'maintenance'
-        ].find(t => config.modules[t as keyof typeof config.modules]?.enabled !== false)
+          'overview', 'kpi', 'appointments', 'financial', 'professionals', 'clients',
+          'time_tracking', 'notifications', 'services', 'gallery', 'partnerships', 'maintenance'
+        ].find(t => isModuleEnabled(config.modules, t as ModuleKey))
         if (firstEnabled) {
           setSearchParams({ tab: firstEnabled })
         }
@@ -166,7 +168,7 @@ const AdminDashboard = () => {
 
   const fetchLists = async () => {
     setIsLoading(true)
-    if (currentTab === 'patients') {
+    if (currentTab === 'clients') {
       const clientRes = await getAllClients({
         status: clientStatusFilter,
         serviceId: clientServiceFilter,
@@ -178,14 +180,14 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     if (!loading && user && (companyId || role === 'super_admin')) {
-      if (currentTab === 'professionals' || currentTab === 'patients') {
+      if (currentTab === 'professionals' || currentTab === 'clients') {
         fetchLists()
       }
     }
   }, [currentTab, clientStatusFilter, clientServiceFilter, loading, user, companyId, role])
 
   const handlePatientCreated = (client: Client) => {
-    if (currentTab === 'patients') fetchLists()
+    if (currentTab === 'clients') fetchLists()
     setNewlyCreatedClient(client)
     setIsOnboardingDialogOpen(true)
   }
@@ -203,20 +205,21 @@ const AdminDashboard = () => {
     )
   })
 
+  // Valores das abas = ModuleKey canônico do registry — o gating do super-admin depende disso
   const tabOptions = [
     { value: 'overview', label: 'Visão Geral', icon: BarChart },
     { value: 'kpi', label: 'Indicadores', icon: LayoutDashboard },
-    { value: 'agenda', label: 'Agenda', icon: Calendar },
-    { value: 'financials', label: 'Gestão Financeira', icon: CreditCard },
+    { value: 'appointments', label: 'Agenda', icon: Calendar },
+    { value: 'financial', label: 'Gestão Financeira', icon: CreditCard },
     { value: 'professionals', label: 'Profissionais', icon: Briefcase },
-    { value: 'patients', label: 'Pacientes', icon: Users },
+    { value: 'clients', label: 'Pacientes', icon: Users },
     { value: 'time_tracking', label: 'Ponto Eletrônico', icon: Clock },
-    { value: 'messages', label: 'Confirmações', icon: MessageSquare },
+    { value: 'notifications', label: 'Confirmações', icon: MessageSquare },
     { value: 'services', label: 'Serviços e Pacotes', icon: Stethoscope },
     { value: 'gallery', label: 'Galeria Clínica', icon: Camera },
     { value: 'partnerships', label: 'Parcerias', icon: Handshake },
     { value: 'maintenance', label: 'Manutenção', icon: Database },
-  ].filter(tab => config?.modules ? config.modules[tab.value as keyof typeof config.modules]?.enabled !== false : true)
+  ].filter(tab => isModuleEnabled(config?.modules, tab.value as ModuleKey))
 
   // Role-Based Rendering Check: Wait for profile to be fully loaded
   if (loading || tenantLoading || !role || (!companyId && role !== 'super_admin')) {
@@ -319,7 +322,7 @@ const AdminDashboard = () => {
             <KpiDashboard />
           </TabsContent>
 
-          <TabsContent value="agenda">
+          <TabsContent value="appointments">
             <Card>
               <CardContent className="p-0 sm:p-0">
                 <AgendaView />
@@ -351,7 +354,7 @@ const AdminDashboard = () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="patients">
+          <TabsContent value="clients">
             <Card>
               <CardHeader>
                 <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
@@ -418,11 +421,7 @@ const AdminDashboard = () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="financials">
-            <FinancialManagement />
-          </TabsContent>
-
-          <TabsContent value="subscriptions">
+          <TabsContent value="financial">
             <FinancialManagement />
           </TabsContent>
 
@@ -430,7 +429,7 @@ const AdminDashboard = () => {
             <TimeSheetReport />
           </TabsContent>
 
-          <TabsContent value="messages">
+          <TabsContent value="notifications">
             <MessageConfirmation />
           </TabsContent>
 

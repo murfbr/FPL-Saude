@@ -4,6 +4,8 @@ export interface ModuleRegistryEntry {
   key: ModuleKey
   label: string
   defaultEnabled: boolean
+  /** Módulo-base do produto: não pode ser desligado por empresa (ex.: Agenda) */
+  alwaysEnabled?: boolean
 }
 
 /**
@@ -16,7 +18,7 @@ export interface ModuleRegistryEntry {
  */
 export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
   { key: 'overview',      label: 'Visão Geral',       defaultEnabled: true  },
-  { key: 'appointments',  label: 'Agenda',             defaultEnabled: true  },
+  { key: 'appointments',  label: 'Agenda',             defaultEnabled: true, alwaysEnabled: true },
   { key: 'kpi',           label: 'Indicadores',        defaultEnabled: true  },
   { key: 'financial',     label: 'Gestão Financeira',  defaultEnabled: true  },
   { key: 'professionals', label: 'Profissionais',      defaultEnabled: true  },
@@ -28,3 +30,18 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
   { key: 'maintenance',   label: 'Manutenção',         defaultEnabled: false },
   { key: 'gallery',       label: 'Galeria Clínica',    defaultEnabled: true  },
 ]
+
+/**
+ * Um módulo está habilitado para a empresa?
+ * - alwaysEnabled ignora o toggle (módulos-base do produto, ex.: Agenda)
+ * - empresa sem config ou sem a chave = habilitado (compatível com tenants legados)
+ */
+export function isModuleEnabled(
+  modules: Partial<Record<ModuleKey, { enabled: boolean }>> | undefined,
+  key: ModuleKey,
+): boolean {
+  const entry = MODULE_REGISTRY.find((m) => m.key === key)
+  if (entry?.alwaysEnabled) return true
+  if (!modules) return true
+  return modules[key]?.enabled !== false
+}

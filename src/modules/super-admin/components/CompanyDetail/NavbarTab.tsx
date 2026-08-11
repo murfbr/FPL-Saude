@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { doc, updateDoc } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase'
 import { useToast } from '@/shared/hooks/use-toast'
-import type { CompanyConfig, NavbarGroup, ModuleKey } from '@/shared/types/tenant'
+import type { CompanyConfig, NavbarGroup } from '@/shared/types/tenant'
+import { MODULE_REGISTRY } from '@/modules/registry'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -15,24 +16,8 @@ interface NavbarTabProps {
   onUpdate: (company: CompanyConfig) => void
 }
 
-// Mapeamento visual das opções (todas as possibilidades que o sistema suporta)
-const AVAILABLE_MODULES = [
-  { id: 'agenda', label: 'Agenda' },
-  { id: 'overview', label: 'Visão Geral' },
-  { id: 'kpi', label: 'Indicadores' },
-  { id: 'financials', label: 'Gestão Financeira' },
-  { id: 'financial', label: 'Financeiro' },
-  { id: 'gallery', label: 'Galeria Clínica' },
-  { id: 'patients', label: 'Pacientes' },
-  { id: 'clients', label: 'Clientes/Pacientes' },
-  { id: 'professionals', label: 'Profissionais' },
-  { id: 'partnerships', label: 'Parcerias' },
-  { id: 'services', label: 'Serviços' },
-  { id: 'time_tracking', label: 'Ponto Eletrônico' },
-  { id: 'messages', label: 'Mensagens/Confirmações' },
-  { id: 'notifications', label: 'Notificações' },
-  { id: 'maintenance', label: 'Manutenção' },
-]
+// Opções derivadas do registry — uma única fonte de chaves de módulo
+const AVAILABLE_MODULES = MODULE_REGISTRY.map((m) => ({ id: m.key, label: m.label }))
 
 export function NavbarTab({ company, onUpdate }: NavbarTabProps) {
   const { toast } = useToast()
@@ -41,10 +26,10 @@ export function NavbarTab({ company, onUpdate }: NavbarTabProps) {
   // Estado local para o builder
   const [groups, setGroups] = useState<NavbarGroup[]>(() => {
     return company.navbar_config ? JSON.parse(JSON.stringify(company.navbar_config)) : [
-      { modules: ['agenda'] as unknown as ModuleKey[] },
-      { label: 'Gestão', modules: ['overview', 'kpi', 'financials', 'gallery'] as unknown as ModuleKey[] },
-      { label: 'Cadastros', modules: ['patients', 'professionals', 'partnerships'] as unknown as ModuleKey[] },
-      { label: 'Administrativo', modules: ['services', 'time_tracking', 'messages', 'maintenance'] as unknown as ModuleKey[] }
+      { modules: ['appointments'] },
+      { label: 'Gestão', modules: ['overview', 'kpi', 'financial', 'gallery'] },
+      { label: 'Cadastros', modules: ['clients', 'professionals', 'partnerships'] },
+      { label: 'Administrativo', modules: ['services', 'time_tracking', 'notifications', 'maintenance'] }
     ]
   })
 
