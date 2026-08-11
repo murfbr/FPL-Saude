@@ -28,7 +28,7 @@ import {
 } from '@/components/ui/dialog'
 import { CalendarOff } from 'lucide-react'
 import { useAuth } from '@/shared/providers/AuthProvider'
-import { useInvalidateAppointments } from '@/modules/appointments/queries'
+import { useInvalidateAppointments, type AppointmentsRange } from '@/modules/appointments/queries'
 import { useTenant } from '@/shared/contexts/TenantContext'
 
 export type ViewMode = 'month' | 'week' | 'day'
@@ -83,11 +83,12 @@ export const AgendaView = ({
     setIsDetailOpen(true)
   }
 
-  const handleDataRefresh = (shouldInvalidate: boolean = true) => {
-    if (shouldInvalidate) {
-      setRefreshKey((prevKey) => prevKey + 1)
-      invalidateAppointments()
-    }
+  // false = cache já atualizado por patch, nada a fazer; objeto = invalida só o
+  // período afetado; true/omitido = invalidação total (fallback)
+  const handleDataRefresh = (range: boolean | AppointmentsRange = true) => {
+    if (range === false) return
+    setRefreshKey((prevKey) => prevKey + 1)
+    invalidateAppointments(range === true ? undefined : range)
   }
 
   const handleTimeSlotClick = (date: Date, isSpecificSlot: boolean = true) => {

@@ -23,6 +23,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
 
 import { Appointment } from '@/shared/types'
+import { type AppointmentsRange } from '@/modules/appointments/queries'
 import { RescheduleDialog } from '../RescheduleDialog'
 import { PatientHistoryModal } from '@/modules/clients/components/PatientHistoryModal'
 import { isValid } from 'date-fns'
@@ -36,7 +37,7 @@ interface AppointmentDetailDialogProps {
   appointment: Appointment | null
   isOpen: boolean
   onOpenChange: (isOpen: boolean) => void
-  onAppointmentUpdated: (shouldInvalidate?: boolean) => void
+  onAppointmentUpdated: (shouldInvalidate?: boolean | AppointmentsRange) => void
 }
 
 export const AppointmentDetailDialog = (props: AppointmentDetailDialogProps) => {

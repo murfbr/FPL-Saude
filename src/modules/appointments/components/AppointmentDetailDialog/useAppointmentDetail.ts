@@ -15,7 +15,7 @@ import {
   getClientNotesByAppointment,
 } from '@/shared/services'
 import { getClientSubscriptions, findActiveSubscriptionForService } from '@/modules/clients/service'
-import { useUpdateAppointmentCache } from '@/modules/appointments/queries'
+import { useUpdateAppointmentCache, type AppointmentsRange } from '@/modules/appointments/queries'
 import { useDeleteAppointmentMutation, useUpdateAppointmentStatusMutation } from '@/modules/appointments/hooks/useAppointments'
 import { deleteFutureAppointments, updateAppointment } from '@/shared/services' // Note: these are not in TanStack yet or we can use the ones we have
 
@@ -28,7 +28,7 @@ export function useAppointmentDetail({
   appointment: Appointment | null
   isOpen: boolean
   onOpenChange: (isOpen: boolean) => void
-  onAppointmentUpdated: (shouldInvalidate?: boolean) => void
+  onAppointmentUpdated: (shouldInvalidate?: boolean | AppointmentsRange) => void
 }) {
   const { toast } = useToast()
   const updateAppointmentCache = useUpdateAppointmentCache()
@@ -190,7 +190,8 @@ export function useAppointmentDetail({
         } else {
           updateAppointmentCache(appointment.id, () => null)
         }
-        onAppointmentUpdated(true)
+        // O patch acima já removeu todos os ids do cache — refetch é desnecessário
+        onAppointmentUpdated(false)
         onOpenChange(false)
       }
     } else {
@@ -369,7 +370,7 @@ export function useAppointmentDetail({
       handleStatusChange,
       handleAddNote,
       handleSaveDiscount,
-      handleRescheduleSuccess: (shouldInvalidate?: boolean) => {
+      handleRescheduleSuccess: (shouldInvalidate?: boolean | AppointmentsRange) => {
         onAppointmentUpdated(shouldInvalidate)
         onOpenChange(false)
       }

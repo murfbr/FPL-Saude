@@ -28,6 +28,7 @@ import {
 import { useNavigate } from 'react-router-dom'
 import { ClientSelector } from '@/modules/clients/components/ClientSelector'
 
+import { type AppointmentsRange } from '@/modules/appointments/queries'
 import { useAppointmentForm } from './useAppointmentForm'
 import { FinancialSection } from './FinancialSection'
 import { RecurringOptions } from './RecurringOptions'
@@ -36,7 +37,7 @@ import { DateTimeSelection } from './DateTimeSelection'
 interface AppointmentFormDialogProps {
   isOpen: boolean
   onOpenChange: (isOpen: boolean) => void
-  onAppointmentCreated: () => void
+  onAppointmentCreated: (range?: boolean | AppointmentsRange) => void
   initialDate?: Date
   isSpecificTimeSlot?: boolean
   preselectedProfessionalId?: string

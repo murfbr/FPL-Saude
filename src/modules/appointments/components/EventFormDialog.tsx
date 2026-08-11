@@ -44,7 +44,7 @@ import { Professional } from '@/shared/types'
 import { getAllProfessionals } from '@/shared/services'
 import { bookClinicEvent } from '@/modules/appointments/service'
 import { useAuth } from '@/shared/providers/AuthProvider'
-import { useInvalidateAppointments } from '@/modules/appointments/queries'
+import { type AppointmentsRange } from '@/modules/appointments/queries'
 
 const eventSchema = z.object({
   title: z.string().min(2, 'Informe o título do evento.'),
@@ -62,7 +62,7 @@ type EventFormValues = z.infer<typeof eventSchema>
 interface EventFormDialogProps {
   isOpen: boolean
   onOpenChange: (open: boolean) => void
-  onEventCreated: () => void
+  onEventCreated: (range?: boolean | AppointmentsRange) => void
   initialDate?: Date
   preselectedProfessionalId?: string
 }
@@ -76,7 +76,6 @@ export const EventFormDialog = ({
 }: EventFormDialogProps) => {
   const { toast } = useToast()
   const { loading, companyId } = useAuth()
-  const invalidateAppointments = useInvalidateAppointments()
   const [professionals, setProfessionals] = useState<Professional[]>([])
   const [isLoadingProfessionals, setIsLoadingProfessionals] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -152,8 +151,10 @@ export const EventFormDialog = ({
         toast({ title: 'Erro ao criar evento', description: String(error), variant: 'destructive' })
       } else {
         toast({ title: 'Evento criado com sucesso!' })
-        invalidateAppointments()
-        onEventCreated()
+        // Invalidação única e cirúrgica, feita pelo pai (antes havia dupla:
+        // aqui e no onEventCreated)
+        const startIso = startDate.toISOString()
+        onEventCreated({ from: startIso, to: startIso })
         onOpenChange(false)
       }
     } catch (err: any) {

@@ -1,63 +1,17 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import * as appointmentService from '../service'
-import { Appointment } from '@/shared/types'
+import { invalidateAppointmentQueries } from '../queries'
 
-export const appointmentKeys = {
-  all: ['appointments'] as const,
-  lists: () => [...appointmentKeys.all, 'list'] as const,
-  list: (filters: any) => [...appointmentKeys.lists(), { filters }] as const,
-  ranges: () => [...appointmentKeys.all, 'range'] as const,
-  range: (start: string, end: string, professionalId?: string) => [...appointmentKeys.ranges(), { start, end, professionalId }] as const,
-  upcoming: () => [...appointmentKeys.all, 'upcoming'] as const,
-  byClient: (clientId: string) => [...appointmentKeys.all, 'byClient', clientId] as const,
-  byClientPaginated: (clientId: string, page: number) => [...appointmentKeys.all, 'byClientPaginated', clientId, page] as const,
-}
-
-export function useAppointmentsQuery(page: number, pageSize: number, filters: any) {
-  return useQuery({
-    queryKey: appointmentKeys.list({ page, pageSize, ...filters }),
-    queryFn: async () => {
-      const { data, count, error } = await appointmentService.getAppointmentsPaginated(page, pageSize, filters)
-      if (error) throw error
-      return { data: data as Appointment[], count }
-    },
-  })
-}
-
-export function useAppointmentsForRangeQuery(startDate: Date, endDate: Date, professionalId?: string) {
-  return useQuery({
-    queryKey: appointmentKeys.range(startDate.toISOString(), endDate.toISOString(), professionalId),
-    queryFn: async () => {
-      const { data, error } = await appointmentService.getAppointmentsForRange(startDate, endDate, professionalId)
-      if (error) throw error
-      return data as Appointment[]
-    },
-    enabled: !!startDate && !!endDate,
-  })
-}
-
-export function useUpcomingAppointmentsQuery() {
-  return useQuery({
-    queryKey: appointmentKeys.upcoming(),
-    queryFn: async () => {
-      const { data, error } = await appointmentService.getUpcomingAppointments()
-      if (error) throw error
-      return data as Appointment[]
-    },
-  })
-}
-
-export function useAppointmentsByClientQuery(clientId: string) {
-  return useQuery({
-    queryKey: appointmentKeys.byClient(clientId),
-    queryFn: async () => {
-      const { data, error } = await appointmentService.getAppointmentsByClientId(clientId)
-      if (error) throw error
-      return data as Appointment[]
-    },
-    enabled: !!clientId,
-  })
-}
+/**
+ * Mutações de agendamento.
+ *
+ * Custo de reads: cada query de range refeita cobra 1 read por documento do
+ * período (um mês pode ter centenas). Por isso a invalidação aqui é cirúrgica:
+ * - criar: invalida apenas as queries de range que contêm a data do novo
+ *   agendamento (invalidateAppointmentQueries com range)
+ * - status/excluir: nenhuma invalidação — o chamador atualiza o cache pontualmente
+ *   via useUpdateAppointmentCache (contrato seguido por AppointmentDetailDialog)
+ */
 
 export function useBookAppointmentMutation() {
   const queryClient = useQueryClient()
@@ -69,50 +23,31 @@ export function useBookAppointmentMutation() {
       if (error) throw error
       return data
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: appointmentKeys.all })
+    onSuccess: (_data, variables) => {
+      invalidateAppointmentQueries(queryClient, {
+        from: variables.startTime,
+        to: variables.isRecurring ? undefined : variables.startTime,
+      })
     },
   })
 }
 
 export function useUpdateAppointmentStatusMutation() {
-  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (params: { appointmentId: string; status: string; options?: { allowExhaustedPackageUse?: boolean } }) => {
       const { error } = await appointmentService.updateAppointmentStatus(params.appointmentId, params.status, params.options)
       if (error) throw error
       return params
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: appointmentKeys.all })
-    },
   })
 }
 
 export function useDeleteAppointmentMutation() {
-  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (id: string) => {
       const { deletedIds, error } = await appointmentService.deleteAppointment(id)
       if (error) throw error
       return deletedIds
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: appointmentKeys.all })
-    },
-  })
-}
-
-export function useRescheduleAppointmentMutation() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async (params: { appointmentId: string; newProfessionalId: string; newStartTime: string }) => {
-      const { error } = await appointmentService.rescheduleAppointment(params.appointmentId, params.newProfessionalId, params.newStartTime)
-      if (error) throw error
-      return params
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: appointmentKeys.all })
     },
   })
 }

@@ -30,6 +30,7 @@ import {
 } from '@/modules/appointments/schedules'
 import { getAvailableDatesForProfessional, getRecurringAvailability } from '@/modules/availability/service'
 import { useBookAppointmentMutation } from '@/modules/appointments/hooks/useAppointments'
+import { type AppointmentsRange } from '@/modules/appointments/queries'
 import { bookRecurringAppointments } from '@/shared/services'
 import { useAuth } from '@/shared/providers/AuthProvider'
 
@@ -76,7 +77,7 @@ export function useAppointmentForm({
 }: {
   isOpen: boolean
   onOpenChange: (isOpen: boolean) => void
-  onAppointmentCreated: () => void
+  onAppointmentCreated: (range?: boolean | AppointmentsRange) => void
   initialDate?: Date
   isSpecificTimeSlot?: boolean
   preselectedProfessionalId?: string
@@ -361,7 +362,8 @@ export function useAppointmentForm({
         )
         if (result.error) throw result.error
         toast({ title: 'Agendamento(s) criado(s) com sucesso!' })
-        onAppointmentCreated()
+        // Série criada da data-base em diante: invalida só esse período
+        onAppointmentCreated({ from: values.startTime })
         onOpenChange(false)
       } else {
         bookMutation.mutate({
@@ -375,7 +377,8 @@ export function useAppointmentForm({
         }, {
           onSuccess: () => {
             toast({ title: 'Agendamento(s) criado(s) com sucesso!' })
-            onAppointmentCreated()
+            // O useBookAppointmentMutation já invalidou o período afetado
+            onAppointmentCreated(false)
             onOpenChange(false)
           },
           onError: (error: any) => {

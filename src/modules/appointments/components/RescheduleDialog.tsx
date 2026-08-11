@@ -32,7 +32,7 @@ import { getAvailableDatesForRange } from '@/modules/availability/service'
 import { rescheduleAppointment, rescheduleFutureAppointments } from '@/shared/services'
 import { getProfessionalsByService } from '@/shared/services'
 import { AvailableSlots } from '@/modules/availability/components/AvailableSlots'
-import { useUpdateAppointmentCache } from '@/modules/appointments/queries'
+import { useUpdateAppointmentCache, type AppointmentsRange } from '@/modules/appointments/queries'
 import { getFriendlyErrorMessage } from '@/shared/lib/error-mapping'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
@@ -45,7 +45,7 @@ interface RescheduleDialogProps {
   client: Client
   service: Service
   professionalId: string
-  onRescheduleSuccess: (shouldInvalidate?: boolean) => void
+  onRescheduleSuccess: (shouldInvalidate?: boolean | AppointmentsRange) => void
   is_recurring?: boolean
   currentStartTime?: string
 }
@@ -203,7 +203,12 @@ export const RescheduleDialog = ({
     } else {
       toast({ title: 'Agendamento remarcado com sucesso!' })
       
-      if (rescheduleMode === 'only-this') {
+      const isSeriesMode = rescheduleMode === 'this-and-future'
+
+      if (!isSeriesMode) {
+        // Feedback imediato na view atual; a invalidação abaixo garante que o
+        // agendamento apareça no período de destino (o patch não insere em
+        // ranges cacheados que ainda não o contêm)
         updateAppointmentCache(oldAppointmentId, (oldAppt) => {
           const newAppt = { ...oldAppt }
           newAppt.professional_id = selectedProfessionalId
@@ -220,7 +225,18 @@ export const RescheduleDialog = ({
         })
       }
 
-      onRescheduleSuccess(rescheduleMode === 'this-and-future')
+      // Invalida apenas o período afetado: da origem ou do destino (o que vier
+      // primeiro) até o outro extremo — série deslocada afeta dali em diante
+      const from =
+        currentStartTime && currentStartTime < selectedSlotTime
+          ? currentStartTime
+          : selectedSlotTime
+      const to = isSeriesMode
+        ? undefined
+        : currentStartTime && currentStartTime > selectedSlotTime
+          ? currentStartTime
+          : selectedSlotTime
+      onRescheduleSuccess({ from, to })
       onOpenChange(false)
     }
     setIsSubmitting(false)
