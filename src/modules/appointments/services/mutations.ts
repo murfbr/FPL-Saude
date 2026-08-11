@@ -449,34 +449,11 @@ export async function updateAppointmentStatus(
              // Cortesia confirmada: conclui sem debitar
              packageSessionConsumed = false
            } else {
-           const newRemaining = (pkgData.sessions_remaining || 0) - 1
-           batch.update(packageRef, { sessions_remaining: increment(-1) })
-           packageSessionConsumed = true
-
-           // Admin Notification: Pacote Acabando
-           if (newRemaining === 2 || newRemaining === 1) {
-             try {
-               const usersRef = collection(db, 'companies', companyId, 'users')
-               const adminsQuery = query(usersRef, where('role', '==', 'admin'))
-               const adminsSnap = await getDocs(adminsQuery)
-
-               adminsSnap.docs.forEach(adminDoc => {
-                 const adminId = adminDoc.id
-                 const notifRef = doc(collection(db, 'companies', companyId, 'admins', adminId, 'notifications'))
-                 batch.set(notifRef, {
-                   id: notifRef.id,
-                   professional_id: adminId,
-                   title: 'Aviso de Pacote',
-                   content: `Faltam ${newRemaining} sessões para o pacote de ${appData.clients?.name || 'um cliente'} acabar.`,
-                   is_read: false,
-                   link: `/admin/pacientes/${appData.client_id}`,
-                   created_at: new Date().toISOString()
-                 })
-               })
-             } catch (e) {
-               console.error("Erro ao buscar admins para notificação", e)
-             }
-           }
+             batch.update(packageRef, { sessions_remaining: increment(-1) })
+             packageSessionConsumed = true
+             // O aviso de "pacote acabando" para os admins é criado no servidor
+             // pelo trigger onAppointmentWrite — a lista de admins vive na
+             // coleção raiz `users`, que o client não pode ler
            }
         }
       } else if (wasConsumingStatus && !isConsumingStatus) {
