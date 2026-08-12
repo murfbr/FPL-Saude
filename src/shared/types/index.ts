@@ -10,6 +10,8 @@ export interface Service {
   value_type: 'session' | 'monthly'
   max_attendees: number
   requires_observation?: boolean
+  /** Soft delete: false = desativado (fora dos dropdowns; histórico preservado) */
+  is_active?: boolean
   packages?: Package[] | null
   subscription_plans?: SubscriptionPlan[] | null
 }
@@ -53,6 +55,8 @@ export interface Partnership {
   name: string
   description: string | null
   created_at: string
+  /** Soft delete: false = desativada (fora dos dropdowns; vínculos preservados) */
+  is_active?: boolean
 }
 
 export interface Client {

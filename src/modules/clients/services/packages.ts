@@ -48,9 +48,10 @@ export async function getClientPackages(clientId: string): Promise<{ data: any[]
 
 export async function getAllActiveClientPackages(options?: { limit?: number }): Promise<{ data: any[] | null; error: any }> {
   try {
-    // 1. Obter todos os clientes da empresa
+    // 1. Obter TODOS os clientes (inclusive arquivados): pacote não pago de
+    // paciente arquivado precisa continuar visível na tela de cobrança
     const clientsRef = collection(db, 'companies', getCompanyId(), 'clients')
-    const clientsSnap = await getDocs(query(clientsRef, where('is_active', '==', true)))
+    const clientsSnap = await getDocs(clientsRef)
 
     let results: any[] = []
 

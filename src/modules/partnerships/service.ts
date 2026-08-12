@@ -1,18 +1,25 @@
 import { db } from '@/shared/lib/firebase'
-import { collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore'
+import { collection, doc, getDocs, getDoc, setDoc, updateDoc, query, orderBy } from 'firebase/firestore'
 import { Partnership, PartnershipDiscount } from '@/shared/types'
 
 import { getCompanyId } from '@/shared/lib/tenantStore'
 
-export async function getAllPartnerships(): Promise<{ data: Partnership[] | null; error: any }> {
+export async function getAllPartnerships(options?: {
+  includeInactive?: boolean
+}): Promise<{ data: Partnership[] | null; error: any }> {
   try {
     const pRef = collection(db, 'companies', getCompanyId(), 'partnerships')
     const q = query(pRef, orderBy('name', 'asc'))
     const snap = await getDocs(q)
-    
+
     const results: Partnership[] = []
-    snap.forEach(d => results.push({ id: d.id, ...d.data() } as Partnership))
-    
+    snap.forEach(d => {
+      const data = d.data()
+      // Parceria desativada (soft delete) some dos dropdowns por padrão
+      if (!options?.includeInactive && data.is_active === false) return
+      results.push({ id: d.id, ...data } as Partnership)
+    })
+
     return { data: results, error: null }
   } catch (error) { return { data: null, error } }
 }
@@ -40,9 +47,17 @@ export async function updatePartnership(
   } catch (error) { return { data: null, error } }
 }
 
+/**
+ * Soft delete: clientes guardam partnership_id e os relatórios agrupam por
+ * parceria — apagar o doc deixaria referências órfãs e nomes vazios no
+ * histórico. Desativada, some dos dropdowns; vínculos antigos permanecem.
+ */
 export async function deletePartnership(id: string): Promise<{ error: any }> {
   try {
-    await deleteDoc(doc(db, 'companies', getCompanyId(), 'partnerships', id))
+    await updateDoc(doc(db, 'companies', getCompanyId(), 'partnerships', id), {
+      is_active: false,
+      deactivated_at: new Date().toISOString(),
+    })
     return { error: null }
   } catch (error) { return { error } }
 }

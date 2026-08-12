@@ -27,7 +27,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/shared/hooks/use-toast'
-import { PlusCircle, Edit, Trash2, Percent } from 'lucide-react'
+import { PlusCircle, Edit, Trash2, Percent, RotateCcw } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { Partnership } from '@/shared/types'
 import {
   getAllPartnerships,
@@ -50,7 +51,7 @@ export const PartnershipsManager = () => {
 
   const fetchPartnerships = async () => {
     setIsLoading(true)
-    const { data } = await getAllPartnerships()
+    const { data } = await getAllPartnerships({ includeInactive: true })
     setPartnerships(data || [])
     setIsLoading(false)
   }
@@ -81,12 +82,22 @@ export const PartnershipsManager = () => {
     setIsSubmitting(false)
   }
 
+  const handleReactivate = async (partnershipId: string) => {
+    const { error } = await updatePartnership(partnershipId, { is_active: true } as Partial<Partnership>)
+    if (error) {
+      toast({ title: 'Erro ao reativar parceria', variant: 'destructive' })
+    } else {
+      toast({ title: 'Parceria reativada!' })
+      fetchPartnerships()
+    }
+  }
+
   const handleDelete = async (partnershipId: string) => {
     const { error } = await deletePartnership(partnershipId)
     if (error) {
-      toast({ title: 'Erro ao excluir parceria', variant: 'destructive' })
+      toast({ title: 'Erro ao desativar parceria', variant: 'destructive' })
     } else {
-      toast({ title: 'Parceria excluída com sucesso!' })
+      toast({ title: 'Parceria desativada. Vínculos e histórico preservados.' })
       fetchPartnerships()
     }
   }
@@ -124,7 +135,16 @@ export const PartnershipsManager = () => {
             <TableBody>
               {partnerships.map((p) => (
                 <TableRow key={p.id}>
-                  <TableCell className="font-medium">{p.name}</TableCell>
+                  <TableCell className="font-medium">
+                    <span className="flex items-center gap-2">
+                      {p.name}
+                      {(p as Partnership & { is_active?: boolean }).is_active === false && (
+                        <Badge variant="destructive" className="text-[10px] h-4 px-1.5 font-normal">
+                          Inativa
+                        </Badge>
+                      )}
+                    </span>
+                  </TableCell>
                   <TableCell>{p.description || '-'}</TableCell>
                   <TableCell className="text-right space-x-2">
                     <Button
@@ -141,29 +161,42 @@ export const PartnershipsManager = () => {
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="destructive" size="icon">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>
-                            Tem certeza que deseja excluir?
-                          </AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Esta ação não pode ser desfeita.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDelete(p.id)}>
-                            Excluir
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                    {(p as Partnership & { is_active?: boolean }).is_active === false ? (
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        title="Reativar parceria"
+                        onClick={() => handleReactivate(p.id)}
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="destructive" size="icon">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>
+                              Desativar parceria?
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                              A parceria sai das listas de seleção. Clientes já
+                              vinculados e o histórico são preservados, e você
+                              pode reativá-la aqui quando quiser.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDelete(p.id)}>
+                              Desativar
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

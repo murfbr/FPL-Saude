@@ -1,5 +1,5 @@
 import { db } from '@/shared/lib/firebase'
-import { collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore'
+import { collection, doc, getDocs, getDoc, setDoc, updateDoc, query, orderBy } from 'firebase/firestore'
 import { Service } from '@/shared/types'
 
 import { getCompanyId } from '@/shared/lib/tenantStore'
@@ -8,7 +8,9 @@ import { getCompanyId } from '@/shared/lib/tenantStore'
 const serviceCache = new Map<string, { data: Service, expiry: number }>()
 const CACHE_TTL = 5 * 60 * 1000
 
-export async function getServices(): Promise<{ data: Service[] | null; error: any }> {
+export async function getServices(options?: {
+  includeInactive?: boolean
+}): Promise<{ data: Service[] | null; error: any }> {
   try {
     const servicesRef = collection(db, 'companies', getCompanyId(), 'services')
     const q = query(servicesRef, orderBy('name', 'asc'))
@@ -26,6 +28,8 @@ export async function getServices(): Promise<{ data: Service[] | null; error: an
     const services: Service[] = []
     snapshot.forEach(doc => {
       const data = doc.data()
+      // Serviço desativado (soft delete) some dos dropdowns por padrão
+      if (!options?.includeInactive && data.is_active === false) return
       services.push({
         id: doc.id,
         ...data,
@@ -71,10 +75,27 @@ export async function updateService(
   }
 }
 
+/**
+ * Soft delete: agendamentos, pacotes, planos e disponibilidade referenciam o
+ * serviço — apagar o doc deixaria tudo isso órfão. Desativado, ele some dos
+ * dropdowns (getServices filtra) e o histórico continua íntegro.
+ */
 export async function deleteService(serviceId: string): Promise<{ error: any }> {
   try {
     const docRef = doc(db, 'companies', getCompanyId(), 'services', serviceId)
-    await deleteDoc(docRef)
+    await updateDoc(docRef, { is_active: false, deactivated_at: new Date().toISOString() })
+    serviceCache.delete(serviceId)
+    return { error: null }
+  } catch (error) {
+    return { error }
+  }
+}
+
+export async function reactivateService(serviceId: string): Promise<{ error: any }> {
+  try {
+    const docRef = doc(db, 'companies', getCompanyId(), 'services', serviceId)
+    await updateDoc(docRef, { is_active: true })
+    serviceCache.delete(serviceId)
     return { error: null }
   } catch (error) {
     return { error }

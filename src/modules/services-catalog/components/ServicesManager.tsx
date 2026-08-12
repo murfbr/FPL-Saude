@@ -28,6 +28,7 @@ import {
   createService,
   updateService,
   deleteService,
+  reactivateService,
 } from '@/shared/services'
 import {
   createPackage,
@@ -52,6 +53,7 @@ import {
   Package as PackageIcon,
   CalendarRange,
   Plus,
+  RotateCcw,
 } from 'lucide-react'
 import {
   Card,
@@ -101,7 +103,7 @@ export const ServicesManager = () => {
   const fetchData = async () => {
     setIsLoading(true)
     const [servicesRes, plansRes] = await Promise.all([
-      getServices(),
+      getServices({ includeInactive: true }), // gestor vê inativos para poder reativar
       getSubscriptionPlans(undefined, true), // Fetch all including inactive for potential future admin toggle
     ])
     setServices(servicesRes.data || [])
@@ -147,18 +149,26 @@ export const ServicesManager = () => {
     setIsSubmitting(false)
   }
 
+  const handleServiceReactivate = async (serviceId: string) => {
+    const { error } = await reactivateService(serviceId)
+    if (error) {
+      toast({ title: 'Erro ao reativar serviço', variant: 'destructive' })
+    } else {
+      toast({ title: 'Serviço reativado!' })
+      fetchData()
+    }
+  }
+
   const handleServiceDelete = async (serviceId: string) => {
     const { error } = await deleteService(serviceId)
     if (error) {
       toast({
-        title: 'Erro ao excluir serviço',
-        description: error.message.includes('foreign key')
-          ? 'Não é possível excluir pois existem vínculos.'
-          : error.message,
+        title: 'Erro ao desativar serviço',
+        description: error.message,
         variant: 'destructive',
       })
     } else {
-      toast({ title: 'Serviço excluído com sucesso!' })
+      toast({ title: 'Serviço desativado. Histórico e vínculos preservados.' })
       fetchData()
     }
   }
@@ -345,6 +355,11 @@ export const ServicesManager = () => {
                                 Sem Prontuário
                               </Badge>
                             )}
+                            {service.is_active === false && (
+                              <Badge variant="destructive" className="text-[10px] h-4 px-1.5 font-normal">
+                                Inativo
+                              </Badge>
+                            )}
                           </CardTitle>
                           <CardDescription className="flex items-center gap-3 mt-1">
                             <span className="flex items-center gap-1">
@@ -369,32 +384,45 @@ export const ServicesManager = () => {
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>
-                                Excluir Serviço?
-                              </AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Esta ação excluirá o serviço e todos os
-                                pacotes/planos associados.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => handleServiceDelete(service.id)}
-                              >
-                                Excluir
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        {service.is_active === false ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Reativar serviço"
+                            onClick={() => handleServiceReactivate(service.id)}
+                          >
+                            <RotateCcw className="h-4 w-4 text-primary" />
+                          </Button>
+                        ) : (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>
+                                  Desativar Serviço?
+                                </AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  O serviço sai das listas de agendamento e
+                                  venda. Agendamentos, pacotes e planos já
+                                  existentes são preservados, e você pode
+                                  reativá-lo aqui quando quiser.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleServiceDelete(service.id)}
+                                >
+                                  Desativar
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
                       </div>
                     </div>
                   </CardHeader>

@@ -4,6 +4,8 @@ import {
   getClientById,
   updateClient,
   deleteClient,
+  archiveClient,
+  getClientArchiveImpact,
   exportClientData,
   getAppointmentsByClientId,
   getAppointmentsByClientIdPaginated,
@@ -12,6 +14,8 @@ import {
   deleteClientExam,
   getClientNotesWithFallback,
 } from '@/shared/services'
+import type { ClientArchiveImpact } from '@/modules/clients/services/mutations'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Client, Appointment, Partnership, NoteEntry, ClientExam } from '@/shared/types'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -226,28 +230,69 @@ const PatientDetail = () => {
     fetchAppointments()
   }, [id, statusFilter, dateRange])
 
+  const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false)
+  const [archiveImpact, setArchiveImpact] = useState<ClientArchiveImpact | null>(null)
+  const [cancelFutureAppointments, setCancelFutureAppointments] = useState(true)
+  const [isArchiving, setIsArchiving] = useState(false)
+
   const handleStatusChange = async (isActive: boolean) => {
     if (!patient) return
-    const { data, error } = await updateClient(patient.id, {
-      is_active: isActive,
-    })
+
+    if (!isActive) {
+      // Arquivar tem cascata financeira: mostrar o impacto antes de confirmar
+      const { data } = await getClientArchiveImpact(patient.id)
+      setArchiveImpact(data)
+      setCancelFutureAppointments(true)
+      setIsArchiveDialogOpen(true)
+      return
+    }
+
+    // Reativar é direto (assinaturas/pacotes cancelados não voltam sozinhos)
+    const { data, error } = await updateClient(patient.id, { is_active: true })
     if (error) {
       toast({ title: 'Erro ao atualizar status', variant: 'destructive' })
     } else if (data) {
       setPatient((prev) => (prev ? { ...prev, ...data } : data))
+      toast({ title: 'Paciente ativado com sucesso!' })
+    }
+  }
+
+  const handleConfirmArchive = async () => {
+    if (!patient) return
+    setIsArchiving(true)
+    const { data, error } = await archiveClient(patient.id, {
+      cancelFutureAppointments,
+    })
+    if (error) {
+      toast({ title: 'Erro ao arquivar paciente', variant: 'destructive' })
+    } else {
+      setPatient((prev) => (prev ? { ...prev, is_active: false } : prev))
+      const parts = []
+      if (data?.activeSubscriptions) parts.push(`${data.activeSubscriptions} assinatura(s) cancelada(s)`)
+      if (data?.activePackages) parts.push(`${data.activePackages} pacote(s) cancelado(s)`)
+      if (data?.futureAppointments) parts.push(`${data.futureAppointments} agendamento(s) futuro(s) cancelado(s)`)
       toast({
-        title: `Paciente ${isActive ? 'ativado' : 'inativado'} com sucesso!`,
+        title: 'Paciente arquivado',
+        description: parts.length
+          ? `${parts.join(', ')}. Histórico preservado.`
+          : 'Histórico preservado.',
       })
     }
+    setIsArchiving(false)
+    setIsArchiveDialogOpen(false)
   }
 
   const handleDelete = async () => {
     if (!patient) return
     const { error } = await deleteClient(patient.id)
     if (error) {
-      toast({ title: 'Erro ao excluir paciente', variant: 'destructive' })
+      toast({
+        title: 'Não foi possível excluir',
+        description: error.message,
+        variant: 'destructive',
+      })
     } else {
-      toast({ title: 'Paciente excluído com sucesso!' })
+      toast({ title: 'Cadastro excluído (sem histórico associado).' })
       navigate('/admin?tab=clients')
     }
   }
@@ -468,17 +513,86 @@ const PatientDetail = () => {
                   <AlertDialogContent>
                     <AlertDialogHeader>
                       <AlertDialogTitle>
-                        Tem certeza que deseja excluir?
+                        Excluir cadastro?
                       </AlertDialogTitle>
                       <AlertDialogDescription>
-                        Esta ação não pode ser desfeita. Isso excluirá
-                        permanentemente o paciente e todos os seus dados.
+                        A exclusão só é permitida para cadastros SEM histórico
+                        (nenhuma consulta, pagamento ou prontuário) — o caso de
+                        um cadastro criado por engano. Pacientes com histórico
+                        devem ser arquivados: o histórico clínico e financeiro é
+                        de guarda obrigatória.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancelar</AlertDialogCancel>
                       <AlertDialogAction onClick={handleDelete}>
                         Excluir
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+
+                <AlertDialog open={isArchiveDialogOpen} onOpenChange={setIsArchiveDialogOpen}>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Arquivar paciente?</AlertDialogTitle>
+                      <AlertDialogDescription asChild>
+                        <div className="space-y-3">
+                          <p>
+                            O paciente sai das listas ativas e a cobrança dele é
+                            encerrada. Todo o histórico (consultas, pagamentos e
+                            prontuário) é preservado e os relatórios não mudam.
+                          </p>
+                          {archiveImpact && (
+                            <ul className="list-disc pl-5 space-y-1">
+                              <li>
+                                {archiveImpact.activeSubscriptions} assinatura(s)
+                                ativa(s) — serão canceladas
+                              </li>
+                              <li>
+                                {archiveImpact.activePackages} pacote(s) com
+                                sessões restantes — serão cancelados
+                              </li>
+                              <li>
+                                {archiveImpact.futureAppointments} agendamento(s)
+                                futuro(s)
+                              </li>
+                            </ul>
+                          )}
+                          {(archiveImpact?.activeSubscriptions ||
+                            archiveImpact?.activePackages) ? (
+                            <p className="text-xs">
+                              Se houver cobrança pendente de assinatura/pacote,
+                              registre o pagamento ANTES de arquivar.
+                            </p>
+                          ) : null}
+                          {archiveImpact && archiveImpact.futureAppointments > 0 && (
+                            <label className="flex items-center gap-2 font-medium text-foreground cursor-pointer">
+                              <Checkbox
+                                checked={cancelFutureAppointments}
+                                onCheckedChange={(v) =>
+                                  setCancelFutureAppointments(v === true)
+                                }
+                              />
+                              Cancelar os {archiveImpact.futureAppointments}{' '}
+                              agendamento(s) futuro(s)
+                            </label>
+                          )}
+                        </div>
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel disabled={isArchiving}>
+                        Cancelar
+                      </AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={(e) => {
+                          e.preventDefault()
+                          handleConfirmArchive()
+                        }}
+                        disabled={isArchiving}
+                      >
+                        {isArchiving ? 'Arquivando...' : 'Arquivar'}
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
