@@ -4,6 +4,7 @@ exports.onFinancialRecordWrite = void 0;
 const firestore_1 = require("firebase-functions/v2/firestore");
 const config_1 = require("../config");
 const helpers_1 = require("../shared/helpers");
+const isIndependent = (data) => !!data && !data.client_subscription_id && !data.client_package_id;
 exports.onFinancialRecordWrite = (0, firestore_1.onDocumentWritten)({
     document: 'companies/{companyId}/financial_records/{recordId}',
     region: config_1.REGION,
@@ -33,6 +34,15 @@ exports.onFinancialRecordWrite = (0, firestore_1.onDocumentWritten)({
             u.subscriptions_revenue_received = (0, config_1.Inc)(sign * amount);
             u.subscriptions_paid_count = (0, config_1.Inc)(sign);
         }
+        // Caixa avulso por profissional — mantido aqui (registros reais) para o
+        // card "Faturamento Avulso" não depender do snapshot noturno do cron
+        if (isIndependent(data) && data.professional_id) {
+            u.by_professional = {
+                [data.professional_id]: {
+                    independent_revenue: (0, config_1.Inc)(sign * amount),
+                },
+            };
+        }
         return u;
     };
     // Mesmo mês: calcula diferença líquida
@@ -42,8 +52,18 @@ exports.onFinancialRecordWrite = (0, firestore_1.onDocumentWritten)({
         const diff = aAmount - bAmount;
         const wasSub = !!(before === null || before === void 0 ? void 0 : before.client_subscription_id);
         const isSub = !!(after === null || after === void 0 ? void 0 : after.client_subscription_id);
+        const indDeltas = {};
+        if (isIndependent(before) && (before === null || before === void 0 ? void 0 : before.professional_id)) {
+            const pid = before.professional_id;
+            indDeltas[pid] = (indDeltas[pid] || 0) - bAmount;
+        }
+        if (isIndependent(after) && (after === null || after === void 0 ? void 0 : after.professional_id)) {
+            const pid = after.professional_id;
+            indDeltas[pid] = (indDeltas[pid] || 0) + aAmount;
+        }
+        const indChanged = Object.values(indDeltas).some((d) => d !== 0);
         // Skip se nada mudou
-        if (diff === 0 && wasSub === isSub)
+        if (diff === 0 && wasSub === isSub && !indChanged)
             return;
         const updates = {
             updated_at: (0, config_1.ServerTs)(),
@@ -62,6 +82,14 @@ exports.onFinancialRecordWrite = (0, firestore_1.onDocumentWritten)({
         }
         else if (wasSub && isSub && diff !== 0) {
             updates.subscriptions_revenue_received = (0, config_1.Inc)(diff);
+        }
+        if (indChanged) {
+            const byProf = {};
+            for (const [pid, delta] of Object.entries(indDeltas)) {
+                if (delta !== 0)
+                    byProf[pid] = { independent_revenue: (0, config_1.Inc)(delta) };
+            }
+            updates.by_professional = byProf;
         }
         await (0, helpers_1.summaryRef)(companyId, aMonth).set(updates, { merge: true });
         return;

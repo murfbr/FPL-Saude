@@ -17,11 +17,12 @@ import jsPDF from 'jspdf'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { getClientSubscriptions } from '@/modules/clients/services/subscriptions'
+import { dayKeyOf, spDayStartUtc, spDayEndUtc } from '@/shared/lib/spTime'
 
 export async function getActivitiesForReceipt(
   clientId: string,
   startDate: string,
-  endDate: string
+  endDate: string,
 ): Promise<{ data: ReceiptItem[] | null; error: any }> {
   try {
     const companyId = getCompanyId()
@@ -29,7 +30,7 @@ export async function getActivitiesForReceipt(
     const q = query(
       apptsRef,
       where('client_id', '==', clientId),
-      where('status', 'in', ['completed', 'no_show'])
+      where('status', 'in', ['completed', 'no_show']),
     )
 
     const snap = await getDocs(q)
@@ -37,8 +38,10 @@ export async function getActivitiesForReceipt(
 
     snap.forEach((d) => {
       const data = d.data() as Appointment
-      const apptDate = data.schedules?.start_time
-      if (apptDate && apptDate >= startDate && apptDate <= endDate) {
+      const apptDay = data.schedules?.start_time
+        ? dayKeyOf(data.schedules.start_time)
+        : null
+      if (apptDay && apptDay >= startDate && apptDay <= endDate) {
         appointments.push({ id: d.id, ...data })
       }
     })
@@ -52,16 +55,21 @@ export async function getActivitiesForReceipt(
     const finQ = query(
       finRef,
       where('client_id', '==', clientId),
-      where('payment_date', '>=', startDate + 'T00:00:00.000Z'),
-      where('payment_date', '<=', endDate + 'T23:59:59.999Z')
+      where('payment_date', '>=', spDayStartUtc(startDate)),
+      where('payment_date', '<=', spDayEndUtc(endDate)),
     )
     const finSnap = await getDocs(finQ)
-    const financialRecords = finSnap.docs.map(d => ({ id: d.id, ...d.data() } as any))
+    const financialRecords = finSnap.docs.map(
+      (d) => ({ id: d.id, ...d.data() }) as any,
+    )
 
     // Helper functions to find payments
-    const getPackagePayments = (pkgId: string) => financialRecords.filter(f => f.client_package_id === pkgId)
-    const getSubscriptionPayments = (subId: string) => financialRecords.filter(f => f.client_subscription_id === subId)
-    const getAvulsoPayment = (apptId: string) => financialRecords.find(f => f.appointment_id === apptId)
+    const getPackagePayments = (pkgId: string) =>
+      financialRecords.filter((f) => f.client_package_id === pkgId)
+    const getSubscriptionPayments = (subId: string) =>
+      financialRecords.filter((f) => f.client_subscription_id === subId)
+    const getAvulsoPayment = (apptId: string) =>
+      financialRecords.find((f) => f.appointment_id === apptId)
 
     // Map items
     const itemsMap = new Map<string, ReceiptItem>()
@@ -80,37 +88,63 @@ export async function getActivitiesForReceipt(
         }
       }
 
-      const apptDateStr = appt.schedules?.start_time ? format(new Date(appt.schedules.start_time), 'dd/MM/yyyy') : ''
+      const apptDateStr = appt.schedules?.start_time
+        ? format(new Date(appt.schedules.start_time), 'dd/MM/yyyy')
+        : ''
       const apptDesc = appt.services?.name || 'Sessão'
 
       if (isPackage && appt.client_package_id) {
         const pkgId = appt.client_package_id
         if (!itemsMap.has(pkgId)) {
           // Fetch package details
-          const pkgRef = doc(db, 'companies', companyId, 'clients', clientId, 'packages', pkgId)
+          const pkgRef = doc(
+            db,
+            'companies',
+            companyId,
+            'clients',
+            clientId,
+            'packages',
+            pkgId,
+          )
           const pkgSnap = await getDoc(pkgRef)
           let pkgName = 'Pacote'
           let isPrePeriod = false
-          
+
           let pkgPrice = 0
           const pkgPayments = getPackagePayments(pkgId)
           if (pkgPayments.length > 0) {
-             pkgPrice = pkgPayments.reduce((sum, p) => sum + p.amount, 0)
+            pkgPrice = pkgPayments.reduce((sum, p) => sum + p.amount, 0)
           }
 
           if (pkgSnap.exists()) {
             const pkgData = pkgSnap.data()
-            if (pkgPrice === 0) pkgPrice = pkgData.price || 0 // Fallback if paid outside period
-            
+
             const purchaseDate = pkgData.purchase_date
             if (purchaseDate && purchaseDate < startDate) {
               isPrePeriod = true
             }
             if (pkgData.package_id) {
               try {
-                const pSnap = await getDoc(doc(db, 'companies', companyId, 'packages', pkgData.package_id))
+                const pSnap = await getDoc(
+                  doc(
+                    db,
+                    'companies',
+                    companyId,
+                    'packages',
+                    pkgData.package_id,
+                  ),
+                )
                 if (pSnap.exists()) {
                   pkgName = pSnap.data().name
+                  // Pacote pago fora do período: o preço vem do catálogo (menos
+                  // desconto do cliente) — o doc do cliente não guarda price
+                  if (pkgPrice === 0) {
+                    pkgPrice = Math.max(
+                      0,
+                      (pSnap.data().price || 0) -
+                        (pkgData.discount_amount || 0),
+                    )
+                  }
                 }
               } catch (e) {}
             }
@@ -125,18 +159,22 @@ export async function getActivitiesForReceipt(
             subItems: [],
           })
         }
-        itemsMap.get(pkgId)!.subItems!.push({ date: apptDateStr, description: apptDesc })
-
+        itemsMap
+          .get(pkgId)!
+          .subItems!.push({ date: apptDateStr, description: apptDesc })
       } else if (isSubscription && matchingSub) {
         const subId = matchingSub.id
         if (!itemsMap.has(subId)) {
           // Find actual payments in the period
           const subPayments = getSubscriptionPayments(subId)
           const totalPaid = subPayments.reduce((sum, p) => sum + p.amount, 0)
-          
+
           const isUnpaid = totalPaid === 0
-          
-          let subName = matchingSub.subscription_plans?.name || matchingSub.services?.name || 'Assinatura'
+
+          let subName =
+            matchingSub.subscription_plans?.name ||
+            matchingSub.services?.name ||
+            'Assinatura'
 
           itemsMap.set(subId, {
             id: subId,
@@ -147,8 +185,9 @@ export async function getActivitiesForReceipt(
             subItems: [],
           })
         }
-        itemsMap.get(subId)!.subItems!.push({ date: apptDateStr, description: apptDesc })
-
+        itemsMap
+          .get(subId)!
+          .subItems!.push({ date: apptDateStr, description: apptDesc })
       } else {
         // Avulso
         const payment = getAvulsoPayment(appt.id)
@@ -156,10 +195,10 @@ export async function getActivitiesForReceipt(
         let isUnpaid = false
 
         if (!payment) {
-           const price = appt.services?.price || 0
-           const discount = appt.discount_amount || 0
-           finalPrice = Math.max(0, price - discount)
-           isUnpaid = finalPrice > 0 // if it has a price but no payment found
+          const price = appt.services?.price || 0
+          const discount = appt.discount_amount || 0
+          finalPrice = Math.max(0, price - discount)
+          isUnpaid = finalPrice > 0 // if it has a price but no payment found
         }
 
         avulsos.push({
@@ -168,7 +207,7 @@ export async function getActivitiesForReceipt(
           description: apptDesc,
           amount: finalPrice,
           date: apptDateStr,
-          isUnpaid
+          isUnpaid,
         })
       }
     }
@@ -186,20 +225,33 @@ export async function getActivitiesForReceipt(
 export async function saveReceipt(
   clientId: string,
   receiptData: Omit<Receipt, 'id' | 'created_at' | 'file_url' | 'file_path'>,
-  pdfBlob: Blob
+  pdfBlob: Blob,
 ): Promise<{ data: Receipt | null; error: any }> {
   try {
     const companyId = getCompanyId()
     const timestamp = new Date().getTime()
     const filePath = `companies/${companyId}/financial/receipts/${clientId}_${timestamp}.pdf`
-    const bucket = import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'fpl-saude.firebasestorage.app'
+    const bucket =
+      import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ||
+      'fpl-saude.firebasestorage.app'
 
-    const { data: uploadSnap, error: uploadError } = await uploadFile(bucket, filePath, pdfBlob as File)
+    const { data: uploadSnap, error: uploadError } = await uploadFile(
+      bucket,
+      filePath,
+      pdfBlob as File,
+    )
     if (uploadError) throw uploadError
 
     const fileUrl = await getDownloadURL(uploadSnap.ref)
 
-    const docsRef = collection(db, 'companies', companyId, 'clients', clientId, 'receipts')
+    const docsRef = collection(
+      db,
+      'companies',
+      companyId,
+      'clients',
+      clientId,
+      'receipts',
+    )
     const newDoc = doc(docsRef)
 
     const newReceipt: Receipt = {
@@ -218,9 +270,18 @@ export async function saveReceipt(
   }
 }
 
-export async function getClientReceipts(clientId: string): Promise<{ data: Receipt[] | null; error: any }> {
+export async function getClientReceipts(
+  clientId: string,
+): Promise<{ data: Receipt[] | null; error: any }> {
   try {
-    const docsRef = collection(db, 'companies', getCompanyId(), 'clients', clientId, 'receipts')
+    const docsRef = collection(
+      db,
+      'companies',
+      getCompanyId(),
+      'clients',
+      clientId,
+      'receipts',
+    )
     const q = query(docsRef, orderBy('created_at', 'desc'))
     const snap = await getDocs(q)
     const receipts: Receipt[] = []
@@ -233,7 +294,13 @@ export async function getClientReceipts(clientId: string): Promise<{ data: Recei
   }
 }
 
-export const generateReceiptPDF = (receipt: Receipt, clientName: string, clientCpf?: string, companyCnpj?: string, companySubtitle?: string) => {
+export const generateReceiptPDF = (
+  receipt: Receipt,
+  clientName: string,
+  clientCpf?: string,
+  companyCnpj?: string,
+  companySubtitle?: string,
+) => {
   const doc = new jsPDF()
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
@@ -253,7 +320,9 @@ export const generateReceiptPDF = (receipt: Receipt, clientName: string, clientC
   doc.setFontSize(10)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(100, 100, 100)
-  doc.text(companySubtitle || 'Clínica de Especialidades', pageWidth / 2, 32, { align: 'center' })
+  doc.text(companySubtitle || 'Clínica de Especialidades', pageWidth / 2, 32, {
+    align: 'center',
+  })
 
   if (companyCnpj) {
     doc.setFontSize(9)
@@ -269,24 +338,30 @@ export const generateReceiptPDF = (receipt: Receipt, clientName: string, clientC
   doc.setFontSize(16)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(0, 0, 0)
-  doc.text('RECIBO DE PRESTAÇÃO DE SERVIÇOS', pageWidth / 2, lineY + 12, { align: 'center' })
+  doc.text('RECIBO DE PRESTAÇÃO DE SERVIÇOS', pageWidth / 2, lineY + 12, {
+    align: 'center',
+  })
 
   // Corpo do Texto
   doc.setFontSize(12)
   doc.setFont('helvetica', 'normal')
 
   const formatCurrency = (val: number) =>
-    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
+    new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(val)
 
   const startDateStr = format(new Date(receipt.start_date), 'dd/MM/yyyy')
   const endDateStr = format(new Date(receipt.end_date), 'dd/MM/yyyy')
 
-  const cpfStr = clientCpf && clientCpf.length === 11
-    ? `, portador do CPF ${clientCpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')}`
-    : ''
+  const cpfStr =
+    clientCpf && clientCpf.length === 11
+      ? `, portador do CPF ${clientCpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')}`
+      : ''
 
   const content = `Recebemos de ${clientName}${cpfStr}, a importância de ${formatCurrency(
-    receipt.total_amount
+    receipt.total_amount,
   )} referente à prestação de serviços de saúde no período de ${startDateStr} a ${endDateStr}, conforme detalhado abaixo:`
 
   const textLines = doc.splitTextToSize(content, pageWidth - 40)
@@ -304,9 +379,13 @@ export const generateReceiptPDF = (receipt: Receipt, clientName: string, clientC
     }
 
     doc.setFont('helvetica', 'bold')
-    const mainLine = item.date ? `${item.date} - ${item.description}` : item.description
+    const mainLine = item.date
+      ? `${item.date} - ${item.description}`
+      : item.description
     doc.text(mainLine, 20, currentY)
-    doc.text(formatCurrency(item.amount), pageWidth - 20, currentY, { align: 'right' })
+    doc.text(formatCurrency(item.amount), pageWidth - 20, currentY, {
+      align: 'right',
+    })
     currentY += 6
 
     if (item.subItems && item.subItems.length > 0) {
@@ -334,19 +413,33 @@ export const generateReceiptPDF = (receipt: Receipt, clientName: string, clientC
   doc.setFontSize(12)
   doc.setFont('helvetica', 'bold')
   doc.text('TOTAL:', 20, currentY)
-  doc.text(formatCurrency(receipt.total_amount), pageWidth - 20, currentY, { align: 'right' })
+  doc.text(formatCurrency(receipt.total_amount), pageWidth - 20, currentY, {
+    align: 'right',
+  })
 
   // Rodapé / Assinatura
   doc.setDrawColor(0, 0, 0)
-  doc.line(pageWidth / 2 - 40, pageHeight - 50, pageWidth / 2 + 40, pageHeight - 50) // Linha de assinatura
+  doc.line(
+    pageWidth / 2 - 40,
+    pageHeight - 50,
+    pageWidth / 2 + 40,
+    pageHeight - 50,
+  ) // Linha de assinatura
 
   doc.setFontSize(12)
   doc.setFont('helvetica', 'bold')
-  doc.text(receipt.professional_name, pageWidth / 2, pageHeight - 42, { align: 'center' })
+  doc.text(receipt.professional_name, pageWidth / 2, pageHeight - 42, {
+    align: 'center',
+  })
 
   doc.setFontSize(10)
   doc.setFont('helvetica', 'normal')
-  doc.text(`Data de Emissão: ${format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}`, pageWidth / 2, pageHeight - 34, { align: 'center' })
+  doc.text(
+    `Data de Emissão: ${format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}`,
+    pageWidth / 2,
+    pageHeight - 34,
+    { align: 'center' },
+  )
 
   return doc
 }

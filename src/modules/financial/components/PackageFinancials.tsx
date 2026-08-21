@@ -8,10 +8,26 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getAllActiveClientPackages, getPackagePayments, payPackage, deletePackagePayment, terminateClientPackage } from '@/shared/services'
+import {
+  getAllActiveClientPackages,
+  getPackagePayments,
+  payPackage,
+  deletePackagePayment,
+  terminateClientPackage,
+} from '@/shared/services'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Progress } from '@/components/ui/progress'
-import { Ticket, DollarSign, RotateCcw, Loader2, CheckCircle, AlertTriangle, MoreHorizontal, User, Ban } from 'lucide-react'
+import {
+  Ticket,
+  DollarSign,
+  RotateCcw,
+  Loader2,
+  CheckCircle,
+  AlertTriangle,
+  MoreHorizontal,
+  User,
+  Ban,
+} from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { Badge } from '@/components/ui/badge'
@@ -46,27 +62,27 @@ export const PackageFinancials = () => {
 
   const fetchPackages = async () => {
     setIsLoading(true)
-    const { data } = await getAllActiveClientPackages({ limit: 50 })
-    
+    const { data } = await getAllActiveClientPackages()
+
     if (data && data.length > 0) {
       const packageIds = data.map((p: any) => p.id)
       const { data: payments } = await getPackagePayments(packageIds)
-      
+
       const paidMap = new Map<string, string>()
       payments?.forEach((p: any) => {
         if (p.client_package_id) paidMap.set(p.client_package_id, p.id)
       })
-      
+
       const enriched = data.map((pkg: any) => ({
         ...pkg,
         payment_status: paidMap.has(pkg.id) ? 'paid' : 'pending',
-        financial_record_id: paidMap.get(pkg.id)
+        financial_record_id: paidMap.get(pkg.id),
       }))
       setPackages(enriched)
     } else {
       setPackages([])
     }
-    
+
     setIsLoading(false)
   }
 
@@ -77,7 +93,11 @@ export const PackageFinancials = () => {
   const handlePay = async (pkg: any) => {
     const actorId = professionalId || user?.id
     if (!actorId) {
-      toast({ title: 'Erro', description: 'Usuário não identificado.', variant: 'destructive' })
+      toast({
+        title: 'Erro',
+        description: 'Usuário não identificado.',
+        variant: 'destructive',
+      })
       return
     }
     setIsProcessing(pkg.id)
@@ -104,7 +124,10 @@ export const PackageFinancials = () => {
     if (!pkg.financial_record_id) return
     setIsProcessing(pkg.id)
 
-    const { error } = await deletePackagePayment(pkg.financial_record_id, professionalId || user?.id)
+    const { error } = await deletePackagePayment(
+      pkg.financial_record_id,
+      professionalId || user?.id,
+    )
 
     if (error) {
       toast({
@@ -186,7 +209,8 @@ export const PackageFinancials = () => {
                 const remaining = pkg.sessions_remaining || 0
                 const used = total - remaining
                 const progress = total > 0 ? (used / total) * 100 : 0
-                const packageValue = (pkg.packages?.price || 0) - (pkg.discount_amount || 0)
+                const packageValue =
+                  (pkg.packages?.price || 0) - (pkg.discount_amount || 0)
 
                 return (
                   <TableRow key={pkg.id}>
@@ -195,13 +219,16 @@ export const PackageFinancials = () => {
                     </TableCell>
                     <TableCell>{pkg.packages?.name}</TableCell>
                     <TableCell>
-                      {pkg.purchase_date && format(new Date(pkg.purchase_date), 'dd/MM/yyyy', {
-                        locale: ptBR,
-                      })}
+                      {pkg.purchase_date &&
+                        format(new Date(pkg.purchase_date), 'dd/MM/yyyy', {
+                          locale: ptBR,
+                        })}
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1 items-center">
-                        <span className="text-xs font-semibold">{remaining} restantes</span>
+                        <span className="text-xs font-semibold">
+                          {remaining} restantes
+                        </span>
                         <Progress value={progress} className="h-2 w-24" />
                       </div>
                     </TableCell>
@@ -226,16 +253,23 @@ export const PackageFinancials = () => {
                         {pkg.payment_status === 'paid' ? (
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700 hover:bg-red-50 h-8">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50 h-8"
+                              >
                                 <RotateCcw className="mr-2 h-4 w-4" />
                                 Estornar
                               </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                               <AlertDialogHeader>
-                                <AlertDialogTitle>Confirmar Estorno</AlertDialogTitle>
+                                <AlertDialogTitle>
+                                  Confirmar Estorno
+                                </AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  Deseja desfazer o pagamento de <strong>{pkg.clients?.name}</strong>?
+                                  Deseja desfazer o pagamento de{' '}
+                                  <strong>{pkg.clients?.name}</strong>?
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
@@ -245,7 +279,11 @@ export const PackageFinancials = () => {
                                   disabled={isProcessing === pkg.id}
                                   className="bg-red-600 hover:bg-red-700"
                                 >
-                                  {isProcessing === pkg.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirmar Estorno'}
+                                  {isProcessing === pkg.id ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    'Confirmar Estorno'
+                                  )}
                                 </AlertDialogAction>
                               </AlertDialogFooter>
                             </AlertDialogContent>
@@ -253,16 +291,24 @@ export const PackageFinancials = () => {
                         ) : (
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <Button size="sm" variant="outline" className="h-8">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8"
+                              >
                                 <DollarSign className="mr-2 h-4 w-4" />
                                 Quitar
                               </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                               <AlertDialogHeader>
-                                <AlertDialogTitle>Confirmar Pagamento</AlertDialogTitle>
+                                <AlertDialogTitle>
+                                  Confirmar Pagamento
+                                </AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  Registrar o pagamento do pacote <strong>{pkg.packages?.name}</strong> para o cliente <strong>{pkg.clients?.name}</strong>?
+                                  Registrar o pagamento do pacote{' '}
+                                  <strong>{pkg.packages?.name}</strong> para o
+                                  cliente <strong>{pkg.clients?.name}</strong>?
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
@@ -271,7 +317,11 @@ export const PackageFinancials = () => {
                                   onClick={() => handlePay(pkg)}
                                   disabled={isProcessing === pkg.id}
                                 >
-                                  {isProcessing === pkg.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirmar'}
+                                  {isProcessing === pkg.id ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    'Confirmar'
+                                  )}
                                 </AlertDialogAction>
                               </AlertDialogFooter>
                             </AlertDialogContent>
@@ -287,13 +337,19 @@ export const PackageFinancials = () => {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem
-                              onClick={() => navigate(role === 'admin' ? `/admin/pacientes/${pkg.clients?.id}` : `/profissional/pacientes/${pkg.clients?.id}`)}
+                              onClick={() =>
+                                navigate(
+                                  role === 'admin'
+                                    ? `/admin/pacientes/${pkg.clients?.id}`
+                                    : `/profissional/pacientes/${pkg.clients?.id}`,
+                                )
+                              }
                               className="cursor-pointer"
                             >
                               <User className="mr-2 h-4 w-4" />
                               <span>Ver Perfil do Cliente</span>
                             </DropdownMenuItem>
-                            
+
                             {role === 'admin' && (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
@@ -307,19 +363,30 @@ export const PackageFinancials = () => {
                                 </AlertDialogTrigger>
                                 <AlertDialogContent>
                                   <AlertDialogHeader>
-                                    <AlertDialogTitle>Forçar Término do Pacote?</AlertDialogTitle>
+                                    <AlertDialogTitle>
+                                      Forçar Término do Pacote?
+                                    </AlertDialogTitle>
                                     <AlertDialogDescription>
-                                      Tem certeza que deseja encerrar este pacote? As sessões restantes não poderão ser utilizadas para novos agendamentos e o pacote sairá da lista de ativos.
+                                      Tem certeza que deseja encerrar este
+                                      pacote? As sessões restantes não poderão
+                                      ser utilizadas para novos agendamentos e o
+                                      pacote sairá da lista de ativos.
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogCancel>
+                                      Cancelar
+                                    </AlertDialogCancel>
                                     <AlertDialogAction
                                       onClick={() => handleTerminate(pkg)}
                                       disabled={isProcessing === pkg.id}
                                       className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                     >
-                                      {isProcessing === pkg.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirmar'}
+                                      {isProcessing === pkg.id ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                      ) : (
+                                        'Confirmar'
+                                      )}
                                     </AlertDialogAction>
                                   </AlertDialogFooter>
                                 </AlertDialogContent>

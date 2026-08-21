@@ -14,8 +14,11 @@ service firebase.storage {
 
     // Regras para Empresas
     match /companies/{companyId}/{allPaths=**} {
+      // Arquivos da empresa (recibos com CPF/valores, exames, documentos
+      // clínicos) são material de staff — o role 'client' não lê
       allow read: if isAuthenticated() && (
-        isSuperAdmin() || (getUserData().companyId == companyId)
+        isSuperAdmin() ||
+        (getUserData().companyId == companyId && getUserData().role != 'client')
       );
 
       allow write: if isAuthenticated() && isSuperAdmin();
@@ -23,7 +26,8 @@ service firebase.storage {
       // Regra específica para Exames
       match /clients/{clientId}/exams/{fileName} {
         allow read: if isAuthenticated() && (
-          isSuperAdmin() || (getUserData().companyId == companyId)
+          isSuperAdmin() ||
+          (getUserData().companyId == companyId && getUserData().role != 'client')
         );
         allow write: if isAuthenticated() && 
           getUserData().companyId == companyId && 
@@ -33,7 +37,8 @@ service firebase.storage {
       // Regra específica para Galeria
       match /clients/{clientId}/gallery/{fileName} {
         allow read: if isAuthenticated() && (
-          isSuperAdmin() || (getUserData().companyId == companyId)
+          isSuperAdmin() ||
+          (getUserData().companyId == companyId && getUserData().role != 'client')
         );
         allow write: if isAuthenticated() && 
           getUserData().companyId == companyId && 
@@ -43,7 +48,8 @@ service firebase.storage {
       // Regra específica para Documentos Clínicos (Atestados, Receitas)
       match /clients/{clientId}/clinical_documents/{fileName} {
         allow read: if isAuthenticated() && (
-          isSuperAdmin() || (getUserData().companyId == companyId)
+          isSuperAdmin() ||
+          (getUserData().companyId == companyId && getUserData().role != 'client')
         );
         allow write: if isAuthenticated() && 
           getUserData().companyId == companyId && 
@@ -53,7 +59,8 @@ service firebase.storage {
       // Regra específica para Recibos Financeiros
       match /financial/receipts/{fileName} {
         allow read: if isAuthenticated() && (
-          isSuperAdmin() || (getUserData().companyId == companyId)
+          isSuperAdmin() ||
+          (getUserData().companyId == companyId && getUserData().role != 'client')
         );
         allow write: if isAuthenticated() && 
           getUserData().companyId == companyId && 

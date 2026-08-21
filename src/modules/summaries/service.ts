@@ -7,12 +7,31 @@ import { getCompanyId } from '@/shared/lib/tenantStore'
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Semântica dos campos de valor (mesma de functions/src/shared/summaryCore.ts):
+ *   revenue          → caixa avulso (preço efetivo das sessões independentes)
+ *   production_value → produção (preço efetivo de TODA sessão concluída)
+ * Campos novos são opcionais: documentos anteriores à migração não os têm.
+ */
+export interface SummaryBreakdownStats {
+  completed?: number
+  cancelled?: number
+  no_show?: number
+  revenue?: number
+  production_value?: number
+  package_sessions?: number
+  subscription_sessions?: number
+  independent_sessions?: number
+  independent_revenue?: number
+}
+
 export interface MonthlySummary {
   month: string // 'YYYY-MM'
   updated_at?: any
 
   // KPIs gerais
   total_revenue: number
+  total_production_value?: number
   completed_appointments: number
   cancelled_appointments: number
   no_show_appointments: number
@@ -21,29 +40,23 @@ export interface MonthlySummary {
   // Financeiro (assinaturas)
   subscriptions_revenue_received: number
   subscriptions_paid_count: number
-  expected_subscriptions_revenue: number
 
   // Breakdowns
-  by_professional: Record<
-    string,
-    { name: string; completed: number; cancelled: number; no_show: number; revenue: number }
-  >
+  by_professional: Record<string, SummaryBreakdownStats & { name: string }>
   by_service: Record<
     string,
-    { name: string; count: number; cancelled: number; no_show: number; revenue: number }
+    SummaryBreakdownStats & { name: string; count?: number }
   >
   by_partnership: Record<
     string,
-    { name: string; clientCount: number; sessionCount: number; cancelled: number; no_show: number; revenue: number }
+    SummaryBreakdownStats & {
+      name: string
+      clientCount?: number
+      sessionCount?: number
+    }
   >
-  by_professional_service?: Record<
-    string,
-    { completed: number; cancelled: number; no_show: number; revenue: number }
-  >
-  by_professional_partnership?: Record<
-    string,
-    { completed: number; cancelled: number; no_show: number; revenue: number }
-  >
+  by_professional_service?: Record<string, SummaryBreakdownStats>
+  by_professional_partnership?: Record<string, SummaryBreakdownStats>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -54,13 +67,13 @@ function emptyMonthSummary(month: string): MonthlySummary {
   return {
     month,
     total_revenue: 0,
+    total_production_value: 0,
     completed_appointments: 0,
     cancelled_appointments: 0,
     no_show_appointments: 0,
     total_appointments: 0,
     subscriptions_revenue_received: 0,
     subscriptions_paid_count: 0,
-    expected_subscriptions_revenue: 0,
     by_professional: {},
     by_service: {},
     by_partnership: {},
@@ -95,7 +108,10 @@ export async function getMonthlySummary(
       return { data: emptyMonthSummary(monthKey), error: null }
     }
 
-    return { data: { month: monthKey, ...snap.data() } as MonthlySummary, error: null }
+    return {
+      data: { month: monthKey, ...snap.data() } as MonthlySummary,
+      error: null,
+    }
   } catch (error) {
     return { data: emptyMonthSummary(format(month, 'yyyy-MM')), error }
   }

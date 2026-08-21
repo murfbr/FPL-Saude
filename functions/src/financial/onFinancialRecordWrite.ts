@@ -3,6 +3,9 @@ import { REGION, ServerTs, Inc } from '../config'
 import { monthKeyOf, summaryRef } from '../shared/helpers'
 import type { firestore } from 'firebase-admin'
 
+const isIndependent = (data: firestore.DocumentData | undefined) =>
+  !!data && !data.client_subscription_id && !data.client_package_id
+
 export const onFinancialRecordWrite = onDocumentWritten(
   {
     document: 'companies/{companyId}/financial_records/{recordId}',
@@ -39,6 +42,16 @@ export const onFinancialRecordWrite = onDocumentWritten(
         u.subscriptions_paid_count = Inc(sign)
       }
 
+      // Caixa avulso por profissional — mantido aqui (registros reais) para o
+      // card "Faturamento Avulso" não depender do snapshot noturno do cron
+      if (isIndependent(data) && data.professional_id) {
+        u.by_professional = {
+          [data.professional_id as string]: {
+            independent_revenue: Inc(sign * amount),
+          },
+        }
+      }
+
       return u
     }
 
@@ -51,8 +64,19 @@ export const onFinancialRecordWrite = onDocumentWritten(
       const wasSub = !!before?.client_subscription_id
       const isSub = !!after?.client_subscription_id
 
+      const indDeltas: Record<string, number> = {}
+      if (isIndependent(before) && before?.professional_id) {
+        const pid = before.professional_id as string
+        indDeltas[pid] = (indDeltas[pid] || 0) - bAmount
+      }
+      if (isIndependent(after) && after?.professional_id) {
+        const pid = after.professional_id as string
+        indDeltas[pid] = (indDeltas[pid] || 0) + aAmount
+      }
+      const indChanged = Object.values(indDeltas).some((d) => d !== 0)
+
       // Skip se nada mudou
-      if (diff === 0 && wasSub === isSub) return
+      if (diff === 0 && wasSub === isSub && !indChanged) return
 
       const updates: Record<string, any> = {
         updated_at: ServerTs(),
@@ -72,6 +96,14 @@ export const onFinancialRecordWrite = onDocumentWritten(
         updates.subscriptions_revenue_received = Inc(diff)
       }
 
+      if (indChanged) {
+        const byProf: Record<string, any> = {}
+        for (const [pid, delta] of Object.entries(indDeltas)) {
+          if (delta !== 0) byProf[pid] = { independent_revenue: Inc(delta) }
+        }
+        updates.by_professional = byProf
+      }
+
       await summaryRef(companyId, aMonth).set(updates, { merge: true })
       return
     }
@@ -83,9 +115,7 @@ export const onFinancialRecordWrite = onDocumentWritten(
       const removal = buildDelta(before, -1)
       if (removal) {
         removal.month = bMonth
-        writes.push(
-          summaryRef(companyId, bMonth).set(removal, { merge: true }),
-        )
+        writes.push(summaryRef(companyId, bMonth).set(removal, { merge: true }))
       }
     }
 

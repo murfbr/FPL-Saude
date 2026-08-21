@@ -34,288 +34,73 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.dailyReconciliation = void 0;
+exports.fetchAllSubscriptionsByCompany = fetchAllSubscriptionsByCompany;
 exports.fullRecalculation = fullRecalculation;
 const scheduler_1 = require("firebase-functions/v2/scheduler");
-const date_fns_1 = require("date-fns");
 const admin = __importStar(require("firebase-admin"));
 const config_1 = require("../config");
 const helpers_1 = require("../shared/helpers");
-async function fullRecalculation(companyId, month) {
-    var _a, _b;
-    const monthKey = (0, date_fns_1.format)(month, 'yyyy-MM');
-    const startStr = (0, date_fns_1.startOfMonth)(month).toISOString();
-    const endStr = (0, date_fns_1.endOfMonth)(month).toISOString();
-    // 1. Buscar todos os agendamentos do mês
-    const apptsSnap = await config_1.db
-        .collection('companies')
-        .doc(companyId)
-        .collection('appointments')
-        .where('schedules.start_time', '>=', startStr)
-        .where('schedules.start_time', '<=', endStr)
-        .get();
-    // 2. Buscar registros financeiros do mês
-    const finSnap = await config_1.db
-        .collection('companies')
-        .doc(companyId)
-        .collection('financial_records')
-        .where('payment_date', '>=', startStr)
-        .where('payment_date', '<=', endStr)
-        .get();
-    // 1. Calcular receita prevista de assinaturas ativas e mapear assinaturas (Preparação)
-    let expectedSubscriptionsRevenue = 0;
-    const activeSubs = new Set();
-    const clientsSnap = await config_1.db
-        .collection('companies')
-        .doc(companyId)
-        .collection('clients')
-        .get(); // removido where is_active=true para manter contabilidade passada correta
-    for (const clientDoc of clientsSnap.docs) {
-        const subsSnap = await config_1.db
+const summaryCore_1 = require("../shared/summaryCore");
+/**
+ * Todas as assinaturas de todos os tenants em UMA query (Admin SDK ignora
+ * rules). O client_id ausente em docs legados é derivado do path
+ * (companies/{companyId}/clients/{clientId}/subscriptions/{id}).
+ */
+async function fetchAllSubscriptionsByCompany() {
+    const snap = await config_1.db.collectionGroup('subscriptions').get();
+    const byCompany = {};
+    for (const docSnap of snap.docs) {
+        const segments = docSnap.ref.path.split('/');
+        // companies/{companyId}/clients/{clientId}/subscriptions/{id}
+        if (segments[0] !== 'companies' || segments[2] !== 'clients')
+            continue;
+        const companyId = segments[1];
+        const clientId = segments[3];
+        const data = docSnap.data();
+        if (!byCompany[companyId])
+            byCompany[companyId] = [];
+        byCompany[companyId].push(Object.assign(Object.assign({}, data), { client_id: data.client_id || clientId }));
+    }
+    return byCompany;
+}
+/**
+ * Recalcula integralmente o sumário de um mês (verdade absoluta: sobrescreve
+ * o documento). A semântica dos campos vem de summaryCore — a mesma dos
+ * triggers incrementais.
+ */
+async function fullRecalculation(companyId, monthKey, companySubscriptions) {
+    const { startIso, endIso } = (0, summaryCore_1.monthRangeUtc)(monthKey);
+    const [apptsSnap, finSnap, partnershipsSnap] = await Promise.all([
+        config_1.db
             .collection('companies')
             .doc(companyId)
-            .collection('clients')
-            .doc(clientDoc.id)
-            .collection('subscriptions')
-            .get(); // removido status=active para testar vigência
-        for (const subDoc of subsSnap.docs) {
-            const sub = subDoc.data();
-            // Mapear para identificação de agendamentos
-            if (sub.service_id) {
-                activeSubs.add(`${clientDoc.id}_${sub.service_id}`);
-            }
-            // Validação de vigência da assinatura para o mês analisado
-            const tStart = sub.start_date;
-            const tEnd = sub.end_date || sub.cancelled_at;
-            if (tStart && tStart > endStr)
-                continue;
-            if (tEnd && tEnd < startStr)
-                continue;
-            let subPrice = sub.amount || 0;
-            // Fallback para assinaturas antigas sem snapshot
-            if (!subPrice) {
-                if (sub.subscription_plan_id) {
-                    const planSnap = await config_1.db
-                        .collection('companies')
-                        .doc(companyId)
-                        .collection('subscription_plans')
-                        .doc(sub.subscription_plan_id)
-                        .get();
-                    subPrice = ((_a = planSnap.data()) === null || _a === void 0 ? void 0 : _a.price) || 0;
-                }
-                else if (sub.service_id) {
-                    const svcSnap = await config_1.db
-                        .collection('companies')
-                        .doc(companyId)
-                        .collection('services')
-                        .doc(sub.service_id)
-                        .get();
-                    subPrice = ((_b = svcSnap.data()) === null || _b === void 0 ? void 0 : _b.price) || 0;
-                }
-            }
-            if (sub.start_date && subPrice > 0) {
-                const startDate = new Date(sub.start_date);
-                const isSameMonth = startDate.getFullYear() === month.getFullYear() &&
-                    startDate.getMonth() === month.getMonth();
-                if (isSameMonth) {
-                    const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
-                    const daysActive = daysInMonth - startDate.getDate() + 1;
-                    subPrice =
-                        Math.round(((subPrice / daysInMonth) * daysActive * 100) / 100);
-                }
-            }
-            expectedSubscriptionsRevenue += subPrice;
-        }
-    }
-    // 2. Agregar financial_records (Receita Real da Clínica e Receita Avulsa do Profissional)
-    let totalRevenue = 0;
-    let subscriptionsRevenue = 0;
-    let subscriptionsPaidCount = 0;
-    const professionalIndependentRevenue = {};
-    finSnap.forEach((docSnap) => {
-        const f = docSnap.data();
-        const amount = f.amount || 0;
-        totalRevenue += amount;
-        if (f.client_subscription_id) {
-            subscriptionsRevenue += amount;
-            subscriptionsPaidCount++;
-        }
-        // Receita estritamente avulsa do profissional (não é pacote nem assinatura)
-        if (!f.client_package_id && !f.client_subscription_id) {
-            const profId = f.professional_id;
-            if (profId) {
-                professionalIndependentRevenue[profId] = (professionalIndependentRevenue[profId] || 0) + amount;
-            }
-        }
+            .collection('appointments')
+            .where('schedules.start_time', '>=', startIso)
+            .where('schedules.start_time', '<=', endIso)
+            .get(),
+        config_1.db
+            .collection('companies')
+            .doc(companyId)
+            .collection('financial_records')
+            .where('payment_date', '>=', startIso)
+            .where('payment_date', '<=', endIso)
+            .get(),
+        config_1.db.collection('companies').doc(companyId).collection('partnerships').get(),
+    ]);
+    const partnershipNames = {};
+    partnershipsSnap.forEach((d) => {
+        partnershipNames[d.id] = d.data().name || '';
     });
-    // 3. Agregar appointments (Métricas Operacionais)
-    let completedAppointments = 0;
-    let cancelledAppointments = 0;
-    let noShowAppointments = 0;
-    let totalAppointments = 0;
-    const byProfessional = {};
-    const byService = {};
-    const byPartnership = {};
-    const byProfessionalService = {};
-    const byProfessionalPartnership = {};
-    apptsSnap.forEach((docSnap) => {
-        var _a, _b, _c, _d;
-        const a = docSnap.data();
-        totalAppointments++;
-        const profId = a.professional_id;
-        const profName = ((_a = a.professionals) === null || _a === void 0 ? void 0 : _a.name) || 'Desconhecido';
-        const serviceId = a.service_id;
-        const serviceName = ((_b = a.services) === null || _b === void 0 ? void 0 : _b.name) || 'Serviço Removido';
-        const partnershipId = a.partnership_id;
-        const clientId = a.client_id;
-        const isPackage = !!a.client_package_id;
-        const isMonthlySubscription = (((_c = a.services) === null || _c === void 0 ? void 0 : _c.value_type) === 'monthly') || activeSubs.has(`${clientId}_${serviceId}`);
-        const isAvulsa = !isPackage && !isMonthlySubscription;
-        // Iniciar dados do Profissional
-        if (!byProfessional[profId]) {
-            const indRev = professionalIndependentRevenue[profId] || 0;
-            byProfessional[profId] = {
-                name: profName,
-                completed: 0,
-                cancelled: 0,
-                no_show: 0,
-                package_sessions: 0,
-                subscription_sessions: 0,
-                independent_sessions: 0,
-                independent_revenue: indRev,
-                revenue: indRev // Mantém 'revenue' como alias do avulso
-            };
-        }
-        // Iniciar Serviço
-        if (!byService[serviceId]) {
-            byService[serviceId] = {
-                name: serviceName,
-                count: 0,
-                cancelled: 0,
-                no_show: 0,
-                revenue: 0,
-                package_sessions: 0,
-                subscription_sessions: 0,
-                independent_sessions: 0
-            };
-        }
-        // Iniciar Interseção Profissional-Serviço
-        const profSvcId = `${profId}_${serviceId}`;
-        if (!byProfessionalService[profSvcId]) {
-            byProfessionalService[profSvcId] = { completed: 0, cancelled: 0, no_show: 0, package_sessions: 0, subscription_sessions: 0, independent_sessions: 0, revenue: 0 };
-        }
-        // Iniciar Parceria
-        if (partnershipId) {
-            if (!byPartnership[partnershipId]) {
-                byPartnership[partnershipId] = {
-                    name: '',
-                    clientIds: new Set(),
-                    sessionCount: 0,
-                    cancelled: 0,
-                    no_show: 0
-                };
-            }
-            const profPartId = `${profId}_${partnershipId}`;
-            if (!byProfessionalPartnership[profPartId]) {
-                byProfessionalPartnership[profPartId] = { completed: 0, cancelled: 0, no_show: 0 };
-            }
-        }
-        if (a.status === 'completed') {
-            completedAppointments++;
-            byProfessional[profId].completed++;
-            byService[serviceId].count++;
-            byProfessionalService[profSvcId].completed++;
-            if (isPackage) {
-                byProfessional[profId].package_sessions++;
-                byService[serviceId].package_sessions++;
-                byProfessionalService[profSvcId].package_sessions++;
-            }
-            else if (isMonthlySubscription) {
-                byProfessional[profId].subscription_sessions++;
-                byService[serviceId].subscription_sessions++;
-                byProfessionalService[profSvcId].subscription_sessions++;
-            }
-            else {
-                byProfessional[profId].independent_sessions++;
-                byService[serviceId].independent_sessions++;
-                byProfessionalService[profSvcId].independent_sessions++;
-                const price = ((_d = a.services) === null || _d === void 0 ? void 0 : _d.price) || 0;
-                byService[serviceId].revenue += price;
-                byProfessionalService[profSvcId].revenue += price;
-            }
-            if (partnershipId) {
-                byPartnership[partnershipId].clientIds.add(clientId);
-                byPartnership[partnershipId].sessionCount++;
-                byProfessionalPartnership[`${profId}_${partnershipId}`].completed++;
-            }
-        }
-        else if (a.status === 'cancelled') {
-            cancelledAppointments++;
-            byProfessional[profId].cancelled++;
-            byService[serviceId].cancelled++;
-            byProfessionalService[profSvcId].cancelled++;
-            if (partnershipId) {
-                byPartnership[partnershipId].cancelled++;
-                byProfessionalPartnership[`${profId}_${partnershipId}`].cancelled++;
-            }
-        }
-        else if (a.status === 'no_show') {
-            noShowAppointments++;
-            byProfessional[profId].no_show++;
-            byService[serviceId].no_show++;
-            byProfessionalService[profSvcId].no_show++;
-            if (partnershipId) {
-                byPartnership[partnershipId].no_show++;
-                byProfessionalPartnership[`${profId}_${partnershipId}`].no_show++;
-            }
-        }
+    const summary = (0, summaryCore_1.buildMonthlySummary)({
+        monthKey,
+        appointments: apptsSnap.docs.map((d) => d.data()),
+        financialRecords: finSnap.docs.map((d) => d.data()),
+        subscriptionKeys: (0, summaryCore_1.subscriptionKeysForMonth)(companySubscriptions, monthKey),
+        partnershipNames,
     });
-    // Garantir que profissionais que apenas receberam dinheiro (sem agendamentos) apareçam
-    for (const [profId, rev] of Object.entries(professionalIndependentRevenue)) {
-        if (!byProfessional[profId]) {
-            byProfessional[profId] = {
-                name: 'Profissional',
-                completed: 0,
-                cancelled: 0,
-                no_show: 0,
-                package_sessions: 0,
-                subscription_sessions: 0,
-                independent_sessions: 0,
-                independent_revenue: rev,
-                revenue: rev
-            };
-        }
-    }
-    // 4. Serializar Sets para contagens
-    const byPartnershipSerialized = {};
-    for (const [id, data] of Object.entries(byPartnership)) {
-        byPartnershipSerialized[id] = {
-            name: data.name,
-            clientCount: data.clientIds.size,
-            sessionCount: data.sessionCount,
-            cancelled: data.cancelled,
-            no_show: data.no_show,
-        };
-    }
-    // 7. Persistir (sobrescreve completamente — é a verdade absoluta)
-    await (0, helpers_1.summaryRef)(companyId, monthKey).set({
-        month: monthKey,
-        updated_at: admin.firestore.FieldValue.serverTimestamp(),
-        last_full_recalc: admin.firestore.FieldValue.serverTimestamp(),
-        total_revenue: totalRevenue,
-        completed_appointments: completedAppointments,
-        cancelled_appointments: cancelledAppointments,
-        no_show_appointments: noShowAppointments,
-        total_appointments: totalAppointments,
-        subscriptions_revenue_received: subscriptionsRevenue,
-        subscriptions_paid_count: subscriptionsPaidCount,
-        expected_subscriptions_revenue: expectedSubscriptionsRevenue,
-        by_professional: byProfessional,
-        by_service: byService,
-        by_partnership: byPartnershipSerialized,
-        by_professional_service: byProfessionalService,
-        by_professional_partnership: byProfessionalPartnership,
-    });
-    console.log(`[reconciliation] ${companyId}/${monthKey}: ${totalAppointments} appts, R$ ${totalRevenue.toFixed(2)}, expected subs R$ ${expectedSubscriptionsRevenue.toFixed(2)}`);
+    await (0, helpers_1.summaryRef)(companyId, monthKey).set(Object.assign(Object.assign({}, summary), { updated_at: admin.firestore.FieldValue.serverTimestamp(), last_full_recalc: admin.firestore.FieldValue.serverTimestamp() }));
+    console.log(`[reconciliation] ${companyId}/${monthKey}: ${summary.total_appointments} appts, ` +
+        `R$ ${summary.total_revenue.toFixed(2)} caixa, R$ ${summary.total_production_value.toFixed(2)} produção`);
 }
 exports.dailyReconciliation = (0, scheduler_1.onSchedule)({
     schedule: '0 3 * * *', // Cron: todo dia às 3h
@@ -323,14 +108,21 @@ exports.dailyReconciliation = (0, scheduler_1.onSchedule)({
     timeZone: 'America/Sao_Paulo',
 }, async () => {
     const companiesSnap = await config_1.db.collection('companies').listDocuments();
+    const subsByCompany = await fetchAllSubscriptionsByCompany();
+    // Mês corrente + anterior: fecha a janela do último dia do mês (lançamentos
+    // após as 3h) e corrige drift residual dos triggers em meses recém-fechados
+    const current = (0, summaryCore_1.currentMonthKey)(new Date());
+    const months = [current, (0, summaryCore_1.previousMonthKey)(current)];
     for (const companyRef of companiesSnap) {
-        try {
-            await fullRecalculation(companyRef.id, new Date());
-        }
-        catch (err) {
-            console.error(`[reconciliation] Erro em ${companyRef.id}:`, err);
+        for (const monthKey of months) {
+            try {
+                await fullRecalculation(companyRef.id, monthKey, subsByCompany[companyRef.id] || []);
+            }
+            catch (err) {
+                console.error(`[reconciliation] Erro em ${companyRef.id}/${monthKey}:`, err);
+            }
         }
     }
-    console.log(`[reconciliation] Concluída para ${companiesSnap.length} empresa(s)`);
+    console.log(`[reconciliation] Concluída para ${companiesSnap.length} empresa(s) × ${months.length} mês(es)`);
 });
 //# sourceMappingURL=dailyReconciliation.js.map

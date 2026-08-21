@@ -57,7 +57,8 @@ service cloud.firestore {
           !('roles' in companyDoc.data)               // Sem campo roles → libera (empresa legada)
           || companyRoles.size() == 0                 // Campo roles vazio → libera
           || rolePerms == null                        // Role não mapeado na empresa → libera
-          || allowedArray.size() == 0                 // can_view não configurado → libera
+          // can_view vazio NEGA: um role criado no painel sem permissões
+          // marcadas não pode herdar acesso total por acidente
           || userRole == 'admin'                      // Admin sempre passa
           || moduleKeyOf(moduleName) in allowedArray  // Módulo explicitamente permitido
           || '*' in allowedArray                      // Wildcard — acesso total
@@ -162,17 +163,15 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
-      // Registros financeiros — criar faz parte de concluir atendimento
-      // (o profissional gera o registro da sessão avulsa); editar/estornar é admin
+      // Registros financeiros — o registro da sessão avulsa é criado pela
+      // Cloud Function setAppointmentStatus (Admin SDK); no client, apenas os
+      // fluxos de cobrança do admin (quitar/estornar mensalidade e pacote)
       match /financial_records/{recordId} {
         allow read: if request.auth != null && (
           isAdmin(companyId)
           || (isUserInCompany(companyId) && canViewModule(companyId, 'financial_records'))
         );
-        allow create: if request.auth != null
-          && isUserInCompany(companyId)
-          && getUserRole() != 'client';
-        allow update, delete: if request.auth != null && isAdmin(companyId);
+        allow create, update, delete: if request.auth != null && isAdmin(companyId);
       }
 
       // Disponibilidade — a montagem de slots da agenda lê a grade de qualquer

@@ -1,7 +1,11 @@
-import { getMultipleMonthlySummaries, getMonthlySummary } from '@/modules/summaries/service'
-import { getAllPartnerships, getAllServices } from '@/shared/services' // Note: may need to adjust import for getAllServices if not exported there, but let's assume it's available or we can get it from by_service
+import {
+  getMultipleMonthlySummaries,
+  getMonthlySummary,
+  MonthlySummary,
+  SummaryBreakdownStats,
+} from '@/modules/summaries/service'
+import { getAllPartnerships } from '@/shared/services'
 import { format, subMonths, startOfMonth } from 'date-fns'
-import { getCompanyId } from '@/shared/lib/tenantStore'
 
 interface KpiFilters {
   professionalId?: string | null
@@ -13,93 +17,87 @@ interface KpiFilters {
 // Helpers para filtrar dados do sumário por profissional / serviço / parceria
 // ─────────────────────────────────────────────────────────────────────────────
 
-function filterSummary(summary: any, filters?: KpiFilters) {
-  const pId = filters?.professionalId && filters.professionalId !== 'all' ? filters.professionalId : null
-  const sId = filters?.serviceId && filters.serviceId !== 'all' ? filters.serviceId : null
-  const partId = filters?.partnershipId && filters.partnershipId !== 'all' ? filters.partnershipId : null
+interface FilteredStats {
+  total_revenue: number
+  production_value: number
+  completed_appointments: number
+  cancelled_appointments: number
+  no_show_appointments: number
+  total_appointments: number
+  package_sessions: number
+  subscription_sessions: number
+  independent_sessions: number
+  independent_revenue: number
+}
 
-  if (pId && sId) {
-    const data = summary.by_professional_service?.[`${pId}_${sId}`]
-    if (!data) return { total_revenue: 0, completed_appointments: 0, cancelled_appointments: 0, no_show_appointments: 0, total_appointments: 0 }
-    return {
-      total_revenue: data.revenue,
-      completed_appointments: data.completed,
-      cancelled_appointments: data.cancelled || 0,
-      no_show_appointments: data.no_show || 0,
-      total_appointments: data.completed + (data.cancelled || 0) + (data.no_show || 0),
-      package_sessions: data.package_sessions || 0,
-      subscription_sessions: data.subscription_sessions || 0,
-      independent_sessions: data.independent_sessions || 0,
-      independent_revenue: data.independent_revenue || 0,
-    }
+function emptyFiltered(): FilteredStats {
+  return {
+    total_revenue: 0,
+    production_value: 0,
+    completed_appointments: 0,
+    cancelled_appointments: 0,
+    no_show_appointments: 0,
+    total_appointments: 0,
+    package_sessions: 0,
+    subscription_sessions: 0,
+    independent_sessions: 0,
+    independent_revenue: 0,
   }
+}
 
-  if (pId && partId) {
-    const data = summary.by_professional_partnership?.[`${pId}_${partId}`]
-    if (!data) return { total_revenue: 0, completed_appointments: 0, cancelled_appointments: 0, no_show_appointments: 0, total_appointments: 0 }
-    return {
-      total_revenue: data.revenue,
-      completed_appointments: data.completed,
-      cancelled_appointments: data.cancelled || 0,
-      no_show_appointments: data.no_show || 0,
-      total_appointments: data.completed + (data.cancelled || 0) + (data.no_show || 0),
-      package_sessions: data.package_sessions || 0,
-      subscription_sessions: data.subscription_sessions || 0,
-      independent_sessions: data.independent_sessions || 0,
-      independent_revenue: data.independent_revenue || 0,
-    }
+function fromBreakdown(
+  data:
+    | (SummaryBreakdownStats & { count?: number; sessionCount?: number })
+    | undefined,
+): FilteredStats {
+  if (!data) return emptyFiltered()
+  const completed = data.completed ?? data.count ?? data.sessionCount ?? 0
+  const cancelled = data.cancelled || 0
+  const noShow = data.no_show || 0
+  return {
+    // revenue = caixa avulso (semântica summaryCore); docs legados podem não ter
+    total_revenue: data.revenue || 0,
+    production_value: data.production_value || 0,
+    completed_appointments: completed,
+    cancelled_appointments: cancelled,
+    no_show_appointments: noShow,
+    total_appointments: completed + cancelled + noShow,
+    package_sessions: data.package_sessions || 0,
+    subscription_sessions: data.subscription_sessions || 0,
+    independent_sessions: data.independent_sessions || 0,
+    // Nas matrizes cruzadas o caixa avulso é o próprio revenue
+    independent_revenue: data.independent_revenue ?? data.revenue ?? 0,
   }
+}
 
-  if (pId) {
-    const data = summary.by_professional?.[pId]
-    if (!data) return { total_revenue: 0, completed_appointments: 0, cancelled_appointments: 0, no_show_appointments: 0, total_appointments: 0 }
-    return {
-      total_revenue: data.revenue,
-      completed_appointments: data.completed,
-      cancelled_appointments: data.cancelled || 0,
-      no_show_appointments: data.no_show || 0,
-      total_appointments: data.completed + (data.cancelled || 0) + (data.no_show || 0),
-      package_sessions: data.package_sessions || 0,
-      subscription_sessions: data.subscription_sessions || 0,
-      independent_sessions: data.independent_sessions || 0,
-      independent_revenue: data.independent_revenue || 0,
-    }
-  }
+function filterSummary(
+  summary: MonthlySummary,
+  filters?: KpiFilters,
+): FilteredStats {
+  const pId =
+    filters?.professionalId && filters.professionalId !== 'all'
+      ? filters.professionalId
+      : null
+  const sId =
+    filters?.serviceId && filters.serviceId !== 'all' ? filters.serviceId : null
+  const partId =
+    filters?.partnershipId && filters.partnershipId !== 'all'
+      ? filters.partnershipId
+      : null
 
-  if (sId) {
-    const data = summary.by_service?.[sId]
-    if (!data) return { total_revenue: 0, completed_appointments: 0, cancelled_appointments: 0, no_show_appointments: 0, total_appointments: 0 }
-    return {
-      total_revenue: data.revenue,
-      completed_appointments: data.count,
-      cancelled_appointments: data.cancelled || 0,
-      no_show_appointments: data.no_show || 0,
-      total_appointments: data.count + (data.cancelled || 0) + (data.no_show || 0),
-      package_sessions: data.package_sessions || 0,
-      subscription_sessions: data.subscription_sessions || 0,
-      independent_sessions: data.independent_sessions || 0,
-      independent_revenue: data.independent_revenue || 0,
-    }
-  }
-
-  if (partId) {
-    const data = summary.by_partnership?.[partId]
-    if (!data) return { total_revenue: 0, completed_appointments: 0, cancelled_appointments: 0, no_show_appointments: 0, total_appointments: 0 }
-    return {
-      total_revenue: data.revenue || 0,
-      completed_appointments: data.sessionCount,
-      cancelled_appointments: data.cancelled || 0,
-      no_show_appointments: data.no_show || 0,
-      total_appointments: data.sessionCount + (data.cancelled || 0) + (data.no_show || 0),
-      package_sessions: 0,
-      subscription_sessions: 0,
-      independent_sessions: 0,
-      independent_revenue: 0,
-    }
-  }
+  if (pId && sId)
+    return fromBreakdown(summary.by_professional_service?.[`${pId}_${sId}`])
+  if (pId && partId)
+    return fromBreakdown(
+      summary.by_professional_partnership?.[`${pId}_${partId}`],
+    )
+  if (pId) return fromBreakdown(summary.by_professional?.[pId])
+  if (sId) return fromBreakdown(summary.by_service?.[sId])
+  if (partId) return fromBreakdown(summary.by_partnership?.[partId])
 
   return {
     total_revenue: summary.total_revenue || 0,
+    production_value: summary.total_production_value || 0,
     completed_appointments: summary.completed_appointments || 0,
     cancelled_appointments: summary.cancelled_appointments || 0,
     no_show_appointments: summary.no_show_appointments || 0,
@@ -112,19 +110,21 @@ function filterSummary(summary: any, filters?: KpiFilters) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// KPI Metrics — agora usa 2 leituras (mês atual + mês anterior)
+// KPI Metrics — mês selecionado vs mês-calendário anterior
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function getKpiMetrics(startDate: Date, endDate: Date, filters?: KpiFilters) {
+export async function getKpiMetrics(
+  startDate: Date,
+  endDate: Date,
+  filters?: KpiFilters,
+) {
   try {
-    // Pega o mesmo range do tempo anterior para comparação
-    const diff = endDate.getTime() - startDate.getTime()
-    const prevStartDate = new Date(startDate.getTime() - diff)
+    // Comparação sempre contra o mês-calendário ANTERIOR ao mês exibido
+    const prevMonth = startOfMonth(subMonths(startDate, 1))
 
-    // Lê os 2 meses (paralelo)
     const [currRes, prevRes] = await Promise.all([
       getMonthlySummary(startDate),
-      getMonthlySummary(prevStartDate),
+      getMonthlySummary(prevMonth),
     ])
 
     const curr = filterSummary(currRes.data, filters)
@@ -140,22 +140,26 @@ export async function getKpiMetrics(startDate: Date, endDate: Date, filters?: Kp
       data: {
         total_revenue: curr.total_revenue,
         prev_total_revenue: prev.total_revenue,
+        production_value: curr.production_value,
+        prev_production_value: prev.production_value,
         completed_appointments: curr.completed_appointments,
         prev_completed_appointments: prev.completed_appointments,
         total_appointments: curr.total_appointments,
         prev_total_appointments: prev.total_appointments,
-        average_ticket: curr.completed_appointments > 0
-          ? curr.total_revenue / curr.completed_appointments
-          : 0,
-        prev_average_ticket: prev.completed_appointments > 0
-          ? prev.total_revenue / prev.completed_appointments
-          : 0,
+        average_ticket:
+          curr.completed_appointments > 0
+            ? curr.total_revenue / curr.completed_appointments
+            : 0,
+        prev_average_ticket:
+          prev.completed_appointments > 0
+            ? prev.total_revenue / prev.completed_appointments
+            : 0,
         cancellation_rate: (currCancels / totalCurr) * 100,
         prev_cancellation_rate: (prevCancels / totalPrev) * 100,
-        package_sessions: curr.package_sessions || 0,
-        subscription_sessions: curr.subscription_sessions || 0,
-        independent_sessions: curr.independent_sessions || 0,
-        independent_revenue: curr.independent_revenue || 0,
+        package_sessions: curr.package_sessions,
+        subscription_sessions: curr.subscription_sessions,
+        independent_sessions: curr.independent_sessions,
+        independent_revenue: curr.independent_revenue,
       },
       error: null,
     }
@@ -165,40 +169,48 @@ export async function getKpiMetrics(startDate: Date, endDate: Date, filters?: Kp
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Desempenho por Serviço — cruzamento
+// Desempenho por Serviço
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function getServicePerformance(startDate: Date, endDate: Date, filters?: KpiFilters) {
+export async function getServicePerformance(
+  startDate: Date,
+  endDate: Date,
+  filters?: KpiFilters,
+) {
   try {
     const { data: summary } = await getMonthlySummary(startDate)
-    
-    let entries: [string, any][] = []
-    
+
+    let entries: [
+      string,
+      SummaryBreakdownStats & { name?: string; count?: number },
+    ][] = []
+
     if (filters?.professionalId && filters.professionalId !== 'all') {
       const pId = filters.professionalId
       const profSvc = summary.by_professional_service || {}
       for (const [key, val] of Object.entries(profSvc)) {
-         if (key.startsWith(`${pId}_`)) {
-            const sId = key.split('_')[1]
-            // Pegamos o nome do by_service global
-            const svcGlobal = summary.by_service?.[sId]
-            entries.push([sId, { name: svcGlobal?.name || 'Serviço', count: val.completed, revenue: val.revenue }])
-         }
+        if (key.startsWith(`${pId}_`)) {
+          const sId = key.slice(pId.length + 1)
+          // Pegamos o nome do by_service global
+          const svcGlobal = summary.by_service?.[sId]
+          entries.push([sId, { ...val, name: svcGlobal?.name || 'Serviço' }])
+        }
       }
     } else {
       entries = Object.entries(summary.by_service || {})
     }
 
-    // Filtrar por serviço específico se selecionado (redundante para gráfico, mas bom garantir)
     if (filters?.serviceId && filters.serviceId !== 'all') {
       entries = entries.filter(([id]) => id === filters.serviceId)
     }
 
     const arr = entries.map(([id, s]) => ({
       service_id: id,
-      service_name: s.name,
-      count: s.count || s.completed || 0,
+      service_name: s.name || 'Serviço',
+      count: s.count ?? s.completed ?? 0,
       revenue: s.revenue || 0,
+      // Docs legados não têm production_value — revenue antigo é a melhor aproximação
+      production_value: s.production_value ?? s.revenue ?? 0,
     }))
 
     arr.sort((a, b) => b.count - a.count)
@@ -209,23 +221,34 @@ export async function getServicePerformance(startDate: Date, endDate: Date, filt
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Desempenho por Parceria — cruzamento
+// Desempenho por Parceria
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function getPartnershipPerformance(startDate: Date, endDate: Date, filters?: KpiFilters) {
+export async function getPartnershipPerformance(
+  startDate: Date,
+  endDate: Date,
+  filters?: KpiFilters,
+) {
   try {
     const { data: summary } = await getMonthlySummary(startDate)
 
-    let entries: [string, any][] = []
-    
+    let entries: [
+      string,
+      SummaryBreakdownStats & {
+        name?: string
+        clientCount?: number
+        sessionCount?: number
+      },
+    ][] = []
+
     if (filters?.professionalId && filters.professionalId !== 'all') {
       const pId = filters.professionalId
       const profPart = summary.by_professional_partnership || {}
       for (const [key, val] of Object.entries(profPart)) {
-         if (key.startsWith(`${pId}_`)) {
-            const partId = key.split('_')[1]
-            entries.push([partId, { sessionCount: val.completed, revenue: val.revenue, clientCount: 0 }])
-         }
+        if (key.startsWith(`${pId}_`)) {
+          const partId = key.slice(pId.length + 1)
+          entries.push([partId, val])
+        }
       }
     } else {
       entries = Object.entries(summary.by_partnership || {})
@@ -238,13 +261,14 @@ export async function getPartnershipPerformance(startDate: Date, endDate: Date, 
     const { data: dbPartnerships } = await getAllPartnerships()
 
     const arr = entries.map(([id, p]) => {
-      const dbMatch = dbPartnerships?.find(dbP => dbP.id === id)
+      const dbMatch = dbPartnerships?.find((dbP) => dbP.id === id)
       return {
         partnership_id: id,
         partnership_name: dbMatch?.name || p.name || id,
         client_count: p.clientCount || 0,
-        session_count: p.sessionCount || 0,
+        session_count: p.sessionCount ?? p.completed ?? 0,
         total_revenue: p.revenue || 0,
+        production_value: p.production_value ?? p.revenue ?? 0,
       }
     })
 
@@ -263,7 +287,7 @@ export async function getAnnualComparative(filters?: KpiFilters) {
   try {
     // Últimos 12 meses
     const months = Array.from({ length: 12 }, (_, i) =>
-      startOfMonth(subMonths(new Date(), 11 - i))
+      startOfMonth(subMonths(new Date(), 11 - i)),
     )
 
     const { data: summaries } = await getMultipleMonthlySummaries(months)

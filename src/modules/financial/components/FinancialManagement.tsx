@@ -17,20 +17,18 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import {
-  paySubscription,
-  deleteSubscriptionPayment,
-} from '@/shared/services'
+import { paySubscription, deleteSubscriptionPayment } from '@/shared/services'
 import { cancelClientSubscription } from '@/modules/clients/services/subscriptions'
+import {
+  subscriptionBaseAmount,
+  subscriptionChargeForMonth,
+  subscriptionEndedByMonth,
+} from '@/shared/lib/subscriptionBilling'
 import { ClientSubscription } from '@/shared/types'
 import { useAuth } from '@/shared/providers/AuthProvider'
 import { useToast } from '@/shared/hooks/use-toast'
 import { Skeleton } from '@/components/ui/skeleton'
-import {
-  format,
-  addMonths,
-  subMonths,
-} from 'date-fns'
+import { format, addMonths, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import {
   CheckCircle,
@@ -72,24 +70,6 @@ import {
   useInvalidateFinancial,
 } from '@/modules/financial/queries'
 
-// Mirrors proration logic from paySubscription service
-const calculateSubscriptionAmount = (sub: ClientSubscription, forMonth: Date): number => {
-  const fullPrice = sub.amount || sub.subscription_plans?.price || sub.services?.price || 0
-  if (!sub.start_date) return fullPrice
-
-  const startDate = new Date(sub.start_date)
-  const isSameMonthAsStart =
-    startDate.getFullYear() === forMonth.getFullYear() &&
-    startDate.getMonth() === forMonth.getMonth()
-
-  if (isSameMonthAsStart) {
-    const daysInMonth = new Date(forMonth.getFullYear(), forMonth.getMonth() + 1, 0).getDate()
-    const daysActive = daysInMonth - startDate.getDate() + 1
-    return Math.round((fullPrice / daysInMonth) * daysActive * 100) / 100
-  }
-  return fullPrice
-}
-
 export const FinancialManagement = () => {
   const { professionalId, user, role } = useAuth()
   const { toast } = useToast()
@@ -99,8 +79,11 @@ export const FinancialManagement = () => {
   const invalidateFinancial = useInvalidateFinancial()
 
   // TanStack Query: cache de summary (10min), subscriptions (5min), payments (5min)
-  const { data: summary, isLoading: summaryLoading } = useMonthlySummary(currentDate)
-  const { data: subs = [], isLoading: subsLoading } = useActiveSubscriptions({ limit: 50, targetDate: currentDate })
+  const { data: summary, isLoading: summaryLoading } =
+    useMonthlySummary(currentDate)
+  const { data: subs = [], isLoading: subsLoading } = useActiveSubscriptions({
+    targetDate: currentDate,
+  })
 
   const subIds = useMemo(() => subs.map((s) => s.id), [subs])
   const { data: payments = [] } = useSubscriptionPayments(subIds, currentDate)
@@ -139,13 +122,12 @@ export const FinancialManagement = () => {
         }
 
         // Se a assinatura internamente está cancelada, ou se ela terminou neste mês ou antes (end_date),
-        // e ainda não foi paga (estamos no bloco else), marcamos como 'cancelled' 
+        // e ainda não foi paga (estamos no bloco else), marcamos como 'cancelled'
         // para não gerar sensação de falsa pendência/valor dobrado.
-        const viewEndStr = new Date(viewYear, viewMonth + 1, 0, 23, 59, 59).toISOString()
-        const tEnd = sub.end_date || sub.cancelled_at
-        const endedThisMonthOrBefore = tEnd && tEnd <= viewEndStr
-
-        if (sub.status === 'cancelled' || endedThisMonthOrBefore) {
+        if (
+          sub.status === 'cancelled' ||
+          subscriptionEndedByMonth(sub, currentDate)
+        ) {
           status = 'cancelled'
         }
       }
@@ -163,7 +145,7 @@ export const FinancialManagement = () => {
     return subscriptions.reduce((acc, sub) => {
       // Se a assinatura foi cancelada E não foi paga, não entra na previsão de receita nem é considerada devida
       if (sub.payment_status === 'cancelled') return acc
-      return acc + calculateSubscriptionAmount(sub, currentDate)
+      return acc + subscriptionChargeForMonth(sub, currentDate).amount
     }, 0)
   }, [subscriptions, currentDate])
 
@@ -173,7 +155,11 @@ export const FinancialManagement = () => {
     // Use professionalId if available, otherwise fall back to the logged-in user's id
     const actorId = professionalId || user?.id
     if (!actorId) {
-      toast({ title: 'Erro', description: 'Usuário não identificado.', variant: 'destructive' })
+      toast({
+        title: 'Erro',
+        description: 'Usuário não identificado.',
+        variant: 'destructive',
+      })
       return
     }
     setIsProcessing(sub.id)
@@ -202,8 +188,10 @@ export const FinancialManagement = () => {
     if (!sub.financial_record_id) return
     setIsProcessing(sub.id)
 
-
-    const { error } = await deleteSubscriptionPayment(sub.financial_record_id, professionalId || user?.id)
+    const { error } = await deleteSubscriptionPayment(
+      sub.financial_record_id,
+      professionalId || user?.id,
+    )
 
     if (error) {
       toast({
@@ -223,12 +211,22 @@ export const FinancialManagement = () => {
 
   const handleCancelSub = async (sub: ClientSubscription) => {
     setIsProcessing(sub.id)
-    const { error } = await cancelClientSubscription(sub.clients?.id as string, sub.id)
+    const { error } = await cancelClientSubscription(
+      sub.clients?.id as string,
+      sub.id,
+    )
 
     if (error) {
-      toast({ title: 'Erro', description: error.message, variant: 'destructive' })
+      toast({
+        title: 'Erro',
+        description: error.message,
+        variant: 'destructive',
+      })
     } else {
-      toast({ title: 'Sucesso', description: 'Assinatura cancelada com sucesso.' })
+      toast({
+        title: 'Sucesso',
+        description: 'Assinatura cancelada com sucesso.',
+      })
       invalidateFinancial()
     }
     setIsProcessing(null)
@@ -242,8 +240,6 @@ export const FinancialManagement = () => {
       style: 'currency',
       currency: 'BRL',
     }).format(val || 0)
-
-
 
   return (
     <div className="space-y-6">
@@ -273,32 +269,46 @@ export const FinancialManagement = () => {
             <div className="text-2xl font-bold">
               {formatCurrency(expectedSubsRevenue)}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">{subscriptions.length} assinatura(s) ativa(s)</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {subscriptions.length} assinatura(s) ativa(s)
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Recebido (Total)</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Recebido (Total)
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
               {formatCurrency(summary?.total_revenue || 0)}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Avulsas + Assinaturas + Pacotes</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Avulsas + Assinaturas + Pacotes
+            </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Pendente (Assinaturas)</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Pendente (Assinaturas)
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-orange-600">
               {formatCurrency(
-                Math.max(0, expectedSubsRevenue - (summary?.subscriptions_revenue_received || 0))
+                Math.max(
+                  0,
+                  expectedSubsRevenue -
+                    (summary?.subscriptions_revenue_received || 0),
+                ),
               )}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Receita prevista − Assinaturas pagas</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Receita prevista − Assinaturas pagas
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -346,10 +356,7 @@ export const FinancialManagement = () => {
                           {sub.subscription_plans?.name || sub.services?.name}
                         </TableCell>
                         <TableCell>
-                          {formatCurrency(
-                            sub.amount || sub.subscription_plans?.price ||
-                            sub.services?.price,
-                          )}
+                          {formatCurrency(subscriptionBaseAmount(sub))}
                         </TableCell>
                         <TableCell>
                           {sub.payment_status === 'paid' ? (
@@ -363,7 +370,10 @@ export const FinancialManagement = () => {
                               Em Atraso
                             </Badge>
                           ) : sub.payment_status === 'cancelled' ? (
-                            <Badge variant="outline" className="text-muted-foreground">
+                            <Badge
+                              variant="outline"
+                              className="text-muted-foreground"
+                            >
                               <Ban className="w-3 h-3 mr-1" />
                               Cancelada
                             </Badge>
@@ -381,56 +391,90 @@ export const FinancialManagement = () => {
                             {sub.payment_status === 'paid' ? (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
-                                  <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700 hover:bg-red-50 h-8">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="text-red-600 hover:text-red-700 hover:bg-red-50 h-8"
+                                  >
                                     <RotateCcw className="mr-2 h-4 w-4" />
                                     Estornar
                                   </Button>
                                 </AlertDialogTrigger>
                                 <AlertDialogContent>
                                   <AlertDialogHeader>
-                                    <AlertDialogTitle>Confirmar Estorno</AlertDialogTitle>
+                                    <AlertDialogTitle>
+                                      Confirmar Estorno
+                                    </AlertDialogTitle>
                                     <AlertDialogDescription>
-                                      Deseja desfazer o pagamento de <strong>{sub.clients?.name}</strong>? O status voltará para pendente.
+                                      Deseja desfazer o pagamento de{' '}
+                                      <strong>{sub.clients?.name}</strong>? O
+                                      status voltará para pendente.
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogCancel>
+                                      Cancelar
+                                    </AlertDialogCancel>
                                     <AlertDialogAction
                                       onClick={() => handleReverse(sub)}
                                       disabled={isProcessing === sub.id}
                                       className="bg-red-600 hover:bg-red-700"
                                     >
-                                      {isProcessing === sub.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirmar Estorno'}
+                                      {isProcessing === sub.id ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                      ) : (
+                                        'Confirmar Estorno'
+                                      )}
                                     </AlertDialogAction>
                                   </AlertDialogFooter>
                                 </AlertDialogContent>
                               </AlertDialog>
-                            ) : sub.payment_status !== 'cancelled' && (
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button size="sm" variant="outline" className="h-8">
-                                    <DollarSign className="mr-2 h-4 w-4" />
-                                    Quitar
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Confirmar Pagamento</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Deseja marcar a mensalidade de <strong>{sub.clients?.name}</strong> como paga referente a {format(currentDate, 'MMMM/yyyy', { locale: ptBR })}?
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() => handlePay(sub)}
-                                      disabled={isProcessing === sub.id}
+                            ) : (
+                              sub.payment_status !== 'cancelled' && (
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-8"
                                     >
-                                      {isProcessing === sub.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirmar'}
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
+                                      <DollarSign className="mr-2 h-4 w-4" />
+                                      Quitar
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>
+                                        Confirmar Pagamento
+                                      </AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Deseja marcar a mensalidade de{' '}
+                                        <strong>{sub.clients?.name}</strong>{' '}
+                                        como paga referente a{' '}
+                                        {format(currentDate, 'MMMM/yyyy', {
+                                          locale: ptBR,
+                                        })}
+                                        ?
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>
+                                        Cancelar
+                                      </AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => handlePay(sub)}
+                                        disabled={isProcessing === sub.id}
+                                      >
+                                        {isProcessing === sub.id ? (
+                                          <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                          'Confirmar'
+                                        )}
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              )
                             )}
 
                             <DropdownMenu>
@@ -442,7 +486,13 @@ export const FinancialManagement = () => {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem
-                                  onClick={() => navigate(role === 'admin' ? `/admin/pacientes/${sub.clients?.id}` : `/profissional/pacientes/${sub.clients?.id}`)}
+                                  onClick={() =>
+                                    navigate(
+                                      role === 'admin'
+                                        ? `/admin/pacientes/${sub.clients?.id}`
+                                        : `/profissional/pacientes/${sub.clients?.id}`,
+                                    )
+                                  }
                                   className="cursor-pointer"
                                 >
                                   <User className="mr-2 h-4 w-4" />
@@ -462,19 +512,36 @@ export const FinancialManagement = () => {
                                         </AlertDialogTrigger>
                                         <AlertDialogContent>
                                           <AlertDialogHeader>
-                                            <AlertDialogTitle>Cancelar Assinatura Definitivamente</AlertDialogTitle>
+                                            <AlertDialogTitle>
+                                              Cancelar Assinatura
+                                              Definitivamente
+                                            </AlertDialogTitle>
                                             <AlertDialogDescription>
-                                              Tem certeza que deseja cancelar a assinatura de <strong>{sub.clients?.name}</strong>? Esta ação interromperá cobranças futuras.
+                                              Tem certeza que deseja cancelar a
+                                              assinatura de{' '}
+                                              <strong>
+                                                {sub.clients?.name}
+                                              </strong>
+                                              ? Esta ação interromperá cobranças
+                                              futuras.
                                             </AlertDialogDescription>
                                           </AlertDialogHeader>
                                           <AlertDialogFooter>
-                                            <AlertDialogCancel>Manter Assinatura</AlertDialogCancel>
+                                            <AlertDialogCancel>
+                                              Manter Assinatura
+                                            </AlertDialogCancel>
                                             <AlertDialogAction
-                                              onClick={() => handleCancelSub(sub)}
+                                              onClick={() =>
+                                                handleCancelSub(sub)
+                                              }
                                               disabled={isProcessing === sub.id}
                                               className="bg-red-600 hover:bg-red-700"
                                             >
-                                              {isProcessing === sub.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Sim, Cancelar'}
+                                              {isProcessing === sub.id ? (
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                              ) : (
+                                                'Sim, Cancelar'
+                                              )}
                                             </AlertDialogAction>
                                           </AlertDialogFooter>
                                         </AlertDialogContent>
