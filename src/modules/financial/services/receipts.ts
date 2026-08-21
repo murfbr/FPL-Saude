@@ -171,7 +171,7 @@ export async function getActivitiesForReceipt(
 
           const isUnpaid = totalPaid === 0
 
-          let subName =
+          const subName =
             matchingSub.subscription_plans?.name ||
             matchingSub.services?.name ||
             'Assinatura'
@@ -300,6 +300,7 @@ export const generateReceiptPDF = (
   clientCpf?: string,
   companyCnpj?: string,
   companySubtitle?: string,
+  companyName?: string,
 ) => {
   const doc = new jsPDF()
   const pageWidth = doc.internal.pageSize.getWidth()
@@ -314,7 +315,7 @@ export const generateReceiptPDF = (
   doc.setFontSize(24)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(30, 64, 175) // Azul primário
-  doc.text('FPL Saúde', pageWidth / 2, 25, { align: 'center' })
+  doc.text(companyName || 'Clínica', pageWidth / 2, 25, { align: 'center' })
 
   // Subtítulo do cabeçalho
   doc.setFontSize(10)

@@ -1,6 +1,12 @@
 import { useState, useEffect } from 'react'
 import { Client, ClinicalDocument, ClinicalDocumentType } from '@/shared/types'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -13,7 +19,15 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { FileText, Plus, Loader2, Download, Printer, Edit, Trash2 } from 'lucide-react'
+import {
+  FileText,
+  Plus,
+  Loader2,
+  Download,
+  Printer,
+  Edit,
+  Trash2,
+} from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { useAuth } from '@/shared/providers/AuthProvider'
@@ -31,7 +45,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { getClinicalDocuments, saveClinicalDocument, updateClinicalDocument, deleteClinicalDocument } from '../services/documents'
+import {
+  getClinicalDocuments,
+  saveClinicalDocument,
+  updateClinicalDocument,
+  deleteClinicalDocument,
+} from '../services/documents'
 import jsPDF from 'jspdf'
 
 interface ClinicalDocumentsTabProps {
@@ -45,15 +64,18 @@ export const ClinicalDocumentsTab = ({ client }: ClinicalDocumentsTabProps) => {
   const [isCreating, setIsCreating] = useState(false)
   const [editingDocId, setEditingDocId] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
-  
+
   const [newDocType, setNewDocType] = useState<ClinicalDocumentType>('atestado')
   const [newDocContent, setNewDocContent] = useState('')
-  
+
   const { user, professionalId, role } = useAuth()
   const { config } = useTenant()
   const { toast } = useToast()
 
-  const professionalName = user?.displayName || user?.email || (role === 'admin' ? 'Administrador' : 'Profissional')
+  const professionalName =
+    user?.displayName ||
+    user?.email ||
+    (role === 'admin' ? 'Administrador' : 'Profissional')
 
   const fetchDocuments = async () => {
     if (!client.id) return
@@ -67,27 +89,38 @@ export const ClinicalDocumentsTab = ({ client }: ClinicalDocumentsTabProps) => {
     fetchDocuments()
   }, [client.id])
 
-  const generatePDF = (docType: string, content: string, date: Date = new Date()) => {
+  const generatePDF = (
+    docType: string,
+    content: string,
+    date: Date = new Date(),
+  ) => {
     const doc = new jsPDF()
     const pageWidth = doc.internal.pageSize.getWidth()
     const pageHeight = doc.internal.pageSize.getHeight()
-    
+
     // Borda da página
     doc.setDrawColor(200, 200, 200)
     doc.setLineWidth(0.5)
     doc.rect(10, 10, pageWidth - 20, pageHeight - 20)
-    
+
     // Cabeçalho (Timbre)
     doc.setFontSize(24)
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(30, 64, 175) // Azul primário
-    doc.text('FPL Saúde', pageWidth / 2, 25, { align: 'center' })
-    
+    doc.text(config?.branding?.app_name || 'Clínica', pageWidth / 2, 25, {
+      align: 'center',
+    })
+
     // Subtítulo do cabeçalho
     doc.setFontSize(10)
     doc.setFont('helvetica', 'normal')
     doc.setTextColor(100, 100, 100)
-    doc.text(config?.subtitle || 'Clínica de Especialidades', pageWidth / 2, 32, { align: 'center' })
+    doc.text(
+      config?.subtitle || 'Clínica de Especialidades',
+      pageWidth / 2,
+      32,
+      { align: 'center' },
+    )
 
     if (config?.cnpj) {
       doc.setFontSize(9)
@@ -98,7 +131,7 @@ export const ClinicalDocumentsTab = ({ client }: ClinicalDocumentsTabProps) => {
     doc.setDrawColor(200, 200, 200)
     const lineY = config?.cnpj ? 41 : 38
     doc.line(20, lineY, pageWidth - 20, lineY)
-    
+
     // Título do Documento
     doc.setFontSize(16)
     doc.setFont('helvetica', 'bold')
@@ -106,7 +139,7 @@ export const ClinicalDocumentsTab = ({ client }: ClinicalDocumentsTabProps) => {
     let displayType = docType.toUpperCase()
     if (docType === 'receita') displayType = 'RECEITUÁRIO'
     doc.text(displayType, pageWidth / 2, lineY + 12, { align: 'center' })
-    
+
     // Dados do Paciente
     doc.setFontSize(12)
     doc.setFont('helvetica', 'bold')
@@ -114,78 +147,110 @@ export const ClinicalDocumentsTab = ({ client }: ClinicalDocumentsTabProps) => {
     doc.text('Paciente:', 20, startContentY)
     doc.setFont('helvetica', 'normal')
     doc.text(client.name, 42, startContentY)
-    
+
     if (client.email && client.email.length === 11) {
-       doc.setFont('helvetica', 'bold')
-       doc.text('CPF:', 20, startContentY + 7)
-       doc.setFont('helvetica', 'normal')
-       // Formatação simples de CPF
-       const cpf = client.email.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4")
-       doc.text(cpf, 32, startContentY + 7)
+      doc.setFont('helvetica', 'bold')
+      doc.text('CPF:', 20, startContentY + 7)
+      doc.setFont('helvetica', 'normal')
+      // Formatação simples de CPF
+      const cpf = client.email.replace(
+        /(\d{3})(\d{3})(\d{3})(\d{2})/,
+        '$1.$2.$3-$4',
+      )
+      doc.text(cpf, 32, startContentY + 7)
     }
-    
+
     // Corpo do Texto
     doc.setFontSize(12)
     const textLines = doc.splitTextToSize(content, pageWidth - 40)
     doc.text(textLines, 20, startContentY + 25)
-    
+
     // Rodapé / Assinatura
     doc.setDrawColor(0, 0, 0)
-    doc.line(pageWidth / 2 - 40, pageHeight - 50, pageWidth / 2 + 40, pageHeight - 50) // Linha de assinatura
-    
+    doc.line(
+      pageWidth / 2 - 40,
+      pageHeight - 50,
+      pageWidth / 2 + 40,
+      pageHeight - 50,
+    ) // Linha de assinatura
+
     doc.setFontSize(12)
     doc.setFont('helvetica', 'bold')
-    doc.text(professionalName, pageWidth / 2, pageHeight - 42, { align: 'center' })
-    
+    doc.text(professionalName, pageWidth / 2, pageHeight - 42, {
+      align: 'center',
+    })
+
     doc.setFontSize(10)
     doc.setFont('helvetica', 'normal')
-    doc.text(`Data: ${format(date, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}`, pageWidth / 2, pageHeight - 34, { align: 'center' })
-    
+    doc.text(
+      `Data: ${format(date, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}`,
+      pageWidth / 2,
+      pageHeight - 34,
+      { align: 'center' },
+    )
+
     return doc
   }
 
   const handleGenerateDocument = async () => {
     if (!newDocContent.trim()) {
-      toast({ title: 'Preencha o conteúdo do documento.', variant: 'destructive' })
+      toast({
+        title: 'Preencha o conteúdo do documento.',
+        variant: 'destructive',
+      })
       return
     }
-    
+
     setIsGenerating(true)
-    
+
     try {
       // 1. Gerar PDF
       const pdf = generatePDF(newDocType, newDocContent)
       const pdfBlob = pdf.output('blob')
-      const pdfFile = new File([pdfBlob], `${newDocType}.pdf`, { type: 'application/pdf' })
-      
+      const pdfFile = new File([pdfBlob], `${newDocType}.pdf`, {
+        type: 'application/pdf',
+      })
+
       let finalFileUrl = ''
-      
+
       if (editingDocId) {
         // Edit mode
-        const { data, error } = await updateClinicalDocument(client.id, editingDocId, {
-          type: newDocType,
-          content: newDocContent
-        }, pdfFile)
+        const { data, error } = await updateClinicalDocument(
+          client.id,
+          editingDocId,
+          {
+            type: newDocType,
+            content: newDocContent,
+          },
+          pdfFile,
+        )
         if (error) throw error
-        
+
         finalFileUrl = data?.file_url || ''
         toast({ title: 'Documento atualizado e salvo no Storage com sucesso!' })
-        if (data) setDocuments(prev => prev.map(d => d.id === editingDocId ? data : d))
+        if (data)
+          setDocuments((prev) =>
+            prev.map((d) => (d.id === editingDocId ? data : d)),
+          )
       } else {
         // Create mode
-        const { data, error } = await saveClinicalDocument(client.id, {
-          professional_id: professionalId || user?.id || 'admin',
-          professional_name: professionalName,
-          type: newDocType,
-          content: newDocContent
-        }, pdfFile)
+        const { data, error } = await saveClinicalDocument(
+          client.id,
+          {
+            professional_id: professionalId || user?.id || 'admin',
+            professional_name: professionalName,
+            type: newDocType,
+            content: newDocContent,
+          },
+          pdfFile,
+        )
         if (error) throw error
-        
+
         finalFileUrl = data?.file_url || ''
         toast({ title: 'Documento criado e salvo no Storage com sucesso!' })
-        if (data) setDocuments(prev => [data, ...prev])
+        if (data) setDocuments((prev) => [data, ...prev])
       }
-      
+
       // 3. Abrir PDF para impressão/download
       if (finalFileUrl) {
         window.open(finalFileUrl, '_blank')
@@ -193,14 +258,17 @@ export const ClinicalDocumentsTab = ({ client }: ClinicalDocumentsTabProps) => {
         pdf.autoPrint()
         window.open(pdf.output('bloburl'), '_blank')
       }
-      
+
       // 4. Limpar e atualizar
       setNewDocContent('')
       setIsCreating(false)
       setEditingDocId(null)
-      
     } catch (err: any) {
-      toast({ title: 'Erro ao gerar documento', description: err.message, variant: 'destructive' })
+      toast({
+        title: 'Erro ao gerar documento',
+        description: err.message,
+        variant: 'destructive',
+      })
     } finally {
       setIsGenerating(false)
     }
@@ -211,7 +279,11 @@ export const ClinicalDocumentsTab = ({ client }: ClinicalDocumentsTabProps) => {
       window.open(document.file_url, '_blank')
     } else {
       // Backward compatibility for documents generated before we saved the file
-      const pdf = generatePDF(document.type, document.content, new Date(document.created_at || ''))
+      const pdf = generatePDF(
+        document.type,
+        document.content,
+        new Date(document.created_at || ''),
+      )
       window.open(pdf.output('bloburl'), '_blank')
     }
   }
@@ -235,10 +307,14 @@ export const ClinicalDocumentsTab = ({ client }: ClinicalDocumentsTabProps) => {
     setIsDeleting(docId)
     const { error } = await deleteClinicalDocument(client.id, docId)
     if (error) {
-      toast({ title: 'Erro ao excluir', description: error.message, variant: 'destructive' })
+      toast({
+        title: 'Erro ao excluir',
+        description: error.message,
+        variant: 'destructive',
+      })
     } else {
       toast({ title: 'Documento excluído.' })
-      setDocuments(prev => prev.filter(d => d.id !== docId))
+      setDocuments((prev) => prev.filter((d) => d.id !== docId))
     }
     setIsDeleting(null)
   }
@@ -249,40 +325,58 @@ export const ClinicalDocumentsTab = ({ client }: ClinicalDocumentsTabProps) => {
         <Card className="border-primary/50 shadow-sm">
           <CardHeader className="pb-3 bg-muted/30">
             <CardTitle className="text-lg flex justify-between items-center">
-              <span>{editingDocId ? 'Editar Documento' : 'Novo Documento Clínico'}</span>
-              <Button variant="ghost" size="sm" onClick={cancelEdit}>Cancelar</Button>
+              <span>
+                {editingDocId ? 'Editar Documento' : 'Novo Documento Clínico'}
+              </span>
+              <Button variant="ghost" size="sm" onClick={cancelEdit}>
+                Cancelar
+              </Button>
             </CardTitle>
-            <CardDescription>Preencha os dados abaixo para gerar o PDF.</CardDescription>
+            <CardDescription>
+              Preencha os dados abaixo para gerar o PDF.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 pt-4">
             <div className="space-y-2">
               <Label>Tipo de Documento</Label>
-              <Select value={newDocType} onValueChange={(v: any) => setNewDocType(v)}>
+              <Select
+                value={newDocType}
+                onValueChange={(v: any) => setNewDocType(v)}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="atestado">Atestado Médico/Odontológico</SelectItem>
+                  <SelectItem value="atestado">
+                    Atestado Médico/Odontológico
+                  </SelectItem>
                   <SelectItem value="receita">Receituário</SelectItem>
                   <SelectItem value="encaminhamento">Encaminhamento</SelectItem>
                   <SelectItem value="outro">Outro</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div className="space-y-2">
               <Label>Conteúdo do Documento</Label>
-              <Textarea 
-                placeholder="Digite o texto que vai no corpo do documento..." 
+              <Textarea
+                placeholder="Digite o texto que vai no corpo do documento..."
                 className="min-h-[150px] resize-y"
                 value={newDocContent}
                 onChange={(e) => setNewDocContent(e.target.value)}
               />
             </div>
-            
+
             <div className="flex justify-end pt-2">
-              <Button onClick={handleGenerateDocument} disabled={isGenerating || !newDocContent.trim()}>
-                {isGenerating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
+              <Button
+                onClick={handleGenerateDocument}
+                disabled={isGenerating || !newDocContent.trim()}
+              >
+                {isGenerating ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Printer className="w-4 h-4 mr-2" />
+                )}
                 Gerar PDF e Salvar
               </Button>
             </div>
@@ -291,9 +385,14 @@ export const ClinicalDocumentsTab = ({ client }: ClinicalDocumentsTabProps) => {
       ) : (
         <div className="flex justify-between items-center mb-4">
           <h3 className="font-semibold flex items-center gap-2">
-            <FileText className="w-4 h-4" /> Histórico de Documentos ({documents.length})
+            <FileText className="w-4 h-4" /> Histórico de Documentos (
+            {documents.length})
           </h3>
-          <Button size="sm" onClick={() => setIsCreating(true)} className="gap-2">
+          <Button
+            size="sm"
+            onClick={() => setIsCreating(true)}
+            className="gap-2"
+          >
             <Plus className="w-4 h-4" />
             Novo Documento
           </Button>
@@ -313,8 +412,8 @@ export const ClinicalDocumentsTab = ({ client }: ClinicalDocumentsTabProps) => {
         ) : (
           <div className="grid grid-cols-1 gap-3">
             {documents.map((doc) => (
-              <div 
-                key={doc.id} 
+              <div
+                key={doc.id}
                 className="flex items-start justify-between p-4 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors"
               >
                 <div className="flex gap-4 w-full">
@@ -324,26 +423,34 @@ export const ClinicalDocumentsTab = ({ client }: ClinicalDocumentsTabProps) => {
                   <div className="flex-1">
                     <div className="flex justify-between items-start">
                       <div>
-                        <Badge variant="outline" className="uppercase font-semibold tracking-wider bg-primary/5 text-primary border-primary/20 mb-1">
+                        <Badge
+                          variant="outline"
+                          className="uppercase font-semibold tracking-wider bg-primary/5 text-primary border-primary/20 mb-1"
+                        >
                           {doc.type === 'receita' ? 'Receituário' : doc.type}
                         </Badge>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          Emitido em {format(new Date(doc.created_at || ''), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                          Emitido em{' '}
+                          {format(
+                            new Date(doc.created_at || ''),
+                            "dd/MM/yyyy 'às' HH:mm",
+                            { locale: ptBR },
+                          )}
                         </p>
                       </div>
                       <div className="flex gap-1">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => handlePrintExisting(doc)}
                           className="text-primary hover:text-primary hover:bg-primary/10 h-8 w-8"
                           title="Visualizar / Imprimir"
                         >
                           <Printer className="w-4 h-4" />
                         </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => startEdit(doc)}
                           className="text-muted-foreground hover:text-primary h-8 w-8"
                           title="Editar"
@@ -352,25 +459,32 @@ export const ClinicalDocumentsTab = ({ client }: ClinicalDocumentsTabProps) => {
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8"
                               title="Excluir"
                             >
-                              {isDeleting === doc.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                              {isDeleting === doc.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
-                              <AlertDialogTitle>Excluir Documento</AlertDialogTitle>
+                              <AlertDialogTitle>
+                                Excluir Documento
+                              </AlertDialogTitle>
                               <AlertDialogDescription>
-                                Tem certeza? O documento será excluído permanentemente do histórico do paciente.
+                                Tem certeza? O documento será excluído
+                                permanentemente do histórico do paciente.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction 
+                              <AlertDialogAction
                                 onClick={() => handleDelete(doc.id!)}
                                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                               >

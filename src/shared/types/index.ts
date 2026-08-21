@@ -86,6 +86,8 @@ export interface NoteEntry {
 }
 
 export interface Appointment {
+  /** Classificação gravada na conclusão (setAppointmentStatus); fonte de verdade dos agregados e recibos */
+  billing_type?: 'package' | 'subscription' | 'independent'
   id: string
   client_id: string
   professional_id: string
@@ -114,7 +116,8 @@ export interface Appointment {
 }
 
 /** Helper de tipagem: retorna true se o agendamento for um evento flexível */
-export const isClinicEvent = (a: Appointment): boolean => a.entry_type === 'event'
+export const isClinicEvent = (a: Appointment): boolean =>
+  a.entry_type === 'event'
 
 export interface Package {
   id: string
@@ -232,7 +235,11 @@ export interface ClientExam {
   professional_name?: string
 }
 
-export type ClinicalDocumentType = 'atestado' | 'receita' | 'encaminhamento' | 'outro'
+export type ClinicalDocumentType =
+  | 'atestado'
+  | 'receita'
+  | 'encaminhamento'
+  | 'outro'
 
 export interface ClinicalDocument {
   id?: string

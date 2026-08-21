@@ -4,10 +4,10 @@ import {
   doc,
   getDoc,
   setDoc,
-  deleteDoc,
   query,
   where,
   getDocs,
+  writeBatch,
 } from 'firebase/firestore'
 import { ClientSubscription } from '@/shared/types'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
@@ -120,10 +120,13 @@ async function archiveAndDeleteFinancialRecord(
       return { error: new Error('Registro financeiro não encontrado.') }
     }
 
+    // Batch atômico: ou a auditoria E a remoção acontecem, ou nenhuma —
+    // impossível ficar com trilha órfã ou remoção sem rastro
     const auditRef = doc(
       collection(db, 'companies', companyId, 'financial_audit'),
     )
-    await setDoc(auditRef, {
+    const batch = writeBatch(db)
+    batch.set(auditRef, {
       id: auditRef.id,
       action: 'reversal',
       record_id: recordId,
@@ -131,8 +134,8 @@ async function archiveAndDeleteFinancialRecord(
       reversed_by: reversedBy || null,
       reversed_at: new Date().toISOString(),
     })
-
-    await deleteDoc(recordRef)
+    batch.delete(recordRef)
+    await batch.commit()
     return { error: null }
   } catch (error) {
     return { error }
@@ -170,9 +173,11 @@ export async function payPackage(
       }
     }
 
-    const amount =
+    const amount = Math.max(
+      0,
       (clientPackage.packages?.price || 0) -
-      (clientPackage.discount_amount || 0)
+        (clientPackage.discount_amount || 0),
+    )
     const description = `Pacote ${clientPackage.packages?.name || ''}`
 
     // ID determinístico = client_package_id: corrida de dois cliques sobrescreve
