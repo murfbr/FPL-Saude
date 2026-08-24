@@ -4,6 +4,7 @@ import * as financialFunctions from './financial/onFinancialRecordWrite'
 import * as cronFunctions from './cron/dailyReconciliation'
 import * as authFunctions from './auth/onUserWrite'
 import * as staffFunctions from './auth/staffLifecycle'
+import * as entitlementFunctions from './entitlements/onEntitlementWrite'
 
 export const { onAppointmentWrite } = appointmentFunctions
 
@@ -16,3 +17,6 @@ export const { dailyReconciliation } = cronFunctions
 export const { onUserWrite } = authFunctions
 
 export const { createStaffUser, setStaffActive } = staffFunctions
+
+export const { onClientSubscriptionWrite, onClientPackageWrite } =
+  entitlementFunctions
