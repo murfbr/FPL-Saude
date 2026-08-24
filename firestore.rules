@@ -154,6 +154,24 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Índices planos de assinaturas/pacotes dos pacientes — mantidos pelas
+      // Cloud Functions (onEntitlementWrite); as telas de cobrança leem daqui
+      // em 1 query em vez de varrer clients × subcoleções
+      match /subscriptions_index/{subId} {
+        allow read: if request.auth != null && (
+          isSuperAdmin()
+          || (isUserInCompany(companyId) && getUserRole() != 'client')
+        );
+        allow write: if false;
+      }
+      match /client_packages_index/{pkgId} {
+        allow read: if request.auth != null && (
+          isSuperAdmin()
+          || (isUserInCompany(companyId) && getUserRole() != 'client')
+        );
+        allow write: if false;
+      }
+
       // Trilha de auditoria financeira — append-only: cria, nunca edita/apaga
       match /financial_audit/{auditId} {
         allow read: if request.auth != null && isAdmin(companyId);

@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
   Table,
@@ -34,6 +35,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/shared/providers/AuthProvider'
 import { useToast } from '@/shared/hooks/use-toast'
+import { useInvalidateFinancial } from '@/modules/financial/queries'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -53,18 +55,20 @@ import {
 } from '@/components/ui/dropdown-menu'
 
 export const PackageFinancials = () => {
-  const { professionalId, user, role } = useAuth()
+  const { professionalId, user, role, companyId } = useAuth()
   const { toast } = useToast()
   const navigate = useNavigate()
-  const [packages, setPackages] = useState<any[]>([])
-  const [isLoading, setIsLoading] = useState(true)
   const [isProcessing, setIsProcessing] = useState<string | null>(null)
+  const invalidateFinancial = useInvalidateFinancial()
 
-  const fetchPackages = async () => {
-    setIsLoading(true)
-    const { data } = await getAllActiveClientPackages()
+  // TanStack Query (cache 5 min) na chave 'financial' — as ações de quitar/
+  // estornar invalidam via useInvalidateFinancial, como o resto do módulo
+  const { data: packages = [], isLoading } = useQuery({
+    queryKey: ['financial', 'packages-list', companyId],
+    queryFn: async () => {
+      const { data } = await getAllActiveClientPackages()
+      if (!data || data.length === 0) return []
 
-    if (data && data.length > 0) {
       const packageIds = data.map((p: any) => p.id)
       const { data: payments } = await getPackagePayments(packageIds)
 
@@ -73,22 +77,14 @@ export const PackageFinancials = () => {
         if (p.client_package_id) paidMap.set(p.client_package_id, p.id)
       })
 
-      const enriched = data.map((pkg: any) => ({
+      return data.map((pkg: any) => ({
         ...pkg,
         payment_status: paidMap.has(pkg.id) ? 'paid' : 'pending',
         financial_record_id: paidMap.get(pkg.id),
       }))
-      setPackages(enriched)
-    } else {
-      setPackages([])
-    }
-
-    setIsLoading(false)
-  }
-
-  useEffect(() => {
-    fetchPackages()
-  }, [])
+    },
+    staleTime: 5 * 60_000,
+  })
 
   const handlePay = async (pkg: any) => {
     const actorId = professionalId || user?.id
@@ -115,7 +111,7 @@ export const PackageFinancials = () => {
         title: 'Pagamento Confirmado',
         description: `Pacote de ${pkg.clients?.name} registrado com sucesso.`,
       })
-      fetchPackages()
+      invalidateFinancial()
     }
     setIsProcessing(null)
   }
@@ -140,7 +136,7 @@ export const PackageFinancials = () => {
         title: 'Estorno Realizado',
         description: `Pagamento de ${pkg.clients?.name} foi removido.`,
       })
-      fetchPackages()
+      invalidateFinancial()
     }
     setIsProcessing(null)
   }
@@ -161,7 +157,7 @@ export const PackageFinancials = () => {
         title: 'Pacote Encerrado',
         description: `O pacote de ${pkg.clients?.name} foi forçado ao término.`,
       })
-      fetchPackages()
+      invalidateFinancial()
     }
     setIsProcessing(null)
   }

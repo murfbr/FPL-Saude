@@ -36,6 +36,7 @@ export interface AppointmentLike {
   discount_amount?: number
   billing_type?: string
   professionals?: { name?: string }
+  partnerships?: { name?: string }
   services?: { name?: string; price?: number; value_type?: string }
   schedules?: { start_time?: string }
 }
@@ -315,7 +316,7 @@ export function buildMonthlySummary(input: {
     if (partId && !byPartnership[partId]) {
       byPartnership[partId] = {
         ...emptyStats(),
-        name: partnershipNames?.[partId] || '',
+        name: partnershipNames?.[partId] || a.partnerships?.name || '',
         clientCount: 0,
         sessionCount: 0,
       }

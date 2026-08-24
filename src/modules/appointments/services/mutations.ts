@@ -27,6 +27,24 @@ import {
 import { getCompanyId } from '@/shared/lib/tenantStore'
 import { callSetAppointmentStatus } from '@/shared/lib/functions'
 
+/**
+ * Snapshot {id, name} da parceria do cliente para denormalizar no agendamento —
+ * o trigger de agregados escreve o nome em by_partnership sem precisar de read.
+ */
+async function partnershipSnapshot(
+  partnershipId?: string | null,
+): Promise<{ id: string; name: string } | null> {
+  if (!partnershipId) return null
+  try {
+    const snap = await getDoc(
+      doc(db, 'companies', getCompanyId(), 'partnerships', partnershipId),
+    )
+    return { id: partnershipId, name: (snap.data()?.name as string) || '' }
+  } catch {
+    return { id: partnershipId, name: '' }
+  }
+}
+
 export async function bookAppointment(
   professionalId: string,
   clientId: string,
@@ -57,6 +75,9 @@ export async function bookAppointment(
     const clientData = clientSnap.data()
     const profData = profSnap.data()
     const serviceData = serviceSnap.data()
+    const partnershipInfo = await partnershipSnapshot(
+      clientData?.partnership_id,
+    )
 
     const appInfo = {
       id: newDocRef.id,
@@ -98,6 +119,7 @@ export async function bookAppointment(
       },
       // Desnormalizado para sumários de parceria
       partnership_id: clientData?.partnership_id || null,
+      partnerships: partnershipInfo,
     }
 
     await setDoc(newDocRef, appInfo)
@@ -221,6 +243,9 @@ export async function bookRecurringAppointments(
     const clientData = clientSnap.data()
     const profData = profSnap.data()
     const serviceData = serviceSnap.data()
+    const partnershipInfo = await partnershipSnapshot(
+      clientData?.partnership_id,
+    )
     const duration = serviceData?.duration_minutes || 60
 
     for (const targetDay of daysOfWeek) {
@@ -274,6 +299,7 @@ export async function bookRecurringAppointments(
           },
           // Desnormalizado para sumários de parceria
           partnership_id: clientData?.partnership_id || null,
+          partnerships: partnershipInfo,
         }
         batch.set(newDocRef, appInfo)
         appointmentsCreated++

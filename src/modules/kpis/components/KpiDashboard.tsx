@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { useAuth } from '@/shared/providers/AuthProvider'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -187,12 +189,7 @@ export const KpiDashboard = () => {
   const [services, setServices] = useState<Service[]>([])
   const [partnerships, setPartnerships] = useState<Partnership[]>([])
 
-  // Data State
-  const [kpis, setKpis] = useState<any>(null)
-  const [serviceData, setServiceData] = useState<any[]>([])
-  const [partnershipData, setPartnershipData] = useState<any[]>([])
-  const [annualData, setAnnualData] = useState<any[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const { companyId } = useAuth()
 
   // Fetch filter options
   useEffect(() => {
@@ -209,80 +206,116 @@ export const KpiDashboard = () => {
     fetchOptions()
   }, [])
 
-  useEffect(() => {
-    const fetchKpis = async () => {
-      setIsLoading(true)
+  // TanStack Query: cache de 5 min sob a chave 'summaries' — os mesmos
+  // invalidadores das ações financeiras (useInvalidateFinancial) atualizam aqui
+  const monthKey = formatDate(currentMonth, 'yyyy-MM')
+  const filters = {
+    professionalId: selectedProfessional,
+    serviceId: selectedService,
+    partnershipId: selectedPartnership,
+  }
+  const filterKey = [selectedProfessional, selectedService, selectedPartnership]
+  const STALE = 5 * 60_000
 
-      const filters = {
-        professionalId: selectedProfessional,
-        serviceId: selectedService,
-        partnershipId: selectedPartnership,
-      }
-
-      const monthStart = startOfMonth(currentMonth)
-      const monthEnd = endOfMonth(currentMonth)
-      const [kpiRes, serviceRes, partnershipRes, annualRes] = await Promise.all(
-        [
-          getKpiMetrics(monthStart, monthEnd, filters),
-          getServicePerformance(monthStart, monthEnd, filters),
-          getPartnershipPerformance(monthStart, monthEnd, filters),
-          getAnnualComparative(filters),
-        ],
+  const kpisQuery = useQuery({
+    queryKey: ['summaries', 'kpi-metrics', companyId, monthKey, ...filterKey],
+    queryFn: async () => {
+      const { data, error } = await getKpiMetrics(
+        startOfMonth(currentMonth),
+        endOfMonth(currentMonth),
+        filters,
       )
+      if (error) throw error
+      return data
+    },
+    staleTime: STALE,
+    enabled: !!companyId,
+  })
 
-      setKpis(kpiRes.data)
-      setServiceData(serviceRes.data || [])
-      setPartnershipData(partnershipRes.data || [])
-      setAnnualData(annualRes.data || [])
-      setIsLoading(false)
-    }
-    fetchKpis()
-  }, [currentMonth, selectedProfessional, selectedService, selectedPartnership])
+  const serviceQuery = useQuery({
+    queryKey: ['summaries', 'kpi-services', companyId, monthKey, ...filterKey],
+    queryFn: async () => {
+      const { data, error } = await getServicePerformance(
+        startOfMonth(currentMonth),
+        endOfMonth(currentMonth),
+        filters,
+      )
+      if (error) throw error
+      return data || []
+    },
+    staleTime: STALE,
+    enabled: !!companyId,
+  })
 
-  const revenueComparison =
-    kpis && kpis.prev_total_revenue > 0
-      ? ((kpis.total_revenue - kpis.prev_total_revenue) /
-          kpis.prev_total_revenue) *
-        100
-      : kpis?.total_revenue > 0
-        ? 100
-        : 0
+  const partnershipQuery = useQuery({
+    queryKey: [
+      'summaries',
+      'kpi-partnerships',
+      companyId,
+      monthKey,
+      ...filterKey,
+    ],
+    queryFn: async () => {
+      const { data, error } = await getPartnershipPerformance(
+        startOfMonth(currentMonth),
+        endOfMonth(currentMonth),
+        filters,
+      )
+      if (error) throw error
+      return data || []
+    },
+    staleTime: STALE,
+    enabled: !!companyId,
+  })
 
-  const appointmentsComparison =
-    kpis && kpis.prev_completed_appointments > 0
-      ? ((kpis.completed_appointments - kpis.prev_completed_appointments) /
-          kpis.prev_completed_appointments) *
-        100
-      : kpis?.completed_appointments > 0
-        ? 100
-        : 0
+  const annualQuery = useQuery({
+    queryKey: ['summaries', 'kpi-annual', companyId, ...filterKey],
+    queryFn: async () => {
+      const { data, error } = await getAnnualComparative(filters)
+      if (error) throw error
+      return data || []
+    },
+    staleTime: STALE,
+    enabled: !!companyId,
+  })
 
-  const ticketComparison =
-    kpis && kpis.prev_average_ticket > 0
-      ? ((kpis.average_ticket - kpis.prev_average_ticket) /
-          kpis.prev_average_ticket) *
-        100
-      : kpis?.average_ticket > 0
-        ? 100
-        : 0
+  const kpis = kpisQuery.data ?? null
+  const serviceData = serviceQuery.data ?? []
+  const partnershipData = partnershipQuery.data ?? []
+  const annualData = annualQuery.data ?? []
+  const isLoading =
+    kpisQuery.isLoading ||
+    serviceQuery.isLoading ||
+    partnershipQuery.isLoading ||
+    annualQuery.isLoading
 
-  const productionComparison =
-    kpis && kpis.prev_production_value > 0
-      ? ((kpis.production_value - kpis.prev_production_value) /
-          kpis.prev_production_value) *
-        100
-      : kpis?.production_value > 0
-        ? 100
-        : 0
+  // Variação % contra o mês anterior; sem base de comparação → undefined
+  // (o card esconde a linha em vez de exibir um '+100%' enganoso)
+  const pctChange = (curr?: number, prev?: number): number | undefined =>
+    prev && prev > 0 && curr !== undefined
+      ? ((curr - prev) / prev) * 100
+      : undefined
 
-  const totalAppointmentsComparison =
-    kpis && kpis.prev_total_appointments > 0
-      ? ((kpis.total_appointments - kpis.prev_total_appointments) /
-          kpis.prev_total_appointments) *
-        100
-      : kpis?.total_appointments > 0
-        ? 100
-        : 0
+  const revenueComparison = pctChange(
+    kpis?.total_revenue,
+    kpis?.prev_total_revenue,
+  )
+  const appointmentsComparison = pctChange(
+    kpis?.completed_appointments,
+    kpis?.prev_completed_appointments,
+  )
+  const ticketComparison = pctChange(
+    kpis?.average_ticket,
+    kpis?.prev_average_ticket,
+  )
+  const productionComparison = pctChange(
+    kpis?.production_value,
+    kpis?.prev_production_value,
+  )
+  const totalAppointmentsComparison = pctChange(
+    kpis?.total_appointments,
+    kpis?.prev_total_appointments,
+  )
 
   const tooltipFormatter = (value: any, name: any) => {
     if (
@@ -372,6 +405,12 @@ export const KpiDashboard = () => {
             </Button>
           </div>
         </div>
+        {selectedService !== 'all' && selectedPartnership !== 'all' && (
+          <p className="text-xs text-muted-foreground w-full xl:w-auto">
+            A combinação Serviço + Parceria ainda não é suportada — o filtro de
+            Parceria está sendo ignorado.
+          </p>
+        )}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">

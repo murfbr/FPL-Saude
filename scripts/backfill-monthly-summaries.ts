@@ -147,7 +147,7 @@ async function main() {
 
     // Range histórico: do dado mais antigo (agendamento OU pagamento — meses só
     // com financial_records também ganham summary) até o mês corrente
-    const [oldestAppt, oldestFin] = await Promise.all([
+    const [oldestAppt, oldestFin, newestAppt] = await Promise.all([
       db
         .collection('companies')
         .doc(companyId)
@@ -160,6 +160,13 @@ async function main() {
         .doc(companyId)
         .collection('financial_records')
         .orderBy('payment_date', 'asc')
+        .limit(1)
+        .get(),
+      db
+        .collection('companies')
+        .doc(companyId)
+        .collection('appointments')
+        .orderBy('schedules.start_time', 'desc')
         .limit(1)
         .get(),
     ])
@@ -189,7 +196,12 @@ async function main() {
 
     const subs = await fetchCompanySubscriptions(companyId)
 
-    const lastKey = currentMonthKey(new Date())
+    // Vai até o mês do agendamento mais FUTURO (recorrências marcadas para
+    // frente têm summary de contadores) — nunca antes do mês corrente
+    const newestTime = newestAppt.docs[0]?.data().schedules?.start_time
+    const newestKey = newestTime ? monthKeyOf(newestTime) : null
+    const nowKey = currentMonthKey(new Date())
+    const lastKey = newestKey && newestKey > nowKey ? newestKey : nowKey
     let cursor = candidates.sort()[0]
     const months: string[] = []
     while (cursor <= lastKey) {

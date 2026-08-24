@@ -144,7 +144,9 @@ export function appointmentDelta(
       }
 
       if (partnId) {
-        applyTo(acc(partAcc, partnId), 'sessionCount')
+        const a = acc(partAcc, partnId)
+        if (multiplier > 0) a.name = appt.partnerships?.name || a.name
+        applyTo(a, 'sessionCount')
       }
     }
 

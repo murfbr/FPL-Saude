@@ -75,7 +75,7 @@ function appointmentDelta(before, after) {
             return map[id];
         };
         const applyStats = (docData, status, multiplier) => {
-            var _a, _b;
+            var _a, _b, _c;
             const appt = docData;
             const pId = appt.professional_id;
             const sId = appt.service_id;
@@ -121,7 +121,10 @@ function appointmentDelta(before, after) {
                 applyTo(a, 'count');
             }
             if (partnId) {
-                applyTo(acc(partAcc, partnId), 'sessionCount');
+                const a = acc(partAcc, partnId);
+                if (multiplier > 0)
+                    a.name = ((_c = appt.partnerships) === null || _c === void 0 ? void 0 : _c.name) || a.name;
+                applyTo(a, 'sessionCount');
             }
         };
         if (wasTracked && before)

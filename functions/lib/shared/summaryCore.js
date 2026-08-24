@@ -156,7 +156,7 @@ function emptyStats() {
     };
 }
 function buildMonthlySummary(input) {
-    var _a, _b;
+    var _a, _b, _c;
     const { monthKey, appointments, financialRecords, subscriptionKeys, partnershipNames, } = input;
     // 1. financial_records — caixa real
     let totalRevenue = 0;
@@ -203,7 +203,7 @@ function buildMonthlySummary(input) {
             byService[svcId] = Object.assign(Object.assign({}, emptyStats()), { name: ((_b = a.services) === null || _b === void 0 ? void 0 : _b.name) || 'Serviço Removido', count: 0 });
         }
         if (partId && !byPartnership[partId]) {
-            byPartnership[partId] = Object.assign(Object.assign({}, emptyStats()), { name: (partnershipNames === null || partnershipNames === void 0 ? void 0 : partnershipNames[partId]) || '', clientCount: 0, sessionCount: 0 });
+            byPartnership[partId] = Object.assign(Object.assign({}, emptyStats()), { name: (partnershipNames === null || partnershipNames === void 0 ? void 0 : partnershipNames[partId]) || ((_c = a.partnerships) === null || _c === void 0 ? void 0 : _c.name) || '', clientCount: 0, sessionCount: 0 });
             partnershipClients[partId] = new Set();
         }
         const crossSvc = profId && svcId ? `${profId}_${svcId}` : null;
