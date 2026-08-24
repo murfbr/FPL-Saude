@@ -49,6 +49,14 @@ export interface FinancialRecordLike {
   client_subscription_id?: string | null
 }
 
+export interface ExpenseLike {
+  amount?: number
+  status?: string
+  payment_date?: string | null
+  category_id?: string | null
+  category_name?: string | null
+}
+
 export interface SubscriptionLike {
   client_id?: string
   service_id?: string
@@ -214,6 +222,8 @@ export interface MonthlySummaryDoc {
   month: string
   total_revenue: number
   total_production_value: number
+  total_expenses: number
+  expenses_by_category: Record<string, { name: string; total: number }>
   completed_appointments: number
   cancelled_appointments: number
   no_show_appointments: number
@@ -245,6 +255,7 @@ export function buildMonthlySummary(input: {
   financialRecords: FinancialRecordLike[]
   subscriptionKeys: Set<string>
   partnershipNames?: Record<string, string>
+  expenses?: ExpenseLike[]
 }): MonthlySummaryDoc {
   const {
     monthKey,
@@ -252,7 +263,25 @@ export function buildMonthlySummary(input: {
     financialRecords,
     subscriptionKeys,
     partnershipNames,
+    expenses,
   } = input
+
+  // Saídas — regime de caixa: só despesa PAGA, no mês do pagamento
+  let totalExpenses = 0
+  const expensesByCategory: Record<string, { name: string; total: number }> = {}
+  for (const e of expenses || []) {
+    if (e.status !== 'paid') continue
+    const eAmount = e.amount || 0
+    totalExpenses += eAmount
+    const catId = e.category_id || 'sem-categoria'
+    if (!expensesByCategory[catId]) {
+      expensesByCategory[catId] = {
+        name: e.category_name || 'Sem categoria',
+        total: 0,
+      }
+    }
+    expensesByCategory[catId].total += eAmount
+  }
 
   // 1. financial_records — caixa real
   let totalRevenue = 0
@@ -390,6 +419,8 @@ export function buildMonthlySummary(input: {
     month: monthKey,
     total_revenue: totalRevenue,
     total_production_value: totalProduction,
+    total_expenses: totalExpenses,
+    expenses_by_category: expensesByCategory,
     completed_appointments: completed,
     cancelled_appointments: cancelled,
     no_show_appointments: noShow,

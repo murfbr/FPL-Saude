@@ -33,10 +33,12 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onClientPackageWrite = exports.onClientSubscriptionWrite = exports.setStaffActive = exports.createStaffUser = exports.onUserWrite = exports.dailyReconciliation = exports.onFinancialRecordWrite = exports.setAppointmentStatus = exports.onAppointmentWrite = void 0;
+exports.onClientPackageWrite = exports.onClientSubscriptionWrite = exports.setStaffActive = exports.createStaffUser = exports.onUserWrite = exports.dailyReconciliation = exports.monthlyRecurringExpenses = exports.onExpenseWrite = exports.onFinancialRecordWrite = exports.setAppointmentStatus = exports.onAppointmentWrite = void 0;
 const appointmentFunctions = __importStar(require("./appointments/onAppointmentWrite"));
 const appointmentStatusFunctions = __importStar(require("./appointments/setAppointmentStatus"));
 const financialFunctions = __importStar(require("./financial/onFinancialRecordWrite"));
+const expenseFunctions = __importStar(require("./financial/onExpenseWrite"));
+const recurringExpenseFunctions = __importStar(require("./financial/monthlyRecurringExpenses"));
 const cronFunctions = __importStar(require("./cron/dailyReconciliation"));
 const authFunctions = __importStar(require("./auth/onUserWrite"));
 const staffFunctions = __importStar(require("./auth/staffLifecycle"));
@@ -44,6 +46,8 @@ const entitlementFunctions = __importStar(require("./entitlements/onEntitlementW
 exports.onAppointmentWrite = appointmentFunctions.onAppointmentWrite;
 exports.setAppointmentStatus = appointmentStatusFunctions.setAppointmentStatus;
 exports.onFinancialRecordWrite = financialFunctions.onFinancialRecordWrite;
+exports.onExpenseWrite = expenseFunctions.onExpenseWrite;
+exports.monthlyRecurringExpenses = recurringExpenseFunctions.monthlyRecurringExpenses;
 exports.dailyReconciliation = cronFunctions.dailyReconciliation;
 exports.onUserWrite = authFunctions.onUserWrite;
 exports.createStaffUser = staffFunctions.createStaffUser, exports.setStaffActive = staffFunctions.setStaffActive;

@@ -63,6 +63,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PackageFinancials } from './PackageFinancials'
 import { ReceiptsTab } from './ReceiptsTab'
+import { ExpensesTab } from './ExpensesTab'
+import { CashFlowTab } from './CashFlowTab'
 import {
   useMonthlySummary,
   useActiveSubscriptions,
@@ -313,12 +315,22 @@ export const FinancialManagement = () => {
         </Card>
       </div>
 
-      <Tabs defaultValue="subscriptions" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 mb-4">
-          <TabsTrigger value="subscriptions">Assinaturas Mensais</TabsTrigger>
-          <TabsTrigger value="packages">Gestão de Pacotes</TabsTrigger>
-          <TabsTrigger value="receipts">Emissão de Recibos</TabsTrigger>
+      <Tabs defaultValue="cashflow" className="w-full">
+        <TabsList className="grid w-full grid-cols-5 mb-4">
+          <TabsTrigger value="cashflow">Fluxo de Caixa</TabsTrigger>
+          <TabsTrigger value="subscriptions">Assinaturas</TabsTrigger>
+          <TabsTrigger value="packages">Pacotes</TabsTrigger>
+          <TabsTrigger value="expenses">Despesas</TabsTrigger>
+          <TabsTrigger value="receipts">Recibos</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="cashflow">
+          <CashFlowTab month={currentDate} />
+        </TabsContent>
+
+        <TabsContent value="expenses">
+          <ExpensesTab month={currentDate} />
+        </TabsContent>
 
         <TabsContent value="subscriptions">
           <Card>

@@ -157,7 +157,24 @@ function emptyStats() {
 }
 function buildMonthlySummary(input) {
     var _a, _b, _c;
-    const { monthKey, appointments, financialRecords, subscriptionKeys, partnershipNames, } = input;
+    const { monthKey, appointments, financialRecords, subscriptionKeys, partnershipNames, expenses, } = input;
+    // Saídas — regime de caixa: só despesa PAGA, no mês do pagamento
+    let totalExpenses = 0;
+    const expensesByCategory = {};
+    for (const e of expenses || []) {
+        if (e.status !== 'paid')
+            continue;
+        const eAmount = e.amount || 0;
+        totalExpenses += eAmount;
+        const catId = e.category_id || 'sem-categoria';
+        if (!expensesByCategory[catId]) {
+            expensesByCategory[catId] = {
+                name: e.category_name || 'Sem categoria',
+                total: 0,
+            };
+        }
+        expensesByCategory[catId].total += eAmount;
+    }
     // 1. financial_records — caixa real
     let totalRevenue = 0;
     let subscriptionsRevenue = 0;
@@ -278,6 +295,8 @@ function buildMonthlySummary(input) {
         month: monthKey,
         total_revenue: totalRevenue,
         total_production_value: totalProduction,
+        total_expenses: totalExpenses,
+        expenses_by_category: expensesByCategory,
         completed_appointments: completed,
         cancelled_appointments: cancelled,
         no_show_appointments: noShow,

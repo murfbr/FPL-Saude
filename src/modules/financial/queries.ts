@@ -8,6 +8,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   getActiveSubscriptions,
   getSubscriptionPayments,
+  getExpensesForMonth,
+  getExpenseCategories,
+  getSuppliers,
 } from '@/modules/financial/service'
 import { getMonthlySummary } from '@/modules/summaries/service'
 import { useAuth } from '@/shared/providers/AuthProvider'
@@ -39,7 +42,10 @@ export const useMonthlySummary = (month: Date) => {
  * Hook para assinaturas ativas.
  * Cache de 5 minutos — lista de subscriptions raramente muda intra-sessão.
  */
-export const useActiveSubscriptions = (options?: { limit?: number; targetDate?: Date }) => {
+export const useActiveSubscriptions = (options?: {
+  limit?: number
+  targetDate?: Date
+}) => {
   const { companyId } = useAuth()
 
   return useQuery({
@@ -49,7 +55,7 @@ export const useActiveSubscriptions = (options?: { limit?: number; targetDate?: 
       companyId,
       options?.limit,
       options?.targetDate?.getFullYear(),
-      options?.targetDate?.getMonth()
+      options?.targetDate?.getMonth(),
     ],
     queryFn: async () => {
       const { data, error } = await getActiveSubscriptions(options)
@@ -104,4 +110,55 @@ export const useInvalidateFinancial = () => {
     queryClient.invalidateQueries({ queryKey: [FINANCIAL_KEY] })
     queryClient.invalidateQueries({ queryKey: [SUMMARIES_KEY] })
   }
+}
+
+/**
+ * Hooks de despesas — chaves sob 'financial': as mutações (criar, pagar,
+ * estornar, excluir) atualizam tudo com o mesmo useInvalidateFinancial.
+ */
+export const useExpenses = (month: Date) => {
+  const { companyId } = useAuth()
+  return useQuery({
+    queryKey: [
+      FINANCIAL_KEY,
+      'expenses',
+      companyId,
+      month.getFullYear(),
+      month.getMonth(),
+    ],
+    queryFn: async () => {
+      const { data, error } = await getExpensesForMonth(month)
+      if (error) throw error
+      return data || []
+    },
+    staleTime: 5 * 60_000,
+    enabled: !!companyId,
+  })
+}
+
+export const useExpenseCategories = () => {
+  const { companyId } = useAuth()
+  return useQuery({
+    queryKey: [FINANCIAL_KEY, 'expense-categories', companyId],
+    queryFn: async () => {
+      const { data, error } = await getExpenseCategories()
+      if (error) throw error
+      return data || []
+    },
+    staleTime: 30 * 60_000,
+    enabled: !!companyId,
+  })
+}
+
+export const useSuppliers = () => {
+  const { companyId } = useAuth()
+  return useQuery({
+    queryKey: [FINANCIAL_KEY, 'suppliers', companyId],
+    queryFn: async () => {
+      const { data } = await getSuppliers()
+      return data || []
+    },
+    staleTime: 30 * 60_000,
+    enabled: !!companyId,
+  })
 }

@@ -26,3 +26,14 @@ export function spDayEndUtc(day: string): string {
   )
   return `${next.toISOString().slice(0, 10)}T02:59:59.999Z`
 }
+
+/** Janela UTC [startIso, endIso] do mês-calendário 'YYYY-MM' de São Paulo. */
+export function monthRangeUtc(monthKey: string): {
+  startIso: string
+  endIso: string
+} {
+  const [y, m] = monthKey.split('-').map(Number)
+  const start = new Date(Date.UTC(y, m - 1, 1) + SP_UTC_OFFSET_MS)
+  const end = new Date(Date.UTC(y, m, 1) + SP_UTC_OFFSET_MS - 1)
+  return { startIso: start.toISOString(), endIso: end.toISOString() }
+}

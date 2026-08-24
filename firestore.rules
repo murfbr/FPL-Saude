@@ -172,6 +172,19 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Despesas, categorias e fornecedores — financeiro de saídas.
+      // Admin-only até a permissão granular em 3 níveis (Fase 4 do módulo);
+      // match explícito para nunca caírem no fallback permissivo genérico
+      match /expenses/{expenseId} {
+        allow read, write: if request.auth != null && isAdmin(companyId);
+      }
+      match /expense_categories/{categoryId} {
+        allow read, write: if request.auth != null && isAdmin(companyId);
+      }
+      match /suppliers/{supplierId} {
+        allow read, write: if request.auth != null && isAdmin(companyId);
+      }
+
       // Trilha de auditoria financeira — append-only: cria, nunca edita/apaga
       match /financial_audit/{auditId} {
         allow read: if request.auth != null && isAdmin(companyId);
@@ -260,6 +273,8 @@ service cloud.firestore {
         // Leitura — RBAC com fallback permissivo para empresas sem config
         allow read: if module != 'users' && module != 'monthly_summaries' && module != 'financial_audit'
           && module != 'financial_records'
+          && module != 'expenses' && module != 'expense_categories' && module != 'suppliers'
+          && module != 'subscriptions_index' && module != 'client_packages_index'
           && request.auth != null && (
           isAdmin(companyId)
           || (isUserInCompany(companyId) && canViewModule(companyId, module))
@@ -275,6 +290,8 @@ service cloud.firestore {
         // fallback para empresas sem config (DEFAULT_ROLES: professional pode editar)
         allow write: if module != 'users' && module != 'monthly_summaries' && module != 'financial_audit'
           && module != 'financial_records'
+          && module != 'expenses' && module != 'expense_categories' && module != 'suppliers'
+          && module != 'subscriptions_index' && module != 'client_packages_index'
           && request.auth != null
           && (
             isSuperAdmin()

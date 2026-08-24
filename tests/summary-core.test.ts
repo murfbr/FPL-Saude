@@ -13,6 +13,7 @@ import {
 } from '../functions/src/shared/summaryCore'
 import {
   dayKeyOf as clientDayKeyOf,
+  monthRangeUtc as clientMonthRangeUtc,
   SP_UTC_OFFSET_MS as clientOffset,
 } from '../src/shared/lib/spTime'
 import { SP_UTC_OFFSET_MS as serverOffset } from '../functions/src/shared/summaryCore'
@@ -62,6 +63,7 @@ describe('bucketing de datas em America/Sao_Paulo', () => {
     for (const iso of samples) {
       expect(clientDayKeyOf(iso)).toBe(dayKeyOf(iso))
     }
+    expect(clientMonthRangeUtc('2026-08')).toEqual(monthRangeUtc('2026-08'))
   })
 })
 
@@ -212,5 +214,48 @@ describe('buildMonthlySummary — semântica caixa × produção', () => {
     expect(summary.subscriptions_paid_count).toBe(1)
     // Pagamento de pacote/assinatura não é caixa avulso de ninguém
     expect(summary.by_professional['admin1']).toBeUndefined()
+  })
+})
+
+describe('buildMonthlySummary — despesas (regime de caixa)', () => {
+  test('só despesa paga entra em total_expenses, agrupada por categoria', () => {
+    const summary = buildMonthlySummary({
+      monthKey: '2026-08',
+      appointments: [],
+      financialRecords: [],
+      subscriptionKeys: new Set(),
+      expenses: [
+        { status: 'paid', amount: 1200, category_id: 'aluguel', category_name: 'Aluguel', payment_date: '2026-08-05T14:00:00.000Z' },
+        { status: 'paid', amount: 300, category_id: 'aluguel', category_name: 'Aluguel', payment_date: '2026-08-20T14:00:00.000Z' },
+        { status: 'paid', amount: 450, category_id: 'materiais', category_name: 'Materiais e Insumos', payment_date: '2026-08-10T14:00:00.000Z' },
+        { status: 'pending', amount: 999, category_id: 'impostos', category_name: 'Impostos', payment_date: null },
+      ],
+    })
+    expect(summary.total_expenses).toBe(1950)
+    expect(summary.expenses_by_category['aluguel']).toEqual({ name: 'Aluguel', total: 1500 })
+    expect(summary.expenses_by_category['materiais'].total).toBe(450)
+    expect(summary.expenses_by_category['impostos']).toBeUndefined()
+  })
+
+  test('sem despesas, campos de saída existem zerados', () => {
+    const summary = buildMonthlySummary({
+      monthKey: '2026-08',
+      appointments: [],
+      financialRecords: [],
+      subscriptionKeys: new Set(),
+    })
+    expect(summary.total_expenses).toBe(0)
+    expect(summary.expenses_by_category).toEqual({})
+  })
+
+  test('despesa sem categoria cai em sem-categoria', () => {
+    const summary = buildMonthlySummary({
+      monthKey: '2026-08',
+      appointments: [],
+      financialRecords: [],
+      subscriptionKeys: new Set(),
+      expenses: [{ status: 'paid', amount: 100, payment_date: '2026-08-10T14:00:00.000Z' }],
+    })
+    expect(summary.expenses_by_category['sem-categoria'].total).toBe(100)
   })
 })

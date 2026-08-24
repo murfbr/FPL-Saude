@@ -162,6 +162,37 @@ export interface ClientSubscription {
   last_payment_date?: string | null // UI helper field
 }
 
+export type ExpenseStatus = 'pending' | 'paid'
+
+export interface ExpenseCategory {
+  id: string
+  name: string
+  is_active: boolean
+  created_at: string
+}
+
+export interface Expense {
+  id: string
+  description: string
+  amount: number
+  category_id: string | null
+  /** Snapshot para agregação sem lookup (summaryCore/expenses_by_category) */
+  category_name: string | null
+  supplier_name: string | null
+  status: ExpenseStatus
+  /** Data de CALENDÁRIO 'YYYY-MM-DD' — imune a fuso (lição do Passo 2) */
+  due_date: string
+  /** Instante ISO do pagamento; null enquanto pendente */
+  payment_date: string | null
+  payment_method: string | null
+  is_recurring: boolean
+  /** Raiz da série recorrente (id da despesa original) */
+  recurrence_source_id?: string | null
+  notes?: string | null
+  created_at: string
+  created_by?: string | null
+}
+
 export interface FinancialRecord {
   id: string
   client_id: string

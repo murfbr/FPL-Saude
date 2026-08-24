@@ -32,6 +32,8 @@ export interface MonthlySummary {
   // KPIs gerais
   total_revenue: number
   total_production_value?: number
+  total_expenses?: number
+  expenses_by_category?: Record<string, { name: string; total: number }>
   completed_appointments: number
   cancelled_appointments: number
   no_show_appointments: number
@@ -68,6 +70,8 @@ function emptyMonthSummary(month: string): MonthlySummary {
     month,
     total_revenue: 0,
     total_production_value: 0,
+    total_expenses: 0,
+    expenses_by_category: {},
     completed_appointments: 0,
     cancelled_appointments: 0,
     no_show_appointments: 0,

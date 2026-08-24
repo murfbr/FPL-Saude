@@ -70,7 +70,7 @@ async function fetchAllSubscriptionsByCompany() {
  */
 async function fullRecalculation(companyId, monthKey, companySubscriptions) {
     const { startIso, endIso } = (0, summaryCore_1.monthRangeUtc)(monthKey);
-    const [apptsSnap, finSnap, partnershipsSnap] = await Promise.all([
+    const [apptsSnap, finSnap, expensesSnap, partnershipsSnap] = await Promise.all([
         config_1.db
             .collection('companies')
             .doc(companyId)
@@ -85,7 +85,18 @@ async function fullRecalculation(companyId, monthKey, companySubscriptions) {
             .where('payment_date', '>=', startIso)
             .where('payment_date', '<=', endIso)
             .get(),
-        config_1.db.collection('companies').doc(companyId).collection('partnerships').get(),
+        config_1.db
+            .collection('companies')
+            .doc(companyId)
+            .collection('expenses')
+            .where('payment_date', '>=', startIso)
+            .where('payment_date', '<=', endIso)
+            .get(),
+        config_1.db
+            .collection('companies')
+            .doc(companyId)
+            .collection('partnerships')
+            .get(),
     ]);
     const partnershipNames = {};
     partnershipsSnap.forEach((d) => {
@@ -97,6 +108,7 @@ async function fullRecalculation(companyId, monthKey, companySubscriptions) {
         financialRecords: finSnap.docs.map((d) => d.data()),
         subscriptionKeys: (0, summaryCore_1.subscriptionKeysForMonth)(companySubscriptions, monthKey),
         partnershipNames,
+        expenses: expensesSnap.docs.map((d) => d.data()),
     });
     await (0, helpers_1.summaryRef)(companyId, monthKey).set(Object.assign(Object.assign({}, summary), { updated_at: admin.firestore.FieldValue.serverTimestamp(), last_full_recalc: admin.firestore.FieldValue.serverTimestamp() }));
     console.log(`[reconciliation] ${companyId}/${monthKey}: ${summary.total_appointments} appts, ` +

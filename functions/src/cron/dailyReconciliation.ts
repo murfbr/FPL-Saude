@@ -49,23 +49,35 @@ export async function fullRecalculation(
 ): Promise<void> {
   const { startIso, endIso } = monthRangeUtc(monthKey)
 
-  const [apptsSnap, finSnap, partnershipsSnap] = await Promise.all([
-    db
-      .collection('companies')
-      .doc(companyId)
-      .collection('appointments')
-      .where('schedules.start_time', '>=', startIso)
-      .where('schedules.start_time', '<=', endIso)
-      .get(),
-    db
-      .collection('companies')
-      .doc(companyId)
-      .collection('financial_records')
-      .where('payment_date', '>=', startIso)
-      .where('payment_date', '<=', endIso)
-      .get(),
-    db.collection('companies').doc(companyId).collection('partnerships').get(),
-  ])
+  const [apptsSnap, finSnap, expensesSnap, partnershipsSnap] =
+    await Promise.all([
+      db
+        .collection('companies')
+        .doc(companyId)
+        .collection('appointments')
+        .where('schedules.start_time', '>=', startIso)
+        .where('schedules.start_time', '<=', endIso)
+        .get(),
+      db
+        .collection('companies')
+        .doc(companyId)
+        .collection('financial_records')
+        .where('payment_date', '>=', startIso)
+        .where('payment_date', '<=', endIso)
+        .get(),
+      db
+        .collection('companies')
+        .doc(companyId)
+        .collection('expenses')
+        .where('payment_date', '>=', startIso)
+        .where('payment_date', '<=', endIso)
+        .get(),
+      db
+        .collection('companies')
+        .doc(companyId)
+        .collection('partnerships')
+        .get(),
+    ])
 
   const partnershipNames: Record<string, string> = {}
   partnershipsSnap.forEach((d) => {
@@ -78,6 +90,7 @@ export async function fullRecalculation(
     financialRecords: finSnap.docs.map((d) => d.data()),
     subscriptionKeys: subscriptionKeysForMonth(companySubscriptions, monthKey),
     partnershipNames,
+    expenses: expensesSnap.docs.map((d) => d.data()),
   })
 
   await summaryRef(companyId, monthKey).set({

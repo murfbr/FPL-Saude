@@ -89,7 +89,7 @@ async function recalculateMonth(
 ) {
   const { startIso, endIso } = monthRangeUtc(monthKey)
 
-  const [apptsSnap, finSnap] = await Promise.all([
+  const [apptsSnap, finSnap, expensesSnap] = await Promise.all([
     db
       .collection('companies')
       .doc(companyId)
@@ -104,6 +104,13 @@ async function recalculateMonth(
       .where('payment_date', '>=', startIso)
       .where('payment_date', '<=', endIso)
       .get(),
+    db
+      .collection('companies')
+      .doc(companyId)
+      .collection('expenses')
+      .where('payment_date', '>=', startIso)
+      .where('payment_date', '<=', endIso)
+      .get(),
   ])
 
   const summary = buildMonthlySummary({
@@ -112,6 +119,7 @@ async function recalculateMonth(
     financialRecords: finSnap.docs.map((d) => d.data()),
     subscriptionKeys: subscriptionKeysForMonth(subs, monthKey),
     partnershipNames,
+    expenses: expensesSnap.docs.map((d) => d.data()),
   })
 
   if (WRITE) {
