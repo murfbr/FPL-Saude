@@ -20,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AvailabilitySettings } from '@/modules/availability/components/AvailabilitySettings'
 import { AvailabilityOverridesManager } from '@/modules/availability/components/AvailabilityOverridesManager'
 import { Badge } from '@/components/ui/badge'
+import { getRoleLabel } from '@/shared/lib/roles'
 
 const ProfessionalDetail = () => {
   const { id } = useParams<{ id: string }>()
@@ -98,17 +99,24 @@ const ProfessionalDetail = () => {
                   <CardTitle className="text-2xl">
                     {professional.name}
                   </CardTitle>
-                  {!professional.is_active && (
-                    <Badge variant="destructive">Inativo</Badge>
-                  )}
-                  {professional.is_active && (
-                    <Badge
-                      variant="secondary"
-                      className="bg-green-100 text-green-800 hover:bg-green-200"
-                    >
-                      Ativo
-                    </Badge>
-                  )}
+                  <div className="flex items-center justify-center gap-2 flex-wrap">
+                    {!professional.is_active && (
+                      <Badge variant="destructive">Inativo</Badge>
+                    )}
+                    {professional.is_active && (
+                      <Badge
+                        variant="secondary"
+                        className="bg-green-100 text-green-800 hover:bg-green-200"
+                      >
+                        Ativo
+                      </Badge>
+                    )}
+                    {professional.access_role && (
+                      <Badge variant="outline">
+                        {getRoleLabel(professional.access_role)}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
                 <CardDescription>{professional.specialty}</CardDescription>
               </CardHeader>

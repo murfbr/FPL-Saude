@@ -32,7 +32,9 @@ function daysInMonth(ref: Date): number {
  * desconto de parceria sem consolidar o amount.
  */
 export function subscriptionBaseAmount(sub: ClientSubscription): number {
-  if (typeof sub.amount === 'number' && sub.amount > 0) return sub.amount
+  // amount explícito vale — inclusive 0 (gratuidade negociada); ausente/negativo
+  // cai para preço de tabela − desconto
+  if (typeof sub.amount === 'number' && sub.amount >= 0) return sub.amount
   const listPrice = sub.subscription_plans?.price || sub.services?.price || 0
   const discount = sub.discount_amount || 0
   return Math.max(0, listPrice - discount)

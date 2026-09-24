@@ -21,8 +21,17 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useToast } from '@/shared/hooks/use-toast'
 import { createProfessionalUser } from '@/shared/services'
+import { useTenant } from '@/shared/contexts/TenantContext'
+import { getRoleLabel, listAssignableRoles } from '@/shared/lib/roles'
 import { Loader2 } from 'lucide-react'
 import { getFriendlyErrorMessage } from '@/shared/lib/error-mapping'
 
@@ -30,6 +39,7 @@ const professionalSchema = z.object({
   name: z.string().min(3, 'O nome deve ter pelo menos 3 caracteres.'),
   email: z.string().email('Por favor, insira um email válido.'),
   password: z.string().min(6, 'A senha deve ter pelo menos 6 caracteres.').optional().or(z.literal('')),
+  role: z.string().min(1, 'Selecione o nível de acesso.'),
   specialty: z.string().optional(),
   bio: z.string().optional(),
   avatar_url: z
@@ -53,7 +63,10 @@ export const ProfessionalFormDialog = ({
   onProfessionalCreated,
 }: ProfessionalFormDialogProps) => {
   const { toast } = useToast()
+  const { config } = useTenant()
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const assignableRoles = listAssignableRoles(config?.roles)
 
   const form = useForm<ProfessionalFormValues>({
     resolver: zodResolver(professionalSchema),
@@ -61,6 +74,7 @@ export const ProfessionalFormDialog = ({
       name: '',
       email: '',
       password: '',
+      role: 'professional',
       specialty: '',
       bio: '',
       avatar_url: '',
@@ -157,19 +171,45 @@ export const ProfessionalFormDialog = ({
                 )}
               />
             </div>
-            <FormField
-              control={form.control}
-              name="specialty"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Especialidade</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Ex: Fisioterapeuta" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="role"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nível de Acesso</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o nível" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {assignableRoles.map((r) => (
+                          <SelectItem key={r} value={r}>
+                            {getRoleLabel(r)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="specialty"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Especialidade</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ex: Fisioterapeuta" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
             <FormField
               control={form.control}
               name="bio"

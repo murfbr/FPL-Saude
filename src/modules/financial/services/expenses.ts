@@ -2,6 +2,7 @@ import { db } from '@/shared/lib/firebase'
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   setDoc,
   updateDoc,
@@ -9,9 +10,14 @@ import {
   query,
   where,
   writeBatch,
+  arrayUnion,
+  arrayRemove,
 } from 'firebase/firestore'
+import { ref, deleteObject, getDownloadURL } from 'firebase/storage'
+import { storage } from '@/shared/lib/firebase'
+import { uploadFile } from '@/shared/lib/storage'
 import { format } from 'date-fns'
-import { Expense, ExpenseCategory } from '@/shared/types'
+import { Expense, ExpenseAttachment, ExpenseCategory } from '@/shared/types'
 import { getCompanyId } from '@/shared/lib/tenantStore'
 import { monthRangeUtc } from '@/shared/lib/spTime'
 
@@ -276,7 +282,105 @@ export async function deleteExpense(
   expenseId: string,
 ): Promise<{ error: any }> {
   try {
-    await deleteDoc(doc(db, 'companies', getCompanyId(), 'expenses', expenseId))
+    const expenseRef = doc(
+      db,
+      'companies',
+      getCompanyId(),
+      'expenses',
+      expenseId,
+    )
+
+    // Remove os anexos do Storage antes do doc (best-effort: anexo órfão não
+    // pode impedir a exclusão da despesa)
+    const snap = await getDoc(expenseRef)
+    const attachments = (snap.data()?.attachments || []) as ExpenseAttachment[]
+    await Promise.all(
+      attachments.map((a) =>
+        deleteObject(ref(storage, a.path)).catch(() => undefined),
+      ),
+    )
+
+    await deleteDoc(expenseRef)
+    return { error: null }
+  } catch (error) {
+    return { error }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Anexos (comprovantes, boletos, notas)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024 // 10 MB
+const ALLOWED_ATTACHMENT_TYPES = [
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+]
+
+export async function uploadExpenseAttachment(
+  expenseId: string,
+  file: File,
+): Promise<{ data: ExpenseAttachment | null; error: any }> {
+  try {
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      return {
+        data: null,
+        error: new Error('Arquivo acima de 10 MB. Reduza e tente de novo.'),
+      }
+    }
+    if (!ALLOWED_ATTACHMENT_TYPES.includes(file.type)) {
+      return {
+        data: null,
+        error: new Error('Formato não suportado. Use PDF ou imagem (JPG/PNG).'),
+      }
+    }
+
+    const companyId = getCompanyId()
+    const safeName = file.name.replace(/[^w.-]+/g, '_').slice(0, 80)
+    const path = `companies/${companyId}/financial/expenses/${expenseId}/${Date.now()}_${safeName}`
+
+    const bucket =
+      import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ||
+      'fpl-saude.firebasestorage.app'
+    const { data: uploadSnap, error: uploadError } = await uploadFile(
+      bucket,
+      path,
+      file,
+    )
+    if (uploadError || !uploadSnap) throw uploadError
+
+    const url = await getDownloadURL(uploadSnap.ref)
+    const attachment: ExpenseAttachment = {
+      name: file.name,
+      path,
+      url,
+      uploaded_at: new Date().toISOString(),
+    }
+
+    await updateDoc(doc(db, 'companies', companyId, 'expenses', expenseId), {
+      attachments: arrayUnion(attachment),
+    })
+    return { data: attachment, error: null }
+  } catch (error) {
+    console.error('[uploadExpenseAttachment]', error)
+    return { data: null, error }
+  }
+}
+
+export async function removeExpenseAttachment(
+  expenseId: string,
+  attachment: ExpenseAttachment,
+): Promise<{ error: any }> {
+  try {
+    // Primeiro tira do doc (a referência some da tela mesmo se o Storage falhar)
+    await updateDoc(
+      doc(db, 'companies', getCompanyId(), 'expenses', expenseId),
+      { attachments: arrayRemove(attachment) },
+    )
+    await deleteObject(ref(storage, attachment.path)).catch(() => undefined)
     return { error: null }
   } catch (error) {
     return { error }

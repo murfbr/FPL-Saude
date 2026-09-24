@@ -30,6 +30,13 @@ describe('dateOnly', () => {
 })
 
 describe('subscriptionBaseAmount — cascata com desconto', () => {
+  test('gratuidade explícita: amount 0 cobra R$ 0, nunca o preço de tabela', () => {
+    // Bug de 100% de desconto: amount 0 era tratado como "sem valor negociado"
+    // e a cobrança caía no preço cheio quando faltava o discount_amount
+    const sub = makeSub({ amount: 0, services: { price: 300 } as any })
+    expect(subscriptionBaseAmount(sub)).toBe(0)
+  })
+
   test('amount negociado prevalece', () => {
     const sub = makeSub({ amount: 250, services: { price: 300 } as any, discount_amount: 50 })
     expect(subscriptionBaseAmount(sub)).toBe(250)

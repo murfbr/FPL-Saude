@@ -289,11 +289,23 @@ export async function getUsersByCompany(
 }
 
 export async function updateUserRole(
+  companyId: string,
   uid: string,
   role: string,
 ): Promise<{ error: any }> {
   try {
     await updateDoc(doc(db, 'users', uid), { role })
+    // Mantém o espelho access_role do cadastro de profissional em sincronia
+    // com a fonte da verdade (id do cadastro == uid nos fluxos atuais)
+    try {
+      const profRef = doc(db, 'companies', companyId, 'professionals', uid)
+      const profSnap = await getDoc(profRef)
+      if (profSnap.exists()) {
+        await updateDoc(profRef, { access_role: role })
+      }
+    } catch (mirrorError) {
+      console.error('updateUserRole: falha ao sincronizar access_role', mirrorError)
+    }
     return { error: null }
   } catch (error) {
     return { error }

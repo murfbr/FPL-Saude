@@ -12,6 +12,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { LogOut, Briefcase, LayoutDashboard, Bell, ShieldHalf } from 'lucide-react'
 import { NotificationBell } from './NotificationBell'
+import { isStaffRole } from '@/shared/lib/roles'
 
 export const UserNav = () => {
   const { user, signOut, role, professionalId } = useAuth()
@@ -53,8 +54,8 @@ export const UserNav = () => {
 
   return (
     <div className="flex items-center gap-2">
-      {/* Show Notifications for both Professionals and Admins */}
-      {(role === 'professional' || role === 'admin') && <NotificationBell />}
+      {/* Show Notifications for all staff roles */}
+      {isStaffRole(role) && <NotificationBell />}
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -91,13 +92,13 @@ export const UserNav = () => {
               <span>Painel Super Admin</span>
             </DropdownMenuItem>
           )}
-          {(role === 'admin' || role === 'professional') && (
+          {isStaffRole(role) && (
             <DropdownMenuItem onClick={() => navigate('/profissional')}>
               <Briefcase className="mr-2 h-4 w-4" />
               <span>{role === 'admin' && !professionalId ? 'Agenda Geral' : 'Área do Profissional'}</span>
             </DropdownMenuItem>
           )}
-          {(role === 'professional' || role === 'admin') && (
+          {isStaffRole(role) && (
             <DropdownMenuItem
               onClick={() => navigate('/profissional/notifications')}
             >

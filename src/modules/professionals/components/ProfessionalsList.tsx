@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { getRoleLabel } from '@/shared/lib/roles'
 
 interface ProfessionalsListProps {
   professionals: Professional[]
@@ -74,6 +75,11 @@ export const ProfessionalsList = ({
                 <p className="text-sm text-muted-foreground">
                   {prof.specialty}
                 </p>
+                {prof.access_role && (
+                  <Badge variant="outline" className="text-xs font-normal">
+                    {getRoleLabel(prof.access_role)}
+                  </Badge>
+                )}
               </div>
               {!prof.is_active && (
                 <div className="absolute top-4 right-4">

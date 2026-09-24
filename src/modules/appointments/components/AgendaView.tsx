@@ -30,6 +30,7 @@ import { CalendarOff } from 'lucide-react'
 import { useAuth } from '@/shared/providers/AuthProvider'
 import { useInvalidateAppointments, type AppointmentsRange } from '@/modules/appointments/queries'
 import { useTenant } from '@/shared/contexts/TenantContext'
+import { usePermission } from '@/shared/hooks/usePermission'
 
 export type ViewMode = 'month' | 'week' | 'day'
 
@@ -53,7 +54,10 @@ export const AgendaView = ({
   const invalidateAppointments = useInvalidateAppointments()
   const { config } = useTenant()
 
-  const canEdit = mode === 'admin' || role === 'professional'
+  // Papéis customizados editam conforme a matriz da empresa; o check literal
+  // de 'professional' fica como fallback para empresa sem matriz configurada
+  const canEditAppointments = usePermission('appointments', 'edit')
+  const canEdit = mode === 'admin' || role === 'professional' || canEditAppointments
 
   // Lifted State
   const [currentDate, setCurrentDate] = useState(new Date())

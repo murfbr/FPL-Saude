@@ -36,10 +36,20 @@ import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useToast } from '@/shared/hooks/use-toast'
 import { updateProfessional, setProfessionalActive } from '@/shared/services'
+import { setProfessionalRole } from '@/modules/professionals/service'
 import { uploadFile, getPublicUrl } from '@/shared/lib/storage'
 import { useAuth } from '@/shared/providers/AuthProvider'
+import { useTenant } from '@/shared/contexts/TenantContext'
+import { getRoleLabel, listAssignableRoles } from '@/shared/lib/roles'
 import { Ban, CheckCircle, Loader2 } from 'lucide-react'
 
 const professionalSchema = z.object({
@@ -65,13 +75,18 @@ export const ProfessionalEditDialog = ({
   onProfessionalUpdate,
 }: ProfessionalEditDialogProps) => {
   const { toast } = useToast()
-  const { role } = useAuth()
+  const { role, user } = useAuth()
+  const { config } = useTenant()
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isProcessingStatus, setIsProcessingStatus] = useState(false)
+  const [isChangingRole, setIsChangingRole] = useState(false)
   const [showInactivateAlert, setShowInactivateAlert] = useState(false)
 
   const isAdmin = role === 'admin'
+  // O servidor também bloqueia; aqui só desabilita a UI
+  const isSelf = !!professional.user_id && professional.user_id === user?.id
+  const assignableRoles = listAssignableRoles(config?.roles)
 
   const form = useForm<ProfessionalFormValues>({
     resolver: zodResolver(professionalSchema),
@@ -115,6 +130,26 @@ export const ProfessionalEditDialog = ({
       onOpenChange(false)
     }
     setIsSubmitting(false)
+  }
+
+  const handleRoleChange = async (newRole: string) => {
+    if (newRole === (professional.access_role || '')) return
+    setIsChangingRole(true)
+    const { error } = await setProfessionalRole(professional.id, newRole)
+    if (error) {
+      toast({
+        title: 'Erro ao alterar nível de acesso',
+        description: error.message,
+        variant: 'destructive',
+      })
+    } else {
+      toast({
+        title: 'Nível de acesso alterado',
+        description: `${professional.name} agora é ${getRoleLabel(newRole)}. A mudança vale a partir do próximo login.`,
+      })
+      onProfessionalUpdate({ ...professional, access_role: newRole })
+    }
+    setIsChangingRole(false)
   }
 
   const handleToggleStatus = async () => {
@@ -212,6 +247,36 @@ export const ProfessionalEditDialog = ({
 
               {isAdmin && (
                 <div className="space-y-4 pt-4 border-t">
+                  <div className="flex flex-row items-center justify-between gap-4 rounded-lg border p-4 shadow-sm bg-muted/20">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">
+                        Nível de Acesso
+                      </FormLabel>
+                      <FormDescription>
+                        {isSelf
+                          ? 'Você não pode alterar o próprio nível.'
+                          : !professional.user_id
+                            ? 'Sem conta de acesso vinculada.'
+                            : 'A mudança vale a partir do próximo login.'}
+                      </FormDescription>
+                    </div>
+                    <Select
+                      value={professional.access_role || ''}
+                      onValueChange={handleRoleChange}
+                      disabled={isChangingRole || isSelf || !professional.user_id}
+                    >
+                      <SelectTrigger className="w-[180px] shrink-0">
+                        <SelectValue placeholder="Não definido" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {assignableRoles.map((r) => (
+                          <SelectItem key={r} value={r}>
+                            {getRoleLabel(r)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="flex flex-col gap-4">
                     <div className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm bg-muted/20">
                       <div className="space-y-0.5">

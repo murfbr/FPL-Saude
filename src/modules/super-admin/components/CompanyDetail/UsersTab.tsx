@@ -52,7 +52,7 @@ export const UsersTab = ({ company }: { company: CompanyConfig }) => {
   }, [company.id])
 
   const handleRoleChange = async (uid: string, role: string) => {
-    const { error } = await updateUserRole(uid, role)
+    const { error } = await updateUserRole(company.id, uid, role)
     if (error) {
       toast({ title: 'Erro ao alterar função', variant: 'destructive' })
     } else {

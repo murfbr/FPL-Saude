@@ -26,6 +26,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
@@ -38,6 +39,8 @@ import {
   Trash2,
   Loader2,
   Repeat,
+  Paperclip,
+  ExternalLink,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { Expense } from '@/shared/types'
@@ -175,6 +178,12 @@ export const ExpensesTab = ({ month }: { month: Date }) => {
                             aria-label="Despesa fixa mensal"
                           />
                         )}
+                        {(e.attachments || []).length > 0 && (
+                          <Paperclip
+                            className="h-3 w-3 text-muted-foreground"
+                            aria-label={`${(e.attachments || []).length} anexo(s)`}
+                          />
+                        )}
                       </span>
                     </TableCell>
                     <TableCell>{e.category_name || '—'}</TableCell>
@@ -307,6 +316,26 @@ export const ExpensesTab = ({ month }: { month: Date }) => {
                             >
                               <Pencil className="mr-2 h-4 w-4" /> Editar
                             </DropdownMenuItem>
+                            {(e.attachments || []).length > 0 && (
+                              <>
+                                <DropdownMenuSeparator />
+                                {(e.attachments || []).map((att) => (
+                                  <DropdownMenuItem
+                                    key={att.path}
+                                    className="cursor-pointer"
+                                    onClick={() =>
+                                      window.open(att.url, '_blank', 'noopener')
+                                    }
+                                  >
+                                    <ExternalLink className="mr-2 h-4 w-4" />
+                                    <span className="truncate max-w-[220px]">
+                                      {att.name}
+                                    </span>
+                                  </DropdownMenuItem>
+                                ))}
+                                <DropdownMenuSeparator />
+                              </>
+                            )}
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <DropdownMenuItem

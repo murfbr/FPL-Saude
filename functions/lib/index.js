@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onClientPackageWrite = exports.onClientSubscriptionWrite = exports.setStaffActive = exports.createStaffUser = exports.onUserWrite = exports.dailyReconciliation = exports.monthlyRecurringExpenses = exports.onExpenseWrite = exports.onFinancialRecordWrite = exports.setAppointmentStatus = exports.onAppointmentWrite = void 0;
+exports.onClientPackageWrite = exports.onClientSubscriptionWrite = exports.setStaffRole = exports.setStaffActive = exports.createStaffUser = exports.onUserWrite = exports.dailyReconciliation = exports.monthlyRecurringExpenses = exports.onExpenseWrite = exports.onFinancialRecordWrite = exports.setAppointmentStatus = exports.onAppointmentWrite = void 0;
 const appointmentFunctions = __importStar(require("./appointments/onAppointmentWrite"));
 const appointmentStatusFunctions = __importStar(require("./appointments/setAppointmentStatus"));
 const financialFunctions = __importStar(require("./financial/onFinancialRecordWrite"));
@@ -50,6 +50,6 @@ exports.onExpenseWrite = expenseFunctions.onExpenseWrite;
 exports.monthlyRecurringExpenses = recurringExpenseFunctions.monthlyRecurringExpenses;
 exports.dailyReconciliation = cronFunctions.dailyReconciliation;
 exports.onUserWrite = authFunctions.onUserWrite;
-exports.createStaffUser = staffFunctions.createStaffUser, exports.setStaffActive = staffFunctions.setStaffActive;
+exports.createStaffUser = staffFunctions.createStaffUser, exports.setStaffActive = staffFunctions.setStaffActive, exports.setStaffRole = staffFunctions.setStaffRole;
 exports.onClientSubscriptionWrite = entitlementFunctions.onClientSubscriptionWrite, exports.onClientPackageWrite = entitlementFunctions.onClientPackageWrite;
 //# sourceMappingURL=index.js.map

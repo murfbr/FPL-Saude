@@ -3,7 +3,7 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore'
 import { Professional } from '@/shared/types'
 import { getCompanyId } from '@/shared/lib/tenantStore'
 import { sendPasswordResetEmail } from 'firebase/auth'
-import { callCreateStaffUser, callSetStaffActive } from '@/shared/lib/functions'
+import { callCreateStaffUser, callSetStaffActive, callSetStaffRole } from '@/shared/lib/functions'
 
 export async function updateProfessional(
   id: string,
@@ -40,6 +40,27 @@ export async function setProfessionalActive(
     return {
       futureAppointments: null,
       error: new Error(error?.message || 'Falha ao atualizar o acesso do profissional.'),
+    }
+  }
+}
+
+/**
+ * Altera o nível de acesso do profissional via Cloud Function (canal oficial:
+ * as rules proíbem mudar role por escrita direta). Atualiza users raiz,
+ * claims e o espelho access_role; para o alvo vale no próximo login.
+ */
+export async function setProfessionalRole(
+  professionalId: string,
+  role: string,
+): Promise<{ error: any }> {
+  try {
+    const companyId = getCompanyId()
+    await callSetStaffRole({ companyId, professionalId, role })
+    return { error: null }
+  } catch (error: any) {
+    console.error('Erro ao alterar nível de acesso:', error)
+    return {
+      error: new Error(error?.message || 'Falha ao alterar o nível de acesso.'),
     }
   }
 }
@@ -95,7 +116,8 @@ export async function createProfessionalUser(
       name: data.name,
       email: data.email,
       password: data.password || null,
-      role: 'professional',
+      // Nível escolhido no formulário; a Cloud Function valida contra a matriz
+      role: data.role || 'professional',
       specialty: data.specialty || '',
       bio: data.bio || '',
       avatarUrl: data.avatar_url || '',

@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/shared/providers/AuthProvider'
+import { getHomeRoute } from '@/shared/lib/roles'
 import { Loader2 } from 'lucide-react'
 
 const Index = () => {
@@ -25,24 +26,9 @@ const Index = () => {
       return
     }
 
-    // Role-based Redirection
+    // Role-based Redirection — papéis customizados (staff) caem no portal
     console.log('[Index] Redirecting based on role:', role)
-    switch (role) {
-      case 'admin':
-        navigate('/admin', { replace: true })
-        break
-      case 'professional':
-        navigate('/profissional', { replace: true })
-        break
-      case 'client':
-        // Client area is currently unavailable per requirements
-        navigate('/cliente-indisponivel', { replace: true })
-        break
-      default:
-        console.warn('[Index] Unknown role:', role)
-        navigate('/cliente-indisponivel', { replace: true })
-        break
-    }
+    navigate(getHomeRoute(role), { replace: true })
   }, [role, user, loading, navigate])
 
   return (

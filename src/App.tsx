@@ -144,7 +144,7 @@ const App = () => (
                     <Route
                       index
                       element={
-                        <RoleGuard allowedRoles={['professional', 'admin']}>
+                        <RoleGuard requireStaff>
                           <ProfessionalArea />
                         </RoleGuard>
                       }
@@ -152,7 +152,7 @@ const App = () => (
                     <Route
                       path="pacientes/:id"
                       element={
-                        <RoleGuard allowedRoles={['professional', 'admin']}>
+                        <RoleGuard requireStaff>
                           <ProfessionalPatientDetail />
                         </RoleGuard>
                       }
@@ -160,7 +160,7 @@ const App = () => (
                     <Route
                       path="notifications"
                       element={
-                        <RoleGuard allowedRoles={['professional', 'admin']}>
+                        <RoleGuard requireStaff>
                           <NotificationsPage />
                         </RoleGuard>
                       }

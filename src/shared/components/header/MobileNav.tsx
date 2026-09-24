@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/sheet'
 import { LogOut, Briefcase, LayoutDashboard, Menu, X, Bell, ShieldHalf } from 'lucide-react'
 import { NotificationBell } from './NotificationBell'
+import { isStaffRole } from '@/shared/lib/roles'
 
 export const MobileNav = () => {
   const { user, signOut, role, professionalId } = useAuth()
@@ -33,7 +34,7 @@ export const MobileNav = () => {
 
   return (
     <div className="flex items-center gap-2">
-      {user && (role === 'professional' || role === 'admin') && <NotificationBell />}
+      {user && isStaffRole(role) && <NotificationBell />}
       <Sheet>
         <SheetTrigger asChild>
           <Button variant="ghost" size="icon">
@@ -93,7 +94,7 @@ export const MobileNav = () => {
                         </Button>
                       </SheetClose>
                     )}
-                    {(role === 'admin' || role === 'professional') && (
+                    {isStaffRole(role) && (
                       <SheetClose asChild>
                         <Button
                           variant="ghost"
@@ -105,7 +106,7 @@ export const MobileNav = () => {
                         </Button>
                       </SheetClose>
                     )}
-                    {(role === 'professional' || role === 'admin') && (
+                    {isStaffRole(role) && (
                       <SheetClose asChild>
                         <Button
                           variant="ghost"

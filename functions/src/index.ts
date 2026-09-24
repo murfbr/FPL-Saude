@@ -22,7 +22,7 @@ export const { dailyReconciliation } = cronFunctions
 
 export const { onUserWrite } = authFunctions
 
-export const { createStaffUser, setStaffActive } = staffFunctions
+export const { createStaffUser, setStaffActive, setStaffRole } = staffFunctions
 
 export const { onClientSubscriptionWrite, onClientPackageWrite } =
   entitlementFunctions

@@ -29,9 +29,11 @@ service firebase.storage {
           isSuperAdmin() ||
           (getUserData().companyId == companyId && getUserData().role != 'client')
         );
-        allow write: if isAuthenticated() && 
-          getUserData().companyId == companyId && 
-          (getUserData().role == 'admin' || getUserData().role == 'professional');
+        // Escrita para qualquer papel de equipe — papéis são dinâmicos por
+      // empresa (matriz roles), então nunca liste nomes literais aqui
+      allow write: if isAuthenticated() &&
+          getUserData().companyId == companyId &&
+          getUserData().role != 'client';
       }
 
       // Regra específica para Galeria
@@ -40,9 +42,11 @@ service firebase.storage {
           isSuperAdmin() ||
           (getUserData().companyId == companyId && getUserData().role != 'client')
         );
-        allow write: if isAuthenticated() && 
-          getUserData().companyId == companyId && 
-          (getUserData().role == 'admin' || getUserData().role == 'professional');
+        // Escrita para qualquer papel de equipe — papéis são dinâmicos por
+      // empresa (matriz roles), então nunca liste nomes literais aqui
+      allow write: if isAuthenticated() &&
+          getUserData().companyId == companyId &&
+          getUserData().role != 'client';
       }
 
       // Regra específica para Documentos Clínicos (Atestados, Receitas)
@@ -51,9 +55,20 @@ service firebase.storage {
           isSuperAdmin() ||
           (getUserData().companyId == companyId && getUserData().role != 'client')
         );
-        allow write: if isAuthenticated() && 
-          getUserData().companyId == companyId && 
-          (getUserData().role == 'admin' || getUserData().role == 'professional');
+        // Escrita para qualquer papel de equipe — papéis são dinâmicos por
+      // empresa (matriz roles), então nunca liste nomes literais aqui
+      allow write: if isAuthenticated() &&
+          getUserData().companyId == companyId &&
+          getUserData().role != 'client';
+      }
+
+      // Anexos de despesas (comprovantes, boletos, notas) — admin-only,
+      // mesmo escopo das despesas no Firestore
+      match /financial/expenses/{expenseId}/{fileName} {
+        allow read, write: if isAuthenticated() && (
+          isSuperAdmin() ||
+          (getUserData().companyId == companyId && getUserData().role == 'admin')
+        );
       }
 
       // Regra específica para Recibos Financeiros
@@ -62,9 +77,11 @@ service firebase.storage {
           isSuperAdmin() ||
           (getUserData().companyId == companyId && getUserData().role != 'client')
         );
-        allow write: if isAuthenticated() && 
-          getUserData().companyId == companyId && 
-          (getUserData().role == 'admin' || getUserData().role == 'professional');
+        // Escrita para qualquer papel de equipe — papéis são dinâmicos por
+      // empresa (matriz roles), então nunca liste nomes literais aqui
+      allow write: if isAuthenticated() &&
+          getUserData().companyId == companyId &&
+          getUserData().role != 'client';
       }
     }
 

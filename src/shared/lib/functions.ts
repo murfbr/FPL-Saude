@@ -11,6 +11,13 @@ export const callCreateStaffUser = httpsCallable(functions, 'createStaffUser')
 export const callSetStaffActive = httpsCallable(functions, 'setStaffActive')
 
 /**
+ * Altera o nível de acesso (role) de um profissional. Canal oficial: as rules
+ * proíbem mudança de role por escrita direta — valida admin, matriz da
+ * empresa e bloqueia auto-alteração; atualiza claims + espelho access_role.
+ */
+export const callSetStaffRole = httpsCallable(functions, 'setStaffRole')
+
+/**
  * Muda status de agendamento no servidor (transação): débito/estorno de
  * pacote, registro financeiro e billing_type — sem depender de permissão de
  * leitura/escrita de financial_records no client.

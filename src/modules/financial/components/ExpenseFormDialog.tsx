@@ -22,12 +22,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2 } from 'lucide-react'
-import { Expense } from '@/shared/types'
+import { Loader2, Paperclip, X, ExternalLink } from 'lucide-react'
+import { Expense, ExpenseAttachment } from '@/shared/types'
 import {
   createExpense,
   updateExpense,
   createExpenseCategory,
+  uploadExpenseAttachment,
+  removeExpenseAttachment,
 } from '@/modules/financial/service'
 import {
   useExpenseCategories,
@@ -81,6 +83,9 @@ export const ExpenseFormDialog = ({
   const { data: categories = [] } = useExpenseCategories()
   const { data: suppliers = [] } = useSuppliers()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  // Arquivos escolhidos agora, enviados após salvar (a despesa precisa de ID)
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
+  const [removingPath, setRemovingPath] = useState<string | null>(null)
 
   const form = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseSchema),
@@ -98,6 +103,7 @@ export const ExpenseFormDialog = ({
 
   useEffect(() => {
     if (!isOpen) return
+    setPendingFiles([])
     if (expense) {
       form.reset({
         description: expense.description,
@@ -125,6 +131,23 @@ export const ExpenseFormDialog = ({
 
   const categoryId = form.watch('categoryId')
   const paidNow = form.watch('paidNow')
+
+  const handleRemoveAttachment = async (att: ExpenseAttachment) => {
+    if (!expense) return
+    setRemovingPath(att.path)
+    const { error } = await removeExpenseAttachment(expense.id, att)
+    if (error) {
+      toast({
+        title: 'Erro ao remover anexo',
+        description: (error as Error)?.message,
+        variant: 'destructive',
+      })
+    } else {
+      toast({ title: 'Anexo removido' })
+      invalidateFinancial()
+    }
+    setRemovingPath(null)
+  }
 
   const onSubmit = async (values: ExpenseFormValues) => {
     setIsSubmitting(true)
@@ -159,22 +182,46 @@ export const ExpenseFormDialog = ({
         payment_method: values.paymentMethod || null,
       }
 
+      let expenseId = expense?.id
       if (expense) {
         const { error } = await updateExpense(expense.id, payload)
         if (error) throw error
-        toast({ title: 'Despesa atualizada' })
       } else {
-        const { error } = await createExpense(
+        const { data: created, error } = await createExpense(
           { ...payload, paid_now: values.paidNow },
           professionalId || user?.id,
         )
-        if (error) throw error
-        toast({
-          title: values.paidNow
+        if (error || !created) throw error || new Error('Falha ao criar')
+        expenseId = created.id
+      }
+
+      // Anexos: enviados um a um; falha em anexo não desfaz a despesa salva
+      let failedUploads = 0
+      if (expenseId) {
+        for (const file of pendingFiles) {
+          const { error } = await uploadExpenseAttachment(expenseId, file)
+          if (error) {
+            failedUploads++
+            toast({
+              title: `Anexo "${file.name}" não enviado`,
+              description: (error as Error)?.message,
+              variant: 'destructive',
+            })
+          }
+        }
+      }
+
+      toast({
+        title: expense
+          ? 'Despesa atualizada'
+          : values.paidNow
             ? 'Despesa registrada como paga'
             : 'Despesa registrada',
-        })
-      }
+        description:
+          pendingFiles.length > 0 && failedUploads === 0
+            ? `${pendingFiles.length} anexo(s) enviado(s).`
+            : undefined,
+      })
 
       invalidateFinancial()
       onOpenChange(false)
@@ -298,6 +345,91 @@ export const ExpenseFormDialog = ({
                 <option key={name} value={name} />
               ))}
             </datalist>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Comprovantes e boletos (opcional)</Label>
+            {expense && (expense.attachments || []).length > 0 && (
+              <div className="space-y-1">
+                {(expense.attachments || []).map((att) => (
+                  <div
+                    key={att.path}
+                    className="flex items-center justify-between rounded-md border px-3 py-1.5 text-sm"
+                  >
+                    <a
+                      href={att.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-2 hover:underline truncate"
+                    >
+                      <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{att.name}</span>
+                      <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                    </a>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 shrink-0"
+                      onClick={() => handleRemoveAttachment(att)}
+                      disabled={removingPath === att.path}
+                    >
+                      {removingPath === att.path ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <X className="h-3 w-3" />
+                      )}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {pendingFiles.length > 0 && (
+              <div className="space-y-1">
+                {pendingFiles.map((f, i) => (
+                  <div
+                    key={`${f.name}-${i}`}
+                    className="flex items-center justify-between rounded-md border border-dashed px-3 py-1.5 text-sm"
+                  >
+                    <span className="flex items-center gap-2 truncate">
+                      <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{f.name}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        (envia ao salvar)
+                      </span>
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 shrink-0"
+                      onClick={() =>
+                        setPendingFiles((prev) =>
+                          prev.filter((_, j) => j !== i),
+                        )
+                      }
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <Input
+              type="file"
+              accept="application/pdf,image/jpeg,image/png,image/webp,image/heic"
+              multiple
+              className="cursor-pointer"
+              onChange={(ev) => {
+                const files = Array.from(ev.target.files || [])
+                if (files.length > 0)
+                  setPendingFiles((prev) => [...prev, ...files])
+                ev.target.value = ''
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              PDF ou imagem, até 10 MB por arquivo.
+            </p>
           </div>
 
           <div className="flex items-center gap-6">

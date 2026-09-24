@@ -17,9 +17,13 @@ import {
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/shared/hooks/use-toast'
-import { Package } from '@/shared/types'
+import { Package, PartnershipDiscount } from '@/shared/types'
 import { getPackages } from '@/shared/services'
-import { assignPackageToClient } from '@/shared/services'
+import {
+  assignPackageToClient,
+  getClientById,
+  getDiscountsForPartnership,
+} from '@/shared/services'
 import { Loader2, CalendarIcon } from 'lucide-react'
 import { Calendar } from '@/components/ui/calendar'
 import {
@@ -50,23 +54,54 @@ export const AssignPackageDialog = ({
   const [purchaseDate, setPurchaseDate] = useState<Date | undefined>(new Date())
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [partnershipName, setPartnershipName] = useState<string | null>(null)
+  const [partnershipDiscounts, setPartnershipDiscounts] = useState<
+    PartnershipDiscount[]
+  >([])
 
   useEffect(() => {
     if (isOpen) {
       setIsLoading(true)
       // Reset date to today on open
       setPurchaseDate(new Date())
-      getPackages().then(({ data }) => {
-        setPackages(data || [])
-        setIsLoading(false)
-      })
+      setPartnershipName(null)
+      setPartnershipDiscounts([])
+      Promise.all([getPackages(), getClientById(clientId)]).then(
+        ([pkgRes, clientRes]) => {
+          setPackages(pkgRes.data || [])
+          // Desconto de parceria: mesma regra do onboarding — sem isto, pacote
+          // vendido pela ficha gravava desconto zero e o Quitar cobrava cheio
+          const partnershipId = clientRes.data?.partnership_id
+          if (partnershipId) {
+            getDiscountsForPartnership(partnershipId).then((res) => {
+              setPartnershipDiscounts(res.data || [])
+              setPartnershipName(
+                clientRes.data?.partnerships?.name || 'Parceria',
+              )
+            })
+          }
+          setIsLoading(false)
+        },
+      )
     }
-  }, [isOpen])
+  }, [isOpen, clientId])
+
+  const selectedPkg = packages.find((p) => p.id === selectedPackageId) || null
+  const appliedDiscount = selectedPkg
+    ? partnershipDiscounts.find(
+        (d) => d.service_id === selectedPkg.service_id || d.service_id === null,
+      ) || null
+    : null
+  const originalPrice = selectedPkg?.price || 0
+  const discountAmount = appliedDiscount
+    ? Math.min(
+        originalPrice,
+        originalPrice * (appliedDiscount.discount_percentage / 100),
+      )
+    : 0
+  const finalPrice = Math.max(0, originalPrice - discountAmount)
 
   const handleAssign = async () => {
-    if (!selectedPackageId) return
-
-    const selectedPkg = packages.find((p) => p.id === selectedPackageId)
     if (!selectedPkg) return
 
     setIsSubmitting(true)
@@ -75,6 +110,7 @@ export const AssignPackageDialog = ({
       selectedPkg.id,
       selectedPkg.session_count,
       purchaseDate,
+      discountAmount,
     )
 
     if (error) {
@@ -127,6 +163,52 @@ export const AssignPackageDialog = ({
               </SelectContent>
             </Select>
           </div>
+
+          {selectedPkg && (
+            <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm space-y-1">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Valor do pacote</span>
+                <span
+                  className={
+                    appliedDiscount
+                      ? 'line-through text-muted-foreground'
+                      : 'font-semibold'
+                  }
+                >
+                  {new Intl.NumberFormat('pt-BR', {
+                    style: 'currency',
+                    currency: 'BRL',
+                  }).format(originalPrice)}
+                </span>
+              </div>
+              {appliedDiscount && (
+                <>
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>
+                      Desconto {appliedDiscount.discount_percentage}%
+                      {partnershipName ? ` · ${partnershipName}` : ''}
+                    </span>
+                    <span>
+                      −{' '}
+                      {new Intl.NumberFormat('pt-BR', {
+                        style: 'currency',
+                        currency: 'BRL',
+                      }).format(discountAmount)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between font-semibold border-t pt-1">
+                    <span>Valor a cobrar</span>
+                    <span>
+                      {new Intl.NumberFormat('pt-BR', {
+                        style: 'currency',
+                        currency: 'BRL',
+                      }).format(finalPrice)}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           <div className="space-y-2 flex flex-col">
             <Label>Data de Início</Label>

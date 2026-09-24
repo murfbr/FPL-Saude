@@ -40,8 +40,22 @@ export const createStaffUser = onCall({ region: REGION }, async (request) => {
   if (!companyId || !name || !email) {
     throw new HttpsError('invalid-argument', 'companyId, name e email são obrigatórios.')
   }
-  const staffRole = role === 'admin' || role === 'client' ? role : 'professional'
   await assertCompanyAdmin(request.auth, companyId)
+
+  // Papéis são dinâmicos por empresa: aceita os padrões e qualquer role da
+  // matriz companies/{id}.roles. Role desconhecido é ERRO visível — nunca a
+  // coerção silenciosa para 'professional' que existia antes.
+  const staffRole = role || 'professional'
+  if (!['admin', 'professional', 'client'].includes(staffRole)) {
+    const companySnap = await db.collection('companies').doc(companyId).get()
+    const companyRoles = (companySnap.data()?.roles || {}) as Record<string, unknown>
+    if (!(staffRole in companyRoles)) {
+      throw new HttpsError(
+        'invalid-argument',
+        `A função "${staffRole}" não existe nesta empresa. Crie-a na matriz de permissões antes.`,
+      )
+    }
+  }
 
   const finalPassword = password || Math.random().toString(36).slice(-10) + 'A1!'
 
@@ -89,6 +103,9 @@ export const createStaffUser = onCall({ region: REGION }, async (request) => {
       bio: bio || '',
       avatar_url: avatarUrl || '',
       is_active: true,
+      // Espelho do nível de acesso (fonte da verdade: users/{uid}.role) — o
+      // admin não lê a coleção raiz users, então a UI de gestão exibe daqui
+      access_role: staffRole,
       service_ids: [] as string[],
       created_at: nowISO,
     }
@@ -213,4 +230,91 @@ export const setStaffActive = onCall({ region: REGION }, async (request) => {
   }
 
   return { active, futureAppointments }
+})
+
+/**
+ * Altera o NÍVEL DE ACESSO (role) de um membro da equipe. Canal oficial da
+ * gestão de profissionais: as rules proíbem mudança de role por escrita
+ * direta (anti auto-promoção), então toda troca passa por aqui.
+ * Garantias: só admin da empresa (ou super-admin); o role precisa existir na
+ * matriz da empresa; ninguém altera o próprio nível; claims são atualizadas
+ * na hora e o espelho access_role do cadastro acompanha. Para o alvo, a
+ * mudança vale no próximo login/refresh de token (~1h).
+ */
+export const setStaffRole = onCall({ region: REGION }, async (request) => {
+  const { companyId, professionalId, role } = (request.data || {}) as {
+    companyId?: string
+    professionalId?: string
+    role?: string
+  }
+  if (!companyId || !professionalId || !role) {
+    throw new HttpsError(
+      'invalid-argument',
+      'companyId, professionalId e role são obrigatórios.',
+    )
+  }
+  await assertCompanyAdmin(request.auth, companyId)
+
+  // Gestão de profissionais só atribui papéis de equipe
+  if (role === 'client' || role === 'super_admin') {
+    throw new HttpsError('invalid-argument', 'Este nível não pode ser atribuído aqui.')
+  }
+  if (!['admin', 'professional'].includes(role)) {
+    const companySnap = await db.collection('companies').doc(companyId).get()
+    const companyRoles = (companySnap.data()?.roles || {}) as Record<string, unknown>
+    if (!(role in companyRoles)) {
+      throw new HttpsError(
+        'invalid-argument',
+        `A função "${role}" não existe nesta empresa. Crie-a na matriz de permissões antes.`,
+      )
+    }
+  }
+
+  const profRef = db
+    .collection('companies').doc(companyId)
+    .collection('professionals').doc(professionalId)
+  const profSnap = await profRef.get()
+  if (!profSnap.exists) {
+    throw new HttpsError('not-found', 'Profissional não encontrado.')
+  }
+  const targetUserId = profSnap.data()?.user_id as string | undefined
+  if (!targetUserId) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Este profissional não tem conta de acesso vinculada.',
+    )
+  }
+  if (targetUserId === request.auth?.uid) {
+    throw new HttpsError('failed-precondition', 'Você não pode alterar o próprio nível de acesso.')
+  }
+
+  const userRef = db.collection('users').doc(targetUserId)
+  const userSnap = await userRef.get()
+  if (!userSnap.exists || userSnap.data()?.companyId !== companyId) {
+    throw new HttpsError('not-found', 'Usuário não encontrado nesta empresa.')
+  }
+
+  // Claims primeiro (fonte do RBAC nas rules); onUserWrite é idempotente e
+  // apenas confirmará o mesmo par companyId/role ao ver o doc atualizado
+  try {
+    const userRecord = await admin.auth().getUser(targetUserId)
+    await admin.auth().setCustomUserClaims(targetUserId, {
+      ...(userRecord.customClaims || {}),
+      companyId,
+      role,
+    })
+  } catch (e) {
+    if ((e as { code?: string })?.code === 'auth/user-not-found') {
+      throw new HttpsError('failed-precondition', 'A conta de acesso deste profissional não existe mais.')
+    }
+    console.error('setStaffRole: falha ao atualizar claims', e)
+    throw new HttpsError('internal', 'Falha ao atualizar as credenciais de acesso.')
+  }
+
+  const batch = db.batch()
+  batch.set(userRef, { role }, { merge: true })
+  batch.set(profRef, { access_role: role }, { merge: true })
+  await batch.commit()
+
+  return { role }
 })

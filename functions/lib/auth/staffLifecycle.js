@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.setStaffActive = exports.createStaffUser = void 0;
+exports.setStaffRole = exports.setStaffActive = exports.createStaffUser = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const admin = __importStar(require("firebase-admin"));
 const config_1 = require("../config");
@@ -64,12 +64,23 @@ async function assertCompanyAdmin(auth, companyId) {
  * o trigger onUserWrite).
  */
 exports.createStaffUser = (0, https_1.onCall)({ region: config_1.REGION }, async (request) => {
+    var _a;
     const { companyId, name, email, password, role, specialty, bio, avatarUrl } = (request.data || {});
     if (!companyId || !name || !email) {
         throw new https_1.HttpsError('invalid-argument', 'companyId, name e email são obrigatórios.');
     }
-    const staffRole = role === 'admin' || role === 'client' ? role : 'professional';
     await assertCompanyAdmin(request.auth, companyId);
+    // Papéis são dinâmicos por empresa: aceita os padrões e qualquer role da
+    // matriz companies/{id}.roles. Role desconhecido é ERRO visível — nunca a
+    // coerção silenciosa para 'professional' que existia antes.
+    const staffRole = role || 'professional';
+    if (!['admin', 'professional', 'client'].includes(staffRole)) {
+        const companySnap = await config_1.db.collection('companies').doc(companyId).get();
+        const companyRoles = (((_a = companySnap.data()) === null || _a === void 0 ? void 0 : _a.roles) || {});
+        if (!(staffRole in companyRoles)) {
+            throw new https_1.HttpsError('invalid-argument', `A função "${staffRole}" não existe nesta empresa. Crie-a na matriz de permissões antes.`);
+        }
+    }
     const finalPassword = password || Math.random().toString(36).slice(-10) + 'A1!';
     let uid;
     try {
@@ -112,6 +123,9 @@ exports.createStaffUser = (0, https_1.onCall)({ region: config_1.REGION }, async
             bio: bio || '',
             avatar_url: avatarUrl || '',
             is_active: true,
+            // Espelho do nível de acesso (fonte da verdade: users/{uid}.role) — o
+            // admin não lê a coleção raiz users, então a UI de gestão exibe daqui
+            access_role: staffRole,
             service_ids: [],
             created_at: nowISO,
         };
@@ -222,5 +236,71 @@ exports.setStaffActive = (0, https_1.onCall)({ region: config_1.REGION }, async 
         }
     }
     return { active, futureAppointments };
+});
+/**
+ * Altera o NÍVEL DE ACESSO (role) de um membro da equipe. Canal oficial da
+ * gestão de profissionais: as rules proíbem mudança de role por escrita
+ * direta (anti auto-promoção), então toda troca passa por aqui.
+ * Garantias: só admin da empresa (ou super-admin); o role precisa existir na
+ * matriz da empresa; ninguém altera o próprio nível; claims são atualizadas
+ * na hora e o espelho access_role do cadastro acompanha. Para o alvo, a
+ * mudança vale no próximo login/refresh de token (~1h).
+ */
+exports.setStaffRole = (0, https_1.onCall)({ region: config_1.REGION }, async (request) => {
+    var _a, _b, _c, _d;
+    const { companyId, professionalId, role } = (request.data || {});
+    if (!companyId || !professionalId || !role) {
+        throw new https_1.HttpsError('invalid-argument', 'companyId, professionalId e role são obrigatórios.');
+    }
+    await assertCompanyAdmin(request.auth, companyId);
+    // Gestão de profissionais só atribui papéis de equipe
+    if (role === 'client' || role === 'super_admin') {
+        throw new https_1.HttpsError('invalid-argument', 'Este nível não pode ser atribuído aqui.');
+    }
+    if (!['admin', 'professional'].includes(role)) {
+        const companySnap = await config_1.db.collection('companies').doc(companyId).get();
+        const companyRoles = (((_a = companySnap.data()) === null || _a === void 0 ? void 0 : _a.roles) || {});
+        if (!(role in companyRoles)) {
+            throw new https_1.HttpsError('invalid-argument', `A função "${role}" não existe nesta empresa. Crie-a na matriz de permissões antes.`);
+        }
+    }
+    const profRef = config_1.db
+        .collection('companies').doc(companyId)
+        .collection('professionals').doc(professionalId);
+    const profSnap = await profRef.get();
+    if (!profSnap.exists) {
+        throw new https_1.HttpsError('not-found', 'Profissional não encontrado.');
+    }
+    const targetUserId = (_b = profSnap.data()) === null || _b === void 0 ? void 0 : _b.user_id;
+    if (!targetUserId) {
+        throw new https_1.HttpsError('failed-precondition', 'Este profissional não tem conta de acesso vinculada.');
+    }
+    if (targetUserId === ((_c = request.auth) === null || _c === void 0 ? void 0 : _c.uid)) {
+        throw new https_1.HttpsError('failed-precondition', 'Você não pode alterar o próprio nível de acesso.');
+    }
+    const userRef = config_1.db.collection('users').doc(targetUserId);
+    const userSnap = await userRef.get();
+    if (!userSnap.exists || ((_d = userSnap.data()) === null || _d === void 0 ? void 0 : _d.companyId) !== companyId) {
+        throw new https_1.HttpsError('not-found', 'Usuário não encontrado nesta empresa.');
+    }
+    // Claims primeiro (fonte do RBAC nas rules); onUserWrite é idempotente e
+    // apenas confirmará o mesmo par companyId/role ao ver o doc atualizado
+    try {
+        const userRecord = await admin.auth().getUser(targetUserId);
+        await admin.auth().setCustomUserClaims(targetUserId, Object.assign(Object.assign({}, (userRecord.customClaims || {})), { companyId,
+            role }));
+    }
+    catch (e) {
+        if ((e === null || e === void 0 ? void 0 : e.code) === 'auth/user-not-found') {
+            throw new https_1.HttpsError('failed-precondition', 'A conta de acesso deste profissional não existe mais.');
+        }
+        console.error('setStaffRole: falha ao atualizar claims', e);
+        throw new https_1.HttpsError('internal', 'Falha ao atualizar as credenciais de acesso.');
+    }
+    const batch = config_1.db.batch();
+    batch.set(userRef, { role }, { merge: true });
+    batch.set(profRef, { access_role: role }, { merge: true });
+    await batch.commit();
+    return { role };
 });
 //# sourceMappingURL=staffLifecycle.js.map

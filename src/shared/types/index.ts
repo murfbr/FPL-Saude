@@ -35,6 +35,9 @@ export interface Professional {
   bio: string | null
   avatar_url: string | null
   is_active: boolean
+  // Espelho do nível de acesso (fonte da verdade: users/{uid}.role, que o
+  // admin não lê); mantido pelas Cloud Functions createStaffUser/setStaffRole
+  access_role?: string | null
   // Optional fields for dynamic availability checks
   current_occupancy?: number
   max_capacity?: number
@@ -171,6 +174,15 @@ export interface ExpenseCategory {
   created_at: string
 }
 
+export interface ExpenseAttachment {
+  /** Nome original do arquivo (ex.: comprovante-pix.pdf) */
+  name: string
+  /** Caminho no Storage (para remoção) */
+  path: string
+  url: string
+  uploaded_at: string
+}
+
 export interface Expense {
   id: string
   description: string
@@ -189,6 +201,8 @@ export interface Expense {
   /** Raiz da série recorrente (id da despesa original) */
   recurrence_source_id?: string | null
   notes?: string | null
+  /** Comprovantes/boletos/notas anexados (Storage) */
+  attachments?: ExpenseAttachment[]
   created_at: string
   created_by?: string | null
 }

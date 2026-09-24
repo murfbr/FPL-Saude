@@ -17,6 +17,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { db } from '@/shared/lib/firebase'
 import { doc, getDoc } from 'firebase/firestore'
 import { applyBranding } from '@/shared/lib/utils'
+import { getHomeRoute, isStaffRole } from '@/shared/lib/roles'
 import type { CompanyBranding } from '@/shared/types/tenant'
 
 const Login = () => {
@@ -75,20 +76,15 @@ const Login = () => {
       if (role) {
         console.log('[Login] Authenticated with role:', role, 'Redirecting...')
         
-        // Smart redirect based on role
-        const isProfessionalGoingToAdmin = role === 'professional' && (from.startsWith('/admin') || from.startsWith('/super-admin'));
-        const isAdminGoingToProfessional = role === 'admin' && from.startsWith('/profissional');
+        // Smart redirect: destino salvo que não pertence ao papel volta para a
+        // home dele (admin continua preferindo /admin, como antes)
+        const fromMismatch =
+          (from.startsWith('/admin') && role !== 'admin') ||
+          (from.startsWith('/super-admin') && role !== 'super_admin') ||
+          (from.startsWith('/profissional') && (!isStaffRole(role) || role === 'admin'))
 
-        if (
-          from === '/' || 
-          from === '/login' || 
-          isProfessionalGoingToAdmin ||
-          isAdminGoingToProfessional
-        ) {
-          if (role === 'admin') navigate('/admin', { replace: true })
-          else if (role === 'professional')
-            navigate('/profissional', { replace: true })
-          else navigate('/dashboard', { replace: true }) // Will hit Index and redirect
+        if (from === '/' || from === '/login' || fromMismatch) {
+          navigate(getHomeRoute(role), { replace: true })
         } else {
           navigate(from, { replace: true })
         }
