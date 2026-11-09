@@ -40,6 +40,7 @@ export type RoleFeatureKey =
   | 'reschedule'
   | 'view_financials'
   | 'update_all_statuses'
+  | 'delete_appointments'
 
 export const ROLE_FEATURE_DEFINITIONS: { key: RoleFeatureKey; label: string; description: string }[] = [
   {
@@ -71,6 +72,11 @@ export const ROLE_FEATURE_DEFINITIONS: { key: RoleFeatureKey; label: string; des
     key: 'update_all_statuses',
     label: 'Atualizar qualquer status',
     description: 'Permite atualizar o status de agendamentos de outros profissionais.',
+  },
+  {
+    key: 'delete_appointments',
+    label: 'Excluir agendamentos',
+    description: 'Permite excluir agendamentos (exige "pode editar" em Agendamentos).',
   },
 ]
 

@@ -320,6 +320,7 @@ export function useAppointmentDetail({
   const canChangeStatus = isAdmin || isOwnAppointment || !!canUpdateAllStatuses
   const canReschedule = isAdmin || config?.roles?.[role || 'professional']?.features?.includes('reschedule')
   const canViewFinancials = isAdmin || config?.roles?.[role || 'professional']?.features?.includes('view_financials')
+  const canDelete = isAdmin || !!config?.roles?.[role || 'professional']?.features?.includes('delete_appointments')
 
   return {
     state: {
@@ -345,6 +346,7 @@ export function useAppointmentDetail({
       displayStatus,
       canEdit,
       isAdmin,
+      canDelete,
       canChangeStatus,
       canReschedule,
       canViewFinancials,

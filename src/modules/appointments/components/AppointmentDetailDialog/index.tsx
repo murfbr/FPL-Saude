@@ -55,7 +55,7 @@ export const AppointmentDetailDialog = (props: AppointmentDetailDialogProps) => 
   const {
     isEvent,
     canEdit,
-    isAdmin,
+    canDelete,
     canReschedule,
     isDeleting,
     deleteMode,
@@ -97,7 +97,7 @@ export const AppointmentDetailDialog = (props: AppointmentDetailDialogProps) => 
           </div>
 
           <DialogFooter className="flex-col sm:flex-row gap-2">
-            {isAdmin && (
+            {canDelete && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button variant="destructive" className="w-full sm:w-auto">

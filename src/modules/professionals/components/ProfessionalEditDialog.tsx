@@ -49,7 +49,7 @@ import { setProfessionalRole } from '@/modules/professionals/service'
 import { uploadFile, getPublicUrl } from '@/shared/lib/storage'
 import { useAuth } from '@/shared/providers/AuthProvider'
 import { useTenant } from '@/shared/contexts/TenantContext'
-import { getRoleLabel, listAssignableRoles } from '@/shared/lib/roles'
+import { getRoleLabel, isAdminRole, listAssignableRoles } from '@/shared/lib/roles'
 import { Ban, CheckCircle, Loader2 } from 'lucide-react'
 
 const professionalSchema = z.object({
@@ -83,7 +83,7 @@ export const ProfessionalEditDialog = ({
   const [isChangingRole, setIsChangingRole] = useState(false)
   const [showInactivateAlert, setShowInactivateAlert] = useState(false)
 
-  const isAdmin = role === 'admin'
+  const isAdmin = isAdminRole(role)
   // O servidor também bloqueia; aqui só desabilita a UI
   const isSelf = !!professional.user_id && professional.user_id === user?.id
   const assignableRoles = listAssignableRoles(config?.roles)

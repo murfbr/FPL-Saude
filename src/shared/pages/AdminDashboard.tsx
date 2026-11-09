@@ -47,6 +47,7 @@ import { PatientFormDialog } from '@/modules/clients/components/PatientFormDialo
 import { ProfessionalFormDialog } from '@/modules/professionals/components/ProfessionalFormDialog'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
 import { AdminNavMenu } from '@/shared/components/AdminNavMenu'
+import { isAdminRole } from '@/shared/lib/roles'
 import {
   Select,
   SelectContent,
@@ -467,7 +468,7 @@ const AdminDashboard = () => {
       </div>
 
       {/* Synchronized Modal Management: Only render when needed and safe */}
-      {!loading && role === 'admin' && (
+      {!loading && isAdminRole(role) && (
         <>
           <PatientFormDialog
             isOpen={isPatientFormOpen}

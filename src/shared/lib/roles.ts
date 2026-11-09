@@ -9,6 +9,13 @@ import type { UserRole } from '@/shared/providers/AuthProvider'
 export const isStaffRole = (role: UserRole | null | undefined): boolean =>
   !!role && role !== 'client' && role !== 'super_admin'
 
+/**
+ * Quem opera a UI de administração da clínica: o admin dela e o super-admin
+ * (que entra no app pelo painel e tem os mesmos poderes no backend).
+ */
+export const isAdminRole = (role: UserRole | null | undefined): boolean =>
+  role === 'admin' || role === 'super_admin'
+
 /** Rota inicial de cada papel após autenticação. */
 export const getHomeRoute = (role: UserRole | null | undefined): string => {
   if (role === 'super_admin') return '/super-admin'
